@@ -1,0 +1,82 @@
+/* ==========================================================================
+   MegaPlay Hub — Animations & Effects
+   ========================================================================== */
+@keyframes float-y { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-8px); } }
+.float { animation: float-y 4.2s ease-in-out infinite; }
+
+@keyframes pulse-glow {
+  0%, 100% { box-shadow: 0 0 0 0 #7c5cff44; }
+  50% { box-shadow: 0 0 0 8px #7c5cff00; }
+}
+.pulse { animation: pulse-glow 2.2s ease-in-out infinite; }
+
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+.skeleton {
+  background: linear-gradient(90deg, var(--surface-2) 25%, var(--border-strong) 50%, var(--surface-2) 75%);
+  background-size: 200% 100%; animation: shimmer 1.4s ease-in-out infinite;
+  border-radius: var(--radius-md);
+}
+
+@keyframes screen-shake {
+  0%, 100% { transform: translate(0, 0); }
+  20% { transform: translate(-6px, 3px); }
+  40% { transform: translate(6px, -3px); }
+  60% { transform: translate(-4px, -2px); }
+  80% { transform: translate(4px, 2px); }
+}
+.shake { animation: screen-shake 320ms var(--ease-in-out); }
+
+@keyframes pop-in {
+  0% { transform: scale(.6); opacity: 0; }
+  70% { transform: scale(1.08); opacity: 1; }
+  100% { transform: scale(1); }
+}
+.pop-in { animation: pop-in 420ms var(--ease-out); }
+
+@keyframes confetti-fall {
+  0% { transform: translateY(-10px) rotate(0deg); opacity: 1; }
+  100% { transform: translateY(120vh) rotate(720deg); opacity: 0; }
+}
+
+@keyframes ring-spin { to { transform: rotate(360deg); } }
+.ring-spin { animation: ring-spin 6s linear infinite; }
+
+@keyframes glow-text {
+  0%, 100% { text-shadow: 0 0 12px #7c5cff77; }
+  50% { text-shadow: 0 0 22px #22d3ee99; }
+}
+.glow-text { animation: glow-text 2.6s ease-in-out infinite; }
+
+@keyframes badge-pop {
+  0% { transform: scale(0) rotate(-20deg); }
+  60% { transform: scale(1.15) rotate(6deg); }
+  100% { transform: scale(1) rotate(0); }
+}
+.badge-pop { animation: badge-pop 500ms var(--ease-out); }
+
+@keyframes slide-up-fade {
+  from { opacity: 0; transform: translateY(16px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.stagger-in > * { animation: slide-up-fade var(--dur-med) var(--ease-out) both; }
+.stagger-in > *:nth-child(1) { animation-delay: 0ms; }
+.stagger-in > *:nth-child(2) { animation-delay: 40ms; }
+.stagger-in > *:nth-child(3) { animation-delay: 80ms; }
+.stagger-in > *:nth-child(4) { animation-delay: 120ms; }
+.stagger-in > *:nth-child(5) { animation-delay: 160ms; }
+.stagger-in > *:nth-child(6) { animation-delay: 200ms; }
+.stagger-in > *:nth-child(n+7) { animation-delay: 240ms; }
+
+@keyframes count-flash {
+  0% { color: var(--accent-2); transform: scale(1.2); }
+  100% { color: inherit; transform: scale(1); }
+}
+.count-flash { animation: count-flash 380ms var(--ease-out); }
+
+@keyframes hue-drift {
+  0% { filter: hue-rotate(0deg); }
+  100% { filter: hue-rotate(360deg); }
+}

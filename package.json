@@ -1,0 +1,19 @@
+{
+  "name": "megaplay-hub",
+  "version": "1.0.0",
+  "private": true,
+  "description": "MegaPlay Hub — a premium browser gaming platform with 30 polished mini games, progression, achievements, daily challenges and full touch support.",
+  "type": "module",
+  "scripts": {
+    "start": "npx --yes http-server . -p 8080 -c-1",
+    "build": "node scripts/build.mjs",
+    "dev": "npm run build && wrangler dev",
+    "deploy": "npm run build && wrangler deploy",
+    "tail": "wrangler tail"
+  },
+  "devDependencies": {
+    "wrangler": "^4.127.1"
+  },
+  "keywords": ["games", "arcade", "browser-games", "cloudflare-workers", "vanilla-js"],
+  "license": "MIT"
+}
