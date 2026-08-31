@@ -3,7 +3,6 @@
 // ==========================================================================
 import { GameBase } from "./gameBase.js";
 import { audioManager } from "../systems/audioManager.js";
-import { clearCanvas } from "./canvasUtils.js";
 import { choice } from "../core/utils.js";
 
 const WORDS = [
@@ -26,6 +25,7 @@ export class TypingRushGame extends GameBase {
   getTouchHint() { return "This game needs a physical keyboard (or an on-screen one)."; }
   getKeyboardHint() { return "Just start typing — Backspace clears your current input."; }
 
+  getScene() { return "aurora"; }
   onInit() {
     this.createCanvas();
     this._onKey = (e) => this._handleKey(e);
@@ -108,8 +108,8 @@ export class TypingRushGame extends GameBase {
     this.endGame({ result: "loss", score: this.completed, message: `${this.completed} words typed at ${wpm} WPM.`, extraStats: [{ label: "Words", value: this.completed }, { label: "WPM", value: wpm }] });
   }
 
-  onRender(ctx) {
-    clearCanvas(ctx, this.canvas, "#080b16");
+  onRender(ctx, dt) {
+    this.gfx.backdrop(ctx, dt);
     ctx.save(); ctx.scale(this.dpr, this.dpr);
     ctx.strokeStyle = "#ff547055";
     ctx.beginPath(); ctx.moveTo(0, this.viewH - 16); ctx.lineTo(this.viewW, this.viewH - 16); ctx.stroke();

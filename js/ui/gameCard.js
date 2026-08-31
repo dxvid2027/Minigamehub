@@ -1,10 +1,11 @@
 // ==========================================================================
-// GameCard — shared grid/list card component used on Home & Library.
+// GameCard — shared grid/list card used on Home & Library.
 // ==========================================================================
-import { el } from "../core/utils.js";
+import { el, formatNumber } from "../core/utils.js";
 import { saveManager } from "../systems/saveManager.js";
 import { audioManager } from "../systems/audioManager.js";
-import { router } from "../core/router.js";
+import { gameArt } from "./gameArt.js";
+import { iconMarkup } from "./icons.js";
 
 const NEW_WINDOW_DAYS = 21;
 
@@ -14,41 +15,44 @@ function isNew(meta) {
   return days >= 0 && days < NEW_WINDOW_DAYS;
 }
 function isHot(meta) {
-  const g = saveManager.data.games[meta.id];
-  return (g?.plays || 0) >= 15;
+  return (saveManager.data.games[meta.id]?.plays || 0) >= 15;
 }
 
 export function gameCard(meta, { list = false } = {}) {
-  const g = saveManager.data.games[meta.id];
+  const stats = saveManager.data.games[meta.id];
   const fav = saveManager.isFavorite(meta.id);
-  const gradient = `linear-gradient(135deg, ${meta.grad[0]}55, ${meta.grad[1]}55), linear-gradient(160deg, ${meta.grad[0]}, ${meta.grad[1]})`;
 
   const favBtn = el("button", {
-    class: `fav-btn${fav ? " active" : ""}`, "aria-label": "Toggle favorite", title: "Favorite",
-    onClick: (e) => { e.preventDefault(); e.stopPropagation(); const now = saveManager.toggleFavorite(meta.id); favBtn.classList.toggle("active", now); audioManager.play("toggle"); },
-  }, fav ? "★" : "☆");
+    class: `fav-btn${fav ? " active" : ""}`, "aria-label": "Toggle favorite", title: "Favorite", type: "button",
+    onClick: (e) => {
+      e.preventDefault(); e.stopPropagation();
+      const now = saveManager.toggleFavorite(meta.id);
+      favBtn.classList.toggle("active", now);
+      favBtn.innerHTML = iconMarkup(now ? "starFilled" : "star");
+      audioManager.play("toggle");
+    },
+  });
+  favBtn.innerHTML = iconMarkup(fav ? "starFilled" : "star");
 
-  const card = el("a", {
+  const metaLine = el("div", { class: "meta" }, [
+    el("span", {}, meta.category),
+    el("span", { class: "dot" }),
+    el("span", {}, stats?.plays ? `Best ${formatNumber(stats.highScore)}` : (meta.tags[0] || "new")),
+  ]);
+
+  return el("a", {
     class: `game-card${list ? " list-item" : ""}`, href: `#/play/${meta.id}`, tabindex: "0",
+    "aria-label": `Play ${meta.title}`,
     onClick: () => audioManager.play("click"),
   }, [
     isNew(meta) ? el("span", { class: "tag new" }, "New") : (isHot(meta) ? el("span", { class: "tag hot" }, "Hot") : null),
     favBtn,
-    el("div", { class: "thumb", style: `background:${gradient}` }, el("span", { class: "emoji" }, meta.emoji)),
+    gameArt(meta, { compact: list }),
     el("div", { class: "body" }, [
       el("div", { class: "title" }, meta.title),
-      el("div", { class: "meta" }, [
-        el("span", {}, meta.category),
-        g?.plays ? el("span", {}, `· Best ${formatScore(g.highScore)}`) : el("span", {}, `· ${meta.tags[0] || ""}`),
-      ]),
+      metaLine,
     ]),
   ]);
-  return card;
-}
-
-function formatScore(n) {
-  if (n >= 1000) return (n / 1000).toFixed(1).replace(/\.0$/, "") + "K";
-  return String(n);
 }
 
 export default gameCard;

@@ -5,9 +5,20 @@ import { el } from "../core/utils.js";
 
 const ICONS = { success: "✅", error: "⚠️", achievement: "🏆", levelup: "⭐", info: "ℹ️" };
 
+// A burst of unlocks (finishing a game can grant several at once) must never
+// bury the screen, so the stack is capped and the oldest toast retires early.
+const MAX_VISIBLE = 3;
+
 export function toast({ type = "info", title, message, duration = 4200 }) {
   const root = document.getElementById("toast-root");
   if (!root) return;
+
+  while (root.children.length >= MAX_VISIBLE) {
+    const oldest = root.firstElementChild;
+    oldest.classList.add("leaving");
+    oldest.remove();
+  }
+
   const node = el("div", { class: `toast ${type}` }, [
     el("div", { class: "ic" }, ICONS[type] || "ℹ️"),
     el("div", { class: "txt" }, [

@@ -3,7 +3,6 @@
 // ==========================================================================
 import { GameBase } from "./gameBase.js";
 import { audioManager } from "../systems/audioManager.js";
-import { clearCanvas } from "./canvasUtils.js";
 
 export class FlappyBirdGame extends GameBase {
   getDifficulties() { return ["Easy", "Normal", "Hard"]; }
@@ -18,6 +17,7 @@ export class FlappyBirdGame extends GameBase {
   getTouchHint() { return "Tap anywhere on the board to flap."; }
   getKeyboardHint() { return "Space or Arrow Up to flap."; }
 
+  getScene() { return "stars"; }
   onInit() {
     this.createCanvas();
     this.input.onTap(() => this._flap());
@@ -75,28 +75,32 @@ export class FlappyBirdGame extends GameBase {
   }
 
   onRender(ctx, dt) {
-    clearCanvas(ctx, this.canvas, "#0c1a2b");
+    this.gfx.backdrop(ctx, dt);
     ctx.save(); ctx.scale(this.dpr, this.dpr);
-    ctx.fillStyle = "#132840";
-    for (let i = 0; i < 3; i++) ctx.fillRect(0, this.viewH - 20 - i * 40, this.viewW, 2);
-
-    ctx.fillStyle = "#2ee6a6";
     for (const p of this.pipes) {
-      ctx.fillRect(p.x, 0, p.w, p.gapY);
-      ctx.fillRect(p.x, p.gapY + this.gapSize, p.w, this.viewH - (p.gapY + this.gapSize));
-      ctx.fillStyle = "#22d3ee"; ctx.fillRect(p.x - 3, p.gapY - 14, p.w + 6, 14); ctx.fillRect(p.x - 3, p.gapY + this.gapSize, p.w + 6, 14);
-      ctx.fillStyle = "#2ee6a6";
+      this.gfx.block(ctx, p.x, -10, p.w, p.gapY + 10, 6, "#2ee6a6", { glow: 0.32 });
+      this.gfx.block(ctx, p.x, p.gapY + this.gapSize, p.w, this.viewH - (p.gapY + this.gapSize) + 10, 6, "#2ee6a6", { glow: 0.32 });
+      // Lips at the gap edges
+      this.gfx.block(ctx, p.x - 4, p.gapY - 15, p.w + 8, 15, 5, "#22d3ee", { glow: 0.6 });
+      this.gfx.block(ctx, p.x - 4, p.gapY + this.gapSize, p.w + 8, 15, 5, "#22d3ee", { glow: 0.6 });
     }
 
     ctx.save();
     ctx.translate(this.bird.x, this.bird.y);
     ctx.rotate(this.bird.rot);
-    ctx.fillStyle = "#ffd76a";
-    ctx.beginPath(); ctx.arc(0, 0, this.bird.r, 0, Math.PI * 2); ctx.fill();
-    ctx.fillStyle = "#ff9f43";
-    ctx.beginPath(); ctx.moveTo(this.bird.r - 2, -3); ctx.lineTo(this.bird.r + 10, 0); ctx.lineTo(this.bird.r - 2, 5); ctx.fill();
-    ctx.fillStyle = "#1a1200";
-    ctx.beginPath(); ctx.arc(5, -5, 2.6, 0, Math.PI * 2); ctx.fill();
+    this.gfx.orb(ctx, 0, 0, this.bird.r, "#ffd76a", { glow: 0.7 });
+    // Wing beats with the flap
+    const wing = Math.sin(performance.now() / 70) * 4;
+    ctx.fillStyle = "rgba(255,159,67,0.95)";
+    ctx.beginPath();
+    ctx.ellipse(-3, wing * 0.4, this.bird.r * 0.62, this.bird.r * 0.36, wing * 0.06, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = "#ff8c2b";
+    ctx.beginPath(); ctx.moveTo(this.bird.r - 3, -3); ctx.lineTo(this.bird.r + 10, 0); ctx.lineTo(this.bird.r - 3, 5); ctx.fill();
+    ctx.fillStyle = "#fff";
+    ctx.beginPath(); ctx.arc(5, -5.5, 4, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = "#160f00";
+    ctx.beginPath(); ctx.arc(6.2, -5.5, 2, 0, Math.PI * 2); ctx.fill();
     ctx.restore();
     ctx.restore();
   }

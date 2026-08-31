@@ -26,6 +26,9 @@
 <meta property="og:type" content="website">
 <meta property="og:image" content="assets/images/og-image.jpg">
 <meta name="twitter:card" content="summary_large_image">
+<link rel="preload" href="assets/fonts/inter-latin.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="assets/fonts/sora-latin.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="css/fonts.css">
 <link rel="stylesheet" href="css/variables.css">
 <link rel="stylesheet" href="css/base.css">
 <link rel="stylesheet" href="css/components.css">
@@ -36,6 +39,7 @@
 <body>
 
 <div id="boot-loader">
+  <div class="boot-mark">M</div>
   <div class="logo">MegaPlay Hub</div>
   <div class="bar"><span></span></div>
 </div>
@@ -46,7 +50,7 @@
   <div class="app-shell">
 
     <aside class="sidebar" id="sidebar">
-      <button class="nav-toggle" id="nav-toggle" aria-label="Toggle navigation">‹</button>
+      <button class="nav-toggle" id="nav-toggle" aria-label="Toggle navigation"></button>
       <div class="brand">
         <div class="brand-mark">M</div>
         <div class="brand-name">MegaPlay</div>
@@ -55,24 +59,25 @@
         <!-- injected by navigation.js -->
       </nav>
       <div class="sidebar-footer">
-        <div class="nav-item" style="opacity:.5;pointer-events:none;">
-          <span class="nav-icon">✨</span><span class="nav-label">v1.0.0</span>
+        <div class="nav-item" style="opacity:.45;pointer-events:none;">
+          <span class="nav-icon" style="font-size:.62rem;font-weight:800;letter-spacing:.04em;">1.1</span>
+          <span class="nav-label">Version 1.1.0</span>
         </div>
       </div>
     </aside>
 
     <div class="main-col">
       <header class="topbar">
-        <button class="icon-btn" id="mobile-nav-btn" aria-label="Menu" style="display:none">☰</button>
+        <button class="icon-btn" id="mobile-nav-btn" aria-label="Menu" style="display:none"></button>
         <div class="search-box">
-          <span aria-hidden="true">🔎</span>
-          <input id="global-search" type="search" placeholder="Search 30+ games…" aria-label="Search games">
+          <span id="search-icon" aria-hidden="true"></span>
+          <input id="global-search" type="search" placeholder="Search 30 games…" aria-label="Search games">
         </div>
         <div class="topbar-spacer"></div>
         <div class="topbar-actions">
-          <div class="currency-chip coins" title="Coins"><span class="ic">🪙</span><span id="topbar-coins">0</span></div>
-          <div class="currency-chip xp" title="Experience"><span class="ic">⭐</span><span id="topbar-xp">Lv 1</span></div>
-          <button class="icon-btn" id="mute-btn" title="Toggle sound" aria-label="Toggle sound">🔊</button>
+          <div class="currency-chip coins" title="Coins"><span class="ic" id="coin-icon"></span><span id="topbar-coins">0</span></div>
+          <div class="currency-chip xp" title="Experience"><span class="ic" id="xp-icon"></span><span id="topbar-xp">Lv 1</span></div>
+          <button class="icon-btn" id="mute-btn" title="Toggle sound" aria-label="Toggle sound"></button>
           <a class="profile-chip" href="#/profile" data-route="/profile" title="Profile">
             <span class="avatar" id="topbar-avatar" style="width:32px;height:32px;font-size:.9rem;">P</span>
           </a>

@@ -3,7 +3,7 @@
 // ==========================================================================
 import { GameBase } from "./gameBase.js";
 import { audioManager } from "../systems/audioManager.js";
-import { clearCanvas, roundRect } from "./canvasUtils.js";
+import { roundRect } from "./canvasUtils.js";
 import { choice } from "../core/utils.js";
 
 const COLS = 10, ROWS = 20;
@@ -34,6 +34,7 @@ export class TetrisGame extends GameBase {
   getTouchHint() { return "D-pad to move/soft-drop, ● to rotate, ■ to hard drop."; }
   getKeyboardHint() { return "Arrows to move/soft-drop, Up to rotate, Space to hard drop."; }
 
+  getScene() { return "grid"; }
   onInit() { this.createCanvas(); }
 
   onStart(difficulty) {
@@ -157,19 +158,28 @@ export class TetrisGame extends GameBase {
     this.endGame({ result: "loss", score: this.score, message: `Cleared ${this.lines} lines.`, extraStats: [{ label: "Lines", value: this.lines }] });
   }
 
-  onRender(ctx) {
-    clearCanvas(ctx, this.canvas, "#07080f");
+  onRender(ctx, dt) {
+    this.gfx.backdrop(ctx, dt);
     ctx.save(); ctx.scale(this.dpr, this.dpr);
     const cell = Math.floor(Math.min(this.viewW / COLS, this.viewH / (ROWS + 1)));
     const boardW = cell * COLS, boardH = cell * ROWS;
     const offX = (this.viewW - boardW - 90) / 2 + 8, offY = (this.viewH - boardH) / 2;
 
-    ctx.strokeStyle = "#ffffff10"; ctx.strokeRect(offX - 1, offY - 1, boardW + 2, boardH + 2);
+    // Well: inset panel with a faint cell lattice
+    ctx.fillStyle = "rgba(0,0,0,0.34)";
+    roundRect(ctx, offX - 4, offY - 4, boardW + 8, boardH + 8, 8); ctx.fill();
+    ctx.strokeStyle = "rgba(255,255,255,0.05)"; ctx.lineWidth = 1;
+    ctx.beginPath();
+    for (let x = 1; x < COLS; x++) { ctx.moveTo(offX + x * cell, offY); ctx.lineTo(offX + x * cell, offY + boardH); }
+    for (let y = 1; y < ROWS; y++) { ctx.moveTo(offX, offY + y * cell); ctx.lineTo(offX + boardW, offY + y * cell); }
+    ctx.stroke();
+    ctx.strokeStyle = "rgba(255,255,255,0.12)"; ctx.lineWidth = 1.5;
+    roundRect(ctx, offX - 4, offY - 4, boardW + 8, boardH + 8, 8); ctx.stroke();
+
     for (let y = 0; y < ROWS; y++) for (let x = 0; x < COLS; x++) {
       const v = this.grid[y][x];
       if (!v) continue;
-      ctx.fillStyle = COLORS[v];
-      roundRect(ctx, offX + x * cell + 1, offY + y * cell + 1, cell - 2, cell - 2, 3); ctx.fill();
+      this.gfx.block(ctx, offX + x * cell + 1, offY + y * cell + 1, cell - 2, cell - 2, 4, COLORS[v], { glow: 0.28 });
     }
     if (this.piece) {
       ctx.fillStyle = COLORS[this.piece.type];
@@ -185,15 +195,14 @@ export class TetrisGame extends GameBase {
       for (const [cx, cy] of this._cells(this.piece)) {
         const y = this.piece.y + cy;
         if (y < 0) continue;
-        roundRect(ctx, offX + (this.piece.x + cx) * cell + 1, offY + y * cell + 1, cell - 2, cell - 2, 3); ctx.fill();
+        this.gfx.block(ctx, offX + (this.piece.x + cx) * cell + 1, offY + y * cell + 1, cell - 2, cell - 2, 4, COLORS[this.piece.type], { glow: 0.5 });
       }
     }
 
     const px = offX + boardW + 20, py = offY + 6;
-    ctx.fillStyle = "#ffffff99"; ctx.font = "12px sans-serif"; ctx.fillText("NEXT", px, py);
-    ctx.fillStyle = COLORS[this.next];
+    this.gfx.label(ctx, "NEXT", px, py, { size: 11, align: "left", color: "rgba(255,255,255,0.55)" });
     this._cells({ type: this.next, rot: 0 }, 0).forEach(([cx, cy]) => {
-      roundRect(ctx, px + cx * (cell * 0.6), py + 12 + cy * (cell * 0.6), cell * 0.55, cell * 0.55, 2); ctx.fill();
+      this.gfx.block(ctx, px + cx * (cell * 0.6), py + 14 + cy * (cell * 0.6), cell * 0.55, cell * 0.55, 3, COLORS[this.next], { glow: 0.3 });
     });
     ctx.restore();
   }

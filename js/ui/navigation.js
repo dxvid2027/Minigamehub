@@ -2,34 +2,35 @@
 // Navigation — sidebar, bottom nav, topbar wallet/avatar, search wiring.
 // ==========================================================================
 import { saveManager } from "../systems/saveManager.js";
-import { progression } from "../systems/progression.js";
-import { achievementSystem } from "../systems/achievementSystem.js";
 import { audioManager } from "../systems/audioManager.js";
 import { router } from "../core/router.js";
 import { eventBus } from "../core/eventBus.js";
 import { el, formatNumber } from "../core/utils.js";
+import { iconMarkup } from "./icons.js";
 
 const NAV_ITEMS = [
-  { path: "/home", icon: "🏠", label: "Home" },
-  { path: "/library", icon: "🎮", label: "Library" },
-  { path: "/profile", icon: "👤", label: "Profile" },
-  { path: "/achievements", icon: "🏆", label: "Achievements" },
-  { path: "/statistics", icon: "📊", label: "Statistics" },
-  { path: "/settings", icon: "⚙️", label: "Settings" },
+  { path: "/home", icon: "home", label: "Home" },
+  { path: "/library", icon: "library", label: "Library" },
+  { path: "/profile", icon: "profile", label: "Profile" },
+  { path: "/achievements", icon: "trophy", label: "Achievements" },
+  { path: "/statistics", icon: "stats", label: "Statistics" },
+  { path: "/settings", icon: "settings", label: "Settings" },
 ];
 
 function navItemNode(item, mobile = false) {
   const active = router.current?.path === item.path;
-  const node = el("a", {
+  const iconEl = el("span", { class: mobile ? "ic" : "nav-icon" });
+  iconEl.innerHTML = iconMarkup(item.icon);
+  return el("a", {
     class: mobile ? `bn-item${active ? " active" : ""}` : `nav-item${active ? " active" : ""}`,
     href: `#${item.path}`,
     "data-route": item.path,
+    "aria-current": active ? "page" : null,
     onClick: () => audioManager.play("click"),
   }, [
-    el("span", { class: mobile ? "ic" : "nav-icon" }, item.icon),
-    el(mobile ? "span" : "span", { class: mobile ? "" : "nav-label" }, item.label),
+    iconEl,
+    el("span", { class: mobile ? "" : "nav-label" }, item.label),
   ]);
-  return node;
 }
 
 export function renderNav() {
@@ -52,6 +53,15 @@ export function initNavigation() {
   renderNav();
   updateWallet();
 
+  // Static chrome that lives in index.html gets its icons here so the whole
+  // UI draws from one icon set.
+  const setIcon = (sel, name) => { const n = document.querySelector(sel); if (n) n.innerHTML = iconMarkup(name); };
+  setIcon("#search-icon", "search");
+  setIcon("#nav-toggle", "chevronLeft");
+  setIcon("#mobile-nav-btn", "menu");
+  setIcon("#coin-icon", "coin");
+  setIcon("#xp-icon", "star");
+
   eventBus.on("route:after", renderNav);
   eventBus.on("save:changed", updateWallet);
   eventBus.on("coins:changed", updateWallet);
@@ -66,7 +76,7 @@ export function initNavigation() {
   });
 
   const muteBtn = document.getElementById("mute-btn");
-  const syncMute = () => { muteBtn.textContent = saveManager.data.settings.muted ? "🔇" : "🔊"; };
+  const syncMute = () => { if (muteBtn) muteBtn.innerHTML = iconMarkup(saveManager.data.settings.muted ? "volumeMuted" : "volume"); };
   syncMute();
   muteBtn?.addEventListener("click", () => { audioManager.toggleMute(); syncMute(); });
 

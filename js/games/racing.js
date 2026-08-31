@@ -3,7 +3,7 @@
 // ==========================================================================
 import { GameBase } from "./gameBase.js";
 import { audioManager } from "../systems/audioManager.js";
-import { clearCanvas, roundRect } from "./canvasUtils.js";
+import { roundRect } from "./canvasUtils.js";
 import { clamp, randInt } from "../core/utils.js";
 
 export class RacingGame extends GameBase {
@@ -20,6 +20,7 @@ export class RacingGame extends GameBase {
   getTouchHint() { return "Use the D-pad (or drag) to steer left and right."; }
   getKeyboardHint() { return "Arrow keys or A/D to steer."; }
 
+  getScene() { return "grid"; }
   onInit() {
     this.createCanvas();
     this.input.onPointer("move", (p) => { this._dragX = p.x; });
@@ -89,22 +90,41 @@ export class RacingGame extends GameBase {
     this.endGame({ result: "loss", score: this.score, message: `You drove ${this.score}m.` });
   }
 
+  _drawCar(ctx, cx, cy, w, h, color, isPlayer) {
+    const x = cx - w / 2, y = cy - h / 2;
+    this.gfx.block(ctx, x, y, w, h, 8, color, { glow: isPlayer ? 0.6 : 0.3 });
+    // Cabin glass
+    ctx.fillStyle = "rgba(6,10,24,0.55)";
+    roundRect(ctx, x + w * 0.16, y + h * (isPlayer ? 0.16 : 0.5), w * 0.68, h * 0.28, 4); ctx.fill();
+    // Head/tail lights
+    ctx.fillStyle = isPlayer ? "rgba(255,255,255,0.9)" : "rgba(255,120,120,0.9)";
+    const ly = isPlayer ? y + 2 : y + h - 5;
+    ctx.fillRect(x + 4, ly, 5, 3);
+    ctx.fillRect(x + w - 9, ly, 5, 3);
+  }
+
   onRender(ctx, dt) {
-    clearCanvas(ctx, this.canvas, "#0a0a12");
+    this.gfx.backdrop(ctx, dt);
     ctx.save(); ctx.scale(this.dpr, this.dpr);
-    ctx.fillStyle = "#181c2c"; ctx.fillRect(this.roadX, 0, this.roadW, this.viewH);
-    ctx.strokeStyle = "#ffffff33"; ctx.lineWidth = 3; ctx.strokeRect(this.roadX, 0, this.roadW, this.viewH);
+    // Asphalt with a soft sheen down the middle
+    const road = ctx.createLinearGradient(this.roadX, 0, this.roadX + this.roadW, 0);
+    road.addColorStop(0, "#12162a"); road.addColorStop(0.5, "#1c2238"); road.addColorStop(1, "#12162a");
+    ctx.fillStyle = road; ctx.fillRect(this.roadX, 0, this.roadW, this.viewH);
+    this.gfx.neonLine(ctx, this.roadX, 0, this.roadX, this.viewH, "#22d3ee", 2, 0.5);
+    this.gfx.neonLine(ctx, this.roadX + this.roadW, 0, this.roadX + this.roadW, this.viewH, "#22d3ee", 2, 0.5);
 
-    this._dashOffset = ((this._dashOffset || 0) + this.speed * dt) % 40;
-    ctx.strokeStyle = "#ffffff55"; ctx.setLineDash([18, 18]); ctx.lineDashOffset = -this._dashOffset;
+    this._dashOffset = ((this._dashOffset || 0) + this.speed * dt) % 44;
+    ctx.save();
+    ctx.strokeStyle = "rgba(255,255,255,0.45)"; ctx.lineWidth = 4; ctx.lineCap = "round";
+    ctx.setLineDash([20, 24]); ctx.lineDashOffset = -this._dashOffset;
+    ctx.shadowColor = "rgba(255,255,255,0.35)"; ctx.shadowBlur = 8;
     ctx.beginPath(); ctx.moveTo(this.roadX + this.roadW / 2, 0); ctx.lineTo(this.roadX + this.roadW / 2, this.viewH); ctx.stroke();
-    ctx.setLineDash([]);
+    ctx.restore();
 
-    for (const c of this.traffic) { ctx.fillStyle = c.color; roundRect(ctx, c.x - c.w / 2, c.y - c.h / 2, c.w, c.h, 6); ctx.fill(); }
+    for (const c of this.traffic) this._drawCar(ctx, c.x, c.y, c.w, c.h, c.color, false);
 
     if (this.invuln <= 0 || Math.floor(this.invuln * 12) % 2 === 0) {
-      ctx.fillStyle = "#2ee6a6";
-      roundRect(ctx, this.player.x - this.player.w / 2, this.viewH - 70 - this.player.h / 2, this.player.w, this.player.h, 7); ctx.fill();
+      this._drawCar(ctx, this.player.x, this.viewH - 70, this.player.w, this.player.h, "#2ee6a6", true);
     }
     ctx.restore();
   }

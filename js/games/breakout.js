@@ -3,7 +3,7 @@
 // ==========================================================================
 import { GameBase } from "./gameBase.js";
 import { audioManager } from "../systems/audioManager.js";
-import { clearCanvas, roundRect } from "./canvasUtils.js";
+import { roundRect } from "./canvasUtils.js";
 import { clamp } from "../core/utils.js";
 
 const ROW_COLORS = ["#ff5470", "#ff9f43", "#ffd76a", "#2ee6a6", "#22d3ee", "#7c5cff"];
@@ -22,6 +22,7 @@ export class BreakoutGame extends GameBase {
   getTouchHint() { return "Drag left/right to move the paddle, tap the button to launch."; }
   getKeyboardHint() { return "Arrow keys or A/D to move the paddle, Space to launch."; }
 
+  getScene() { return "grid"; }
   onInit() {
     this.createCanvas();
     this.input.onPointer("move", (p) => { this._dragX = p.x; });
@@ -130,24 +131,23 @@ export class BreakoutGame extends GameBase {
 
   _updateHud() { this.setHud({ Score: this.score, Lives: "❤️".repeat(Math.max(0, this.lives)), Level: this.level }); }
 
-  onRender(ctx) {
-    clearCanvas(ctx, this.canvas, "#070912");
+  onRender(ctx, dt) {
+    this.gfx.backdrop(ctx, dt);
     ctx.save(); ctx.scale(this.dpr, this.dpr);
     for (const brick of this.bricks) {
       if (!brick.alive) continue;
-      ctx.globalAlpha = brick.hp > 1 ? 1 : 0.85;
-      ctx.fillStyle = brick.color;
-      roundRect(ctx, brick.x, brick.y, brick.w, brick.h, 4); ctx.fill();
-      ctx.globalAlpha = 1;
+      // Reinforced bricks (2 hp) read brighter and carry a stronger rim.
+      this.gfx.block(ctx, brick.x, brick.y, brick.w, brick.h, 5, brick.color,
+                     { glow: brick.hp > 1 ? 0.5 : 0.22 });
+      if (brick.hp > 1) {
+        ctx.strokeStyle = "rgba(255,255,255,0.4)"; ctx.lineWidth = 1;
+        roundRect(ctx, brick.x + 1, brick.y + 1, brick.w - 2, brick.h - 2, 4); ctx.stroke();
+      }
     }
-    ctx.fillStyle = "#7c5cff";
-    roundRect(ctx, this.paddle.x, this.viewH - 24, this.paddle.w, this.paddle.h, 6); ctx.fill();
-    ctx.fillStyle = "#fff"; ctx.shadowColor = "#22d3ee"; ctx.shadowBlur = 12;
-    ctx.beginPath(); ctx.arc(this.ball.x, this.ball.y, this.ball.r, 0, Math.PI * 2); ctx.fill();
-    ctx.shadowBlur = 0;
+    this.gfx.block(ctx, this.paddle.x, this.viewH - 24, this.paddle.w, this.paddle.h, 7, "#7c5cff", { glow: 0.6 });
+    this.gfx.orb(ctx, this.ball.x, this.ball.y, this.ball.r, "#ffffff", { glow: 0.9 });
     if (!this._launched) {
-      ctx.fillStyle = "#ffffffaa"; ctx.font = "13px sans-serif"; ctx.textAlign = "center";
-      ctx.fillText("Press Space / Tap to launch", this.viewW / 2, this.viewH - 40);
+      this.gfx.label(ctx, "Press Space / Tap to launch", this.viewW / 2, this.viewH - 44, { size: 13 });
     }
     ctx.restore();
   }

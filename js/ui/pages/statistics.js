@@ -3,9 +3,19 @@
 // ==========================================================================
 import { statsManager } from "../../systems/statsManager.js";
 import { el, formatNumber, formatTime } from "../../core/utils.js";
+import { iconMarkup } from "../icons.js";
+import { gameArtSVG } from "../gameArt.js";
 
-function tile(icon, val, lbl) {
-  return el("div", { class: "card stat-tile" }, [el("div", { class: "ic" }, icon), el("div", {}, [el("div", { class: "val" }, val), el("div", { class: "lbl" }, lbl)])]);
+function tile(iconName, val, lbl) {
+  const ic = el("div", { class: "ic" });
+  ic.innerHTML = iconMarkup(iconName);
+  return el("div", { class: "card stat-tile" }, [ic, el("div", {}, [el("div", { class: "val" }, val), el("div", { class: "lbl" }, lbl)])]);
+}
+
+function leaderThumb(game) {
+  const thumb = el("div", { class: "thumb" });
+  thumb.innerHTML = gameArtSVG(game, { compact: true });
+  return thumb;
 }
 
 function leaderboard(title, rows, valueFn) {
@@ -14,7 +24,7 @@ function leaderboard(title, rows, valueFn) {
     rows.length
       ? el("div", {}, rows.map((r, i) => el("div", { class: "leaderboard-row" }, [
           el("div", { class: "rank" }, `#${i + 1}`),
-          el("div", { class: "thumb", style: `background:linear-gradient(135deg, ${r.game.grad[0]}, ${r.game.grad[1]})` }, r.game.emoji),
+          leaderThumb(r.game),
           el("div", { class: "name" }, r.game.title),
           el("div", { class: "score" }, valueFn(r)),
         ])))
@@ -43,12 +53,12 @@ export function renderStatistics(container) {
   container.append(el("div", { class: "container" }, [
     el("div", { class: "section-title" }, [el("h2", {}, "Statistics")]),
     el("div", { class: "stat-grid" }, [
-      tile("⏱️", formatTime(ov.totalPlaytime), "Total Playtime"),
-      tile("🎮", formatNumber(ov.totalPlays), "Games Played"),
-      tile("✅", formatNumber(ov.gamesCompleted), "Games Completed"),
-      tile("🏆", `${ov.gamesPlayed}/${ov.totalGames}`, "Games Tried"),
-      tile("📈", `${ov.winRate}%`, "Win Rate"),
-      tile("🥇", formatNumber(ov.totalWins), "Total Wins"),
+      tile("clock", formatTime(ov.totalPlaytime), "Total Playtime"),
+      tile("gamepad", formatNumber(ov.totalPlays), "Games Played"),
+      tile("check", formatNumber(ov.gamesCompleted), "Games Completed"),
+      tile("target", `${ov.gamesPlayed}/${ov.totalGames}`, "Games Tried"),
+      tile("stats", `${ov.winRate}%`, "Win Rate"),
+      tile("medal", formatNumber(ov.totalWins), "Total Wins"),
     ]),
     el("div", { class: "dashboard-grid", style: "margin-top:22px;" }, [
       activityChart(),

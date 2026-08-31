@@ -3,7 +3,6 @@
 // ==========================================================================
 import { GameBase } from "./gameBase.js";
 import { audioManager } from "../systems/audioManager.js";
-import { clearCanvas } from "./canvasUtils.js";
 import { clamp } from "../core/utils.js";
 
 const GRAVITY = 1400;
@@ -21,6 +20,7 @@ export class BasketballGame extends GameBase {
   getTouchHint() { return "Drag back from the ball and release to shoot."; }
   getKeyboardHint() { return "Click and drag back from the ball, then release."; }
 
+  getScene() { return "aurora"; }
   onInit() {
     this.createCanvas();
     this.input.onPointer("down", (p) => { if (!this.inFlight) this.drag = { sx: p.x, sy: p.y, x: p.x, y: p.y }; });
@@ -106,8 +106,8 @@ export class BasketballGame extends GameBase {
     this.endGame({ result: this.made >= 10 ? "win" : "score", score: this.score, message: `${this.made} baskets made!`, extraStats: [{ label: "Baskets", value: this.made }] });
   }
 
-  onRender(ctx) {
-    clearCanvas(ctx, this.canvas, "#0c1220");
+  onRender(ctx, dt) {
+    this.gfx.backdrop(ctx, dt);
     ctx.save(); ctx.scale(this.dpr, this.dpr);
 
     ctx.strokeStyle = "#ff5470"; ctx.lineWidth = 5;

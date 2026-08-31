@@ -131,11 +131,15 @@ export class BackgroundFX {
 
   start() {
     if (this._raf) return;
+    // The ambient background only needs ~30fps — it is slow-moving decoration,
+    // and halving its draw rate leaves the whole frame budget to the games.
+    const FRAME = 1000 / 30;
     const loop = (t) => {
-      const dt = Math.min(0.05, (t - this._last) / 1000);
-      this._last = t;
-      this._tick(dt);
       this._raf = requestAnimationFrame(loop);
+      const elapsed = t - this._last;
+      if (elapsed < FRAME) return;
+      this._last = t;
+      this._tick(Math.min(0.06, elapsed / 1000));
     };
     this._raf = requestAnimationFrame(loop);
   }

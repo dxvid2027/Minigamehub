@@ -3,7 +3,6 @@
 // ==========================================================================
 import { GameBase } from "./gameBase.js";
 import { audioManager } from "../systems/audioManager.js";
-import { clearCanvas } from "./canvasUtils.js";
 import { randInt, choice } from "../core/utils.js";
 
 const GRAVITY = 900;
@@ -25,6 +24,7 @@ export class FruitSliceGame extends GameBase {
   getTouchHint() { return "Swipe across the fruit to slice it."; }
   getKeyboardHint() { return "Click and drag across the fruit to slice it."; }
 
+  getScene() { return "stars"; }
   onInit() {
     this.createCanvas();
     this.trail = [];
@@ -121,8 +121,8 @@ export class FruitSliceGame extends GameBase {
     this.endGame({ result: "loss", score: this.score, message: bombDeath ? "Boom! You sliced a bomb." : "Out of lives." });
   }
 
-  onRender(ctx) {
-    clearCanvas(ctx, this.canvas, "#0a0d18");
+  onRender(ctx, dt) {
+    this.gfx.backdrop(ctx, dt);
     ctx.save(); ctx.scale(this.dpr, this.dpr);
 
     if (this.trail.length > 1) {

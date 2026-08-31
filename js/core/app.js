@@ -20,6 +20,11 @@ function boot() {
 
   const bg = new BackgroundFX(document.getElementById("bg-canvas"));
   bg.start();
+  // While a game is on screen the ambient background is invisible behind the
+  // stage, so it is parked to give the game the whole frame budget.
+  eventBus.on("route:after", ({ path }) => {
+    if (path.startsWith("/play/")) bg.pause(); else bg.resume();
+  });
 
   eventBus.on("achievement:unlocked", (ach) => { toastAchievement(ach); audioManager.play("achievement"); });
   eventBus.on("level:up", ({ level }) => { toastLevelUp(level); audioManager.play("levelup"); });

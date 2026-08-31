@@ -18,7 +18,8 @@ no build step and no external services: everything runs locally and offline.
 | **Daily challenges** | 3 rotating challenges per day (deterministic, seeded by date) + streaks |
 | **Save system** | Robust `localStorage` save with schema-merge migration, export/import, autosave |
 | **Audio** | Fully procedural Web Audio SFX + ambient music with master/music/SFX volume |
-| **Design** | Dark-by-default glassmorphism UI, animated particle background, 5 themes |
+| **Design** | Self-hosted Inter + Sora, layered glass surfaces, film-grain texture, procedural cover art for every game, 5 themes |
+| **Performance** | 60 fps across all games; expensive effects (backdrop blur, blend passes, glow) are budgeted, and the graphics kit auto-downgrades on slow devices |
 | **Accessibility** | Colorblind modes, high contrast, reduced motion, UI scaling, keyboard nav |
 | **Devices** | Desktop, laptop, iPad, Android tablets and phones — controls adapt automatically |
 | **Installable** | Web app manifest + service worker: add it to your home screen and it launches full-screen with its own icon and plays offline |
@@ -143,6 +144,7 @@ wrangler.jsonc             # Cloudflare Workers config (static assets)
 scripts/build.mjs          # copies the deployable site into ./dist
 
 css/
+  fonts.css                # self-hosted Inter + Sora variable fonts
   variables.css            # design tokens, themes, accessibility overrides
   base.css                 # reset, layout primitives, focus handling
   components.css           # nav, cards, buttons, modals, toasts, forms
@@ -168,12 +170,15 @@ js/
     settingsManager.js     # applies theme + accessibility settings
   ui/
     navigation.js          # sidebar, bottom nav, wallet chips, search
+    icons.js               # inline SVG icon set (24px grid, currentColor)
+    gameArt.js             # procedural, seeded SVG cover art per game
     gameCard.js            # shared grid/list game card
     toast.js  modal.js     # notifications and dialogs
     pages/                 # home, library, profile, achievements,
                            # statistics, settings, play
   games/
     gameBase.js            # the framework every game extends
+    gfx.js                 # in-game graphics kit: backdrops, lighting, glow
     canvasUtils.js         # shared canvas drawing helpers
     <30 game modules>      # one self-contained module per game
 
@@ -194,6 +199,12 @@ assets/                    # audio / images / icons (all generated at runtime)
 - **Frame-budget discipline** — `GameBase` owns a single rAF loop per game with
   a clamped delta time, auto-pauses on tab blur, disposes listeners/observers on
   route change, and caps particle counts to avoid leaks in long sessions.
+- **Cheap pixels** — backdrops are rendered once into an offscreen canvas and
+  blitted; gradients are cached and painted in translated space; glows are
+  pre-rendered sprites blitted additively rather than `shadowBlur`. A rolling
+  frame monitor drops glow and grain automatically if a device falls behind.
+- **One visual language** — the same palette drives a game's cover art, its
+  in-game lighting and its card, because all three read `grad` from the registry.
 - **Device-adaptive input** — `InputController` exposes keyboard state, pointer,
   swipe gestures and virtual D-pad/buttons behind one API; a game declares
   `getTouchLayout()` and the framework injects the right on-screen controls.

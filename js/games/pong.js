@@ -3,7 +3,6 @@
 // ==========================================================================
 import { GameBase } from "./gameBase.js";
 import { audioManager } from "../systems/audioManager.js";
-import { clearCanvas } from "./canvasUtils.js";
 import { clamp } from "../core/utils.js";
 
 const WIN_SCORE = 11;
@@ -21,6 +20,7 @@ export class PongGame extends GameBase {
   getTouchHint() { return "Drag anywhere on the board to move your paddle."; }
   getKeyboardHint() { return "Arrow Up/Down or W/S to move your paddle."; }
 
+  getScene() { return "grid"; }
   onInit() {
     this.createCanvas();
     this.input.onPointer("move", (p) => { this._dragY = p.y; });
@@ -89,18 +89,27 @@ export class PongGame extends GameBase {
     else if (this.p2.score >= WIN_SCORE) this.endGame({ result: "win", score: this.p2.score, message: `You won ${this.p2.score}-${this.p1.score}!` });
   }
 
-  onRender(ctx) {
-    clearCanvas(ctx, this.canvas, "#070912");
+  onRender(ctx, dt) {
+    this.gfx.backdrop(ctx, dt);
     ctx.save(); ctx.scale(this.dpr, this.dpr);
-    ctx.strokeStyle = "#ffffff22"; ctx.setLineDash([8, 10]);
+    ctx.strokeStyle = "#ffffff1c"; ctx.setLineDash([6, 12]); ctx.lineWidth = 2;
     ctx.beginPath(); ctx.moveTo(this.viewW / 2, 0); ctx.lineTo(this.viewW / 2, this.viewH); ctx.stroke();
     ctx.setLineDash([]);
-    ctx.fillStyle = "#22d3ee"; ctx.fillRect(4, this.p1.y, this.pW, this.pH);
-    ctx.fillStyle = "#2ee6a6"; ctx.fillRect(this.viewW - this.pW - 4, this.p2.y, this.pW, this.pH);
-    ctx.fillStyle = "#fff";
-    ctx.shadowColor = "#fff"; ctx.shadowBlur = 12;
-    ctx.beginPath(); ctx.arc(this.ball.x, this.ball.y, this.ballR, 0, Math.PI * 2); ctx.fill();
-    ctx.shadowBlur = 0;
+    ctx.strokeStyle = "#ffffff10"; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.arc(this.viewW / 2, this.viewH / 2, 62, 0, Math.PI * 2); ctx.stroke();
+
+    this.gfx.block(ctx, 4, this.p1.y, this.pW, this.pH, 6, "#22d3ee", { glow: 0.7 });
+    this.gfx.block(ctx, this.viewW - this.pW - 4, this.p2.y, this.pW, this.pH, 6, "#2ee6a6", { glow: 0.7 });
+
+    // Motion trail behind the ball
+    for (let i = 4; i >= 1; i--) {
+      const t = i / 5;
+      ctx.globalAlpha = 0.1 * (1 - t) + 0.05;
+      this.gfx.orb(ctx, this.ball.x - this.ball.vx * 0.012 * i, this.ball.y - this.ball.vy * 0.012 * i,
+                   this.ballR * (1 - t * 0.5), "#ffffff", { glow: 0 });
+    }
+    ctx.globalAlpha = 1;
+    this.gfx.orb(ctx, this.ball.x, this.ball.y, this.ballR, "#ffffff", { glow: 0.9 });
     ctx.restore();
   }
 }

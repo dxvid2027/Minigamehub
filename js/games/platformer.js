@@ -4,7 +4,7 @@
 // ==========================================================================
 import { GameBase } from "./gameBase.js";
 import { audioManager } from "../systems/audioManager.js";
-import { clearCanvas, roundRect } from "./canvasUtils.js";
+import { roundRect } from "./canvasUtils.js";
 import { clamp, randInt } from "../core/utils.js";
 
 const GRAVITY = 1900;
@@ -23,6 +23,7 @@ export class PlatformerGame extends GameBase {
   getTouchHint() { return "D-pad to move, ● to jump."; }
   getKeyboardHint() { return "Arrow keys / A-D to move, Space or Up to jump."; }
 
+  getScene() { return "aurora"; }
   onInit() { this.createCanvas(); }
 
   onStart(difficulty) {
@@ -116,8 +117,8 @@ export class PlatformerGame extends GameBase {
     this.endGame({ result: "loss", score: this.score, message: `Collected ${this.gemsCollected} gems before falling.` });
   }
 
-  onRender(ctx) {
-    clearCanvas(ctx, this.canvas, "#0c1524");
+  onRender(ctx, dt) {
+    this.gfx.backdrop(ctx, dt);
     ctx.save(); ctx.scale(this.dpr, this.dpr);
     ctx.translate(-this.camX, 0);
 

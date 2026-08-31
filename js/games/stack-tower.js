@@ -3,7 +3,6 @@
 // ==========================================================================
 import { GameBase } from "./gameBase.js";
 import { audioManager } from "../systems/audioManager.js";
-import { clearCanvas } from "./canvasUtils.js";
 
 const BLOCK_H = 26;
 
@@ -21,6 +20,7 @@ export class StackTowerGame extends GameBase {
   getTouchHint() { return "Tap anywhere (or the button) to drop the block."; }
   getKeyboardHint() { return "Space or click to drop the block."; }
 
+  getScene() { return "grid"; }
   onInit() {
     this.createCanvas();
     this.input.onTap(() => this._drop());
@@ -85,27 +85,22 @@ export class StackTowerGame extends GameBase {
     this.setScore(this.height * 10 + this.perfects * 15);
   }
 
-  onRender(ctx) {
-    clearCanvas(ctx, this.canvas, "#080b18");
+  onRender(ctx, dt) {
+    this.gfx.backdrop(ctx, dt);
     ctx.save(); ctx.scale(this.dpr, this.dpr);
     ctx.translate(0, this.camY);
 
     this.stack.forEach((b, i) => {
       const y = this.viewH - 40 - (i + 1) * BLOCK_H;
-      ctx.fillStyle = b.color;
-      ctx.fillRect(b.x, y, b.w, BLOCK_H - 2);
-      ctx.fillStyle = "#00000022";
-      ctx.fillRect(b.x, y + BLOCK_H - 6, b.w, 4);
+      this.gfx.block(ctx, b.x, y, b.w, BLOCK_H - 2, 5, b.color, { glow: 0.25 });
     });
 
     const cy = this.viewH - 40 - (this.stack.length + 1) * BLOCK_H;
-    ctx.fillStyle = this._color(this.height + 1);
-    ctx.fillRect(this.current.x, cy, this.current.w, BLOCK_H - 2);
+    this.gfx.block(ctx, this.current.x, cy, this.current.w, BLOCK_H - 2, 5, this._color(this.height + 1), { glow: 0.6 });
     ctx.restore();
 
     ctx.save(); ctx.scale(this.dpr, this.dpr);
-    ctx.fillStyle = "#ffffff55"; ctx.font = "12px sans-serif"; ctx.textAlign = "center";
-    ctx.fillText("Tap / Space to drop", this.viewW / 2, this.viewH - 14);
+    this.gfx.label(ctx, "Tap / Space to drop", this.viewW / 2, this.viewH - 16, { size: 12 });
     ctx.restore();
   }
 }

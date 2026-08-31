@@ -4,6 +4,13 @@
 import { achievementSystem } from "../../systems/achievementSystem.js";
 import { saveManager } from "../../systems/saveManager.js";
 import { el, formatNumber } from "../../core/utils.js";
+import { iconMarkup } from "../icons.js";
+
+function lockIcon() {
+  const s = el("span", { style: "display:inline-flex;color:var(--text-3);" });
+  s.innerHTML = iconMarkup("lock");
+  return s;
+}
 
 function drawRing(canvas, pct) {
   const dpr = Math.min(window.devicePixelRatio || 1, 2);
@@ -20,21 +27,35 @@ function drawRing(canvas, pct) {
   ctx.beginPath(); ctx.arc(cx, cy, r, -Math.PI / 2, -Math.PI / 2 + (pct / 100) * Math.PI * 2); ctx.stroke();
 }
 
+function rewardChip(reward = {}) {
+  const wrap = el("div", { class: "reward" });
+  if (reward.coins) {
+    const c = el("span", { class: "r-coin" });
+    c.innerHTML = iconMarkup("coin");
+    c.appendChild(document.createTextNode(String(reward.coins)));
+    wrap.appendChild(c);
+  }
+  if (reward.xp) {
+    const x = el("span", { class: "r-xp" });
+    x.innerHTML = iconMarkup("star");
+    x.appendChild(document.createTextNode(String(reward.xp)));
+    wrap.appendChild(x);
+  }
+  return wrap;
+}
+
 function achCard(ach) {
   const unlocked = achievementSystem.isUnlocked(ach.id);
   const prog = achievementSystem.progressFor(ach);
   return el("div", { class: `card ach-card${unlocked ? " unlocked" : " locked"}` }, [
-    el("div", { class: "ic" }, unlocked ? ach.icon : "🔒"),
+    el("div", { class: "ic" }, unlocked ? ach.icon : lockIcon()),
     el("div", { class: "info" }, [
       el("div", { class: "name" }, ach.name),
       el("div", { class: "desc" }, ach.desc),
       !unlocked ? el("div", { class: "pbar thin" }, el("span", { style: `width:${prog.pct}%` })) : null,
       !unlocked ? el("div", { style: "font-size:.7rem;color:var(--text-3);margin-top:4px;" }, `${formatNumber(prog.current)} / ${formatNumber(prog.target)}`) : null,
     ]),
-    el("div", { class: "reward" }, [
-      ach.reward?.coins ? `🪙${ach.reward.coins} ` : "",
-      ach.reward?.xp ? `⭐${ach.reward.xp}` : "",
-    ].join("")),
+    rewardChip(ach.reward),
   ]);
 }
 

@@ -7,6 +7,7 @@ import { audioManager } from "../../systems/audioManager.js";
 import { el } from "../../core/utils.js";
 import { confirmModal } from "../modal.js";
 import { toast } from "../toast.js";
+import { iconMarkup } from "../icons.js";
 
 function sliderRow(label, key, onInput) {
   const s = saveManager.data.settings;
@@ -29,8 +30,19 @@ function switchRow(title, desc, checked, onChange) {
   ]);
 }
 
-function panel(id, title, children, active = false) {
-  return el("div", { class: `settings-panel${active ? " active" : ""}`, "data-panel": id }, [el("h3", { style: "margin-bottom:18px;" }, title), ...children]);
+function lockOverlay() {
+  const lock = el("div", { class: "lock" });
+  lock.innerHTML = iconMarkup("lock");
+  return lock;
+}
+
+function panel(id, title, iconName, children, active = false) {
+  const head = el("h3", { style: "margin-bottom:18px;display:flex;align-items:center;gap:10px;" });
+  const ic = el("span", { style: "display:inline-flex;color:var(--accent-2);" });
+  ic.innerHTML = iconMarkup(iconName);
+  head.append(ic, document.createTextNode(title));
+  head.dataset.title = title;
+  return el("div", { class: `settings-panel${active ? " active" : ""}`, "data-panel": id }, [head, ...children]);
 }
 
 export function renderSettings(container) {
@@ -39,7 +51,7 @@ export function renderSettings(container) {
   const profile = saveManager.data.profile;
 
   // --- Audio ---
-  const audioPanel = panel("audio", "🔊 Audio", [
+  const audioPanel = panel("audio", "Audio", "volume", [
     sliderRow("Master Volume", "masterVolume", (v) => audioManager.setVolume("masterVolume", v)),
     sliderRow("Music Volume", "musicVolume", (v) => audioManager.setVolume("musicVolume", v)),
     sliderRow("Sound Effects", "sfxVolume", (v) => audioManager.setVolume("sfxVolume", v)),
@@ -54,7 +66,7 @@ export function renderSettings(container) {
       const colors = { dark: "#0a0d18", light: "#eef0f8", crimson: "#3a1420", emerald: "#0f2f28", royal: "#241c4d" };
       const sw = el("button", { class: `swatch${s.theme === t ? " active" : ""}`, style: `background:${colors[t]};`, title: settingsManager.themeLabel(t), disabled: !unlocked || undefined,
         onClick: () => { settingsManager.set("theme", t); audioManager.play("select"); document.querySelectorAll(".swatch").forEach(x => x.classList.remove("active")); sw.classList.add("active"); } },
-        !unlocked ? el("div", { class: "lock" }, "🔒") : null);
+        !unlocked ? lockOverlay() : null);
       return sw;
     })),
     el("div", { class: "hint" }, "Unlock more themes by leveling up your profile."),
@@ -68,7 +80,7 @@ export function renderSettings(container) {
       return [slider, val];
     })()),
   ]);
-  const appearancePanel = panel("appearance", "🎨 Appearance", [themeRow, uiScaleRow]);
+  const appearancePanel = panel("appearance", "Appearance", "palette", [themeRow, uiScaleRow]);
 
   // --- Accessibility ---
   const colorblindRow = el("div", { class: "field" }, [
@@ -79,7 +91,7 @@ export function renderSettings(container) {
       return select;
     })(),
   ]);
-  const accessibilityPanel = panel("accessibility", "♿ Accessibility", [
+  const accessibilityPanel = panel("accessibility", "Accessibility", "accessibility", [
     colorblindRow,
     switchRow("High Contrast", "Increase border and text contrast across the UI.", s.highContrast, (v) => settingsManager.set("highContrast", v)),
     switchRow("Reduced Motion", "Minimize animations and transitions platform-wide.", s.reducedMotion, (v) => settingsManager.set("reducedMotion", v)),
@@ -88,7 +100,7 @@ export function renderSettings(container) {
   ]);
 
   // --- Performance ---
-  const performancePanel = panel("performance", "⚡ Performance", [
+  const performancePanel = panel("performance", "Performance", "gauge", [
     switchRow("Particle Effects", "Confetti, explosions and trail effects in games.", s.particles, (v) => settingsManager.set("particles", v)),
     switchRow("Screen Shake", "Camera shake on impacts for extra feedback.", s.screenShake, (v) => settingsManager.set("screenShake", v)),
     el("div", { class: "field" }, [
@@ -102,7 +114,7 @@ export function renderSettings(container) {
   ]);
 
   // --- Data ---
-  const dataPanel = panel("data", "💾 Save Data", [
+  const dataPanel = panel("data", "Save Data", "save", [
     el("p", {}, "Your entire progress — scores, achievements, stats and settings — is stored locally in your browser. Nothing is sent to a server."),
     el("div", { style: "display:flex;gap:10px;flex-wrap:wrap;margin-top:10px;" }, [
       el("button", { class: "btn btn-ghost", onClick: () => {
@@ -111,7 +123,7 @@ export function renderSettings(container) {
         const a = document.createElement("a"); a.href = url; a.download = "megaplayhub-save.json"; a.click();
         URL.revokeObjectURL(url);
         toast({ type: "success", title: "Save exported" });
-      } }, "⬇ Export Save"),
+      } }, "Export Save"),
       el("button", { class: "btn btn-ghost", onClick: () => {
         const input = document.createElement("input"); input.type = "file"; input.accept = "application/json";
         input.addEventListener("change", () => {
@@ -125,11 +137,11 @@ export function renderSettings(container) {
           reader.readAsText(file);
         });
         input.click();
-      } }, "⬆ Import Save"),
+      } }, "Import Save"),
       el("button", { class: "btn btn-danger", onClick: async () => {
         const ok = await confirmModal({ title: "Reset all progress?", message: "This permanently deletes your scores, achievements, coins and settings. This cannot be undone.", confirmLabel: "Delete Everything", danger: true });
         if (ok) { saveManager.resetAll(); toast({ type: "success", title: "Progress reset" }); renderSettings(container); }
-      } }, "🗑 Reset All Progress"),
+      } }, "Reset All Progress"),
     ]),
   ]);
 
@@ -139,7 +151,7 @@ export function renderSettings(container) {
     p.classList.add("active");
     nav.querySelectorAll("button").forEach(b => b.classList.remove("active"));
     e.target.classList.add("active");
-  } }, p.querySelector("h3").textContent));
+  } }, p.querySelector("h3").dataset.title));
   const nav = el("div", { class: "settings-nav" }, navBtns);
 
   container.append(el("div", { class: "container" }, [

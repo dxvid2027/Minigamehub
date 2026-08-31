@@ -3,8 +3,8 @@
 // ==========================================================================
 import { GameBase } from "./gameBase.js";
 import { audioManager } from "../systems/audioManager.js";
-import { clearCanvas } from "./canvasUtils.js";
 import { clamp, randInt } from "../core/utils.js";
+import { shade } from "./gfx.js";
 
 export class SpaceShooterGame extends GameBase {
   getDifficulties() { return ["Easy", "Normal", "Hard"]; }
@@ -20,6 +20,7 @@ export class SpaceShooterGame extends GameBase {
   getTouchHint() { return "Use the D-pad to move — your ship fires automatically."; }
   getKeyboardHint() { return "Arrow keys or WASD to move. Auto-fire is always on."; }
 
+  getScene() { return "stars"; }
   onInit() { this.createCanvas(); }
 
   onStart(difficulty) {
@@ -128,21 +129,32 @@ export class SpaceShooterGame extends GameBase {
     }
   }
 
-  onRender(ctx) {
-    clearCanvas(ctx, this.canvas, "#050611");
+  onRender(ctx, dt) {
+    this.gfx.backdrop(ctx, dt);
     ctx.save(); ctx.scale(this.dpr, this.dpr);
-    ctx.fillStyle = "#ffffff33";
-    for (let i = 0; i < 30; i++) ctx.fillRect((i * 53) % this.viewW, (i * 97 + (performance.now() / 20)) % this.viewH, 2, 2);
+    // Parallax dust streaking past the ship
+    ctx.fillStyle = "#ffffff2e";
+    for (let i = 0; i < 34; i++) {
+      const y = (i * 97 + performance.now() / 18) % this.viewH;
+      ctx.fillRect((i * 53) % this.viewW, y, 1.6, 6);
+    }
 
-    ctx.fillStyle = "#ff5470";
-    for (const b of this.enemyBullets) { ctx.beginPath(); ctx.arc(b.x, b.y, 3.5, 0, Math.PI * 2); ctx.fill(); }
-    ctx.fillStyle = "#22d3ee";
-    for (const b of this.bullets) ctx.fillRect(b.x - 2, b.y - 8, 4, 12);
+    for (const b of this.enemyBullets) this.gfx.orb(ctx, b.x, b.y, 4, "#ff5470", { glow: 0.9 });
+    for (const b of this.bullets) {
+      this.gfx.neonLine(ctx, b.x, b.y - 10, b.x, b.y + 4, "#22d3ee", 3.4);
+    }
 
     for (const e of this.enemies) {
-      ctx.fillStyle = e.boss ? "#ff4fd8" : "#ff9f43";
+      const col = e.boss ? "#ff4fd8" : "#ff9f43";
       ctx.save(); ctx.translate(e.x, e.y);
+      ctx.shadowColor = col; ctx.shadowBlur = e.boss ? 26 : 12;
+      const g = ctx.createLinearGradient(0, -e.h / 2, 0, e.h / 2);
+      g.addColorStop(0, shade(col, -0.2)); g.addColorStop(1, shade(col, 0.18));
+      ctx.fillStyle = g;
       ctx.beginPath(); ctx.moveTo(0, e.h / 2); ctx.lineTo(-e.w / 2, -e.h / 2); ctx.lineTo(e.w / 2, -e.h / 2); ctx.closePath(); ctx.fill();
+      ctx.shadowBlur = 0;
+      ctx.fillStyle = "rgba(255,255,255,0.5)";
+      ctx.beginPath(); ctx.arc(0, -e.h * 0.12, Math.max(2, e.w * 0.1), 0, Math.PI * 2); ctx.fill();
       ctx.restore();
       if (e.boss) {
         ctx.fillStyle = "#00000066"; ctx.fillRect(e.x - 40, e.y - e.h / 2 - 12, 80, 6);
@@ -150,10 +162,25 @@ export class SpaceShooterGame extends GameBase {
       }
     }
 
+    // Engine flame flickers with the frame
     const p = this.player;
-    ctx.fillStyle = "#2ee6a6";
+    const flame = 10 + Math.random() * 8;
+    const fg = ctx.createLinearGradient(p.x, p.y + p.h / 2, p.x, p.y + p.h / 2 + flame);
+    fg.addColorStop(0, "rgba(255,214,106,0.9)");
+    fg.addColorStop(1, "rgba(255,79,216,0)");
+    ctx.fillStyle = fg;
+    ctx.beginPath();
+    ctx.moveTo(p.x - 5, p.y + p.h / 2); ctx.lineTo(p.x + 5, p.y + p.h / 2); ctx.lineTo(p.x, p.y + p.h / 2 + flame);
+    ctx.closePath(); ctx.fill();
+
+    ctx.save();
+    ctx.shadowColor = "#2ee6a6"; ctx.shadowBlur = 18;
+    const hull = ctx.createLinearGradient(p.x, p.y - p.h / 2, p.x, p.y + p.h / 2);
+    hull.addColorStop(0, "#7cffd0"); hull.addColorStop(1, "#12a077");
+    ctx.fillStyle = hull;
     ctx.beginPath(); ctx.moveTo(p.x, p.y - p.h / 2); ctx.lineTo(p.x - p.w / 2, p.y + p.h / 2); ctx.lineTo(p.x + p.w / 2, p.y + p.h / 2); ctx.closePath(); ctx.fill();
-    ctx.fillStyle = "#22d3ee"; ctx.beginPath(); ctx.arc(p.x, p.y + 2, 4, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+    this.gfx.orb(ctx, p.x, p.y + 2, 4.5, "#22d3ee", { glow: 0.8 });
     ctx.restore();
   }
 }

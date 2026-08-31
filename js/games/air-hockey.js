@@ -3,7 +3,6 @@
 // ==========================================================================
 import { GameBase } from "./gameBase.js";
 import { audioManager } from "../systems/audioManager.js";
-import { clearCanvas } from "./canvasUtils.js";
 import { clamp } from "../core/utils.js";
 
 const WIN_GOALS = 7;
@@ -21,6 +20,7 @@ export class AirHockeyGame extends GameBase {
   getTouchHint() { return "Drag your mallet around the bottom half of the table."; }
   getKeyboardHint() { return "Move the mouse to control your mallet (arrow keys also work)."; }
 
+  getScene() { return "grid"; }
   onInit() {
     this.createCanvas();
     this.input.onPointer("move", (p) => { this._target = { x: p.x, y: p.y }; });
@@ -112,24 +112,25 @@ export class AirHockeyGame extends GameBase {
     this.puck = { x: this.viewW / 2, y: this.viewH / 2, vx: 0, vy: (scorer === "player" ? 1 : -1) * 180, r: 13 };
   }
 
-  onRender(ctx) {
-    clearCanvas(ctx, this.canvas, "#0b1220");
+  onRender(ctx, dt) {
+    this.gfx.backdrop(ctx, dt);
     ctx.save(); ctx.scale(this.dpr, this.dpr);
-    ctx.strokeStyle = "#ffffff22"; ctx.lineWidth = 2;
-    ctx.beginPath(); ctx.moveTo(0, this.viewH / 2); ctx.lineTo(this.viewW, this.viewH / 2); ctx.stroke();
-    ctx.beginPath(); ctx.arc(this.viewW / 2, this.viewH / 2, 56, 0, Math.PI * 2); ctx.stroke();
+    // Table markings
+    this.gfx.neonLine(ctx, 0, this.viewH / 2, this.viewW, this.viewH / 2, "#ffffff", 1.6, 0.35);
+    ctx.strokeStyle = "rgba(255,255,255,0.16)"; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.arc(this.viewW / 2, this.viewH / 2, 58, 0, Math.PI * 2); ctx.stroke();
+    ctx.beginPath(); ctx.arc(this.viewW / 2, this.viewH / 2, 6, 0, Math.PI * 2); ctx.stroke();
 
     const goalMinX = (this.viewW - this.goalW) / 2;
-    ctx.fillStyle = "#2ee6a655"; ctx.fillRect(goalMinX, 0, this.goalW, 6);
-    ctx.fillStyle = "#ff547055"; ctx.fillRect(goalMinX, this.viewH - 6, this.goalW, 6);
+    this.gfx.block(ctx, goalMinX, 0, this.goalW, 7, 3, "#2ee6a6", { glow: 0.8 });
+    this.gfx.block(ctx, goalMinX, this.viewH - 7, this.goalW, 7, 3, "#ff5470", { glow: 0.8 });
 
-    ctx.fillStyle = "#22d3ee";
-    ctx.beginPath(); ctx.arc(this.ai.x, this.ai.y, this.ai.r, 0, Math.PI * 2); ctx.fill();
-    ctx.fillStyle = "#2ee6a6";
-    ctx.beginPath(); ctx.arc(this.player.x, this.player.y, this.player.r, 0, Math.PI * 2); ctx.fill();
-    ctx.fillStyle = "#fff"; ctx.shadowColor = "#fff"; ctx.shadowBlur = 10;
-    ctx.beginPath(); ctx.arc(this.puck.x, this.puck.y, this.puck.r, 0, Math.PI * 2); ctx.fill();
-    ctx.shadowBlur = 0;
+    this.gfx.orb(ctx, this.ai.x, this.ai.y, this.ai.r, "#22d3ee", { glow: 0.55 });
+    this.gfx.orb(ctx, this.player.x, this.player.y, this.player.r, "#2ee6a6", { glow: 0.55 });
+    // Puck sits on a shadow so it reads as floating on the table
+    ctx.fillStyle = "rgba(0,0,0,0.4)";
+    ctx.beginPath(); ctx.ellipse(this.puck.x, this.puck.y + 5, this.puck.r, this.puck.r * 0.5, 0, 0, Math.PI * 2); ctx.fill();
+    this.gfx.orb(ctx, this.puck.x, this.puck.y, this.puck.r, "#f4f6ff", { glow: 0.9 });
     ctx.restore();
   }
 }

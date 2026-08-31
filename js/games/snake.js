@@ -4,7 +4,7 @@
 import { GameBase } from "./gameBase.js";
 import { audioManager } from "../systems/audioManager.js";
 import { randInt } from "../core/utils.js";
-import { roundRect, clearCanvas } from "./canvasUtils.js";
+import { lerpColor } from "./canvasUtils.js";
 
 export class SnakeGame extends GameBase {
   getDifficulties() { return ["Easy", "Normal", "Hard"]; }
@@ -19,6 +19,7 @@ export class SnakeGame extends GameBase {
   getTouchHint() { return "Swipe up/down/left/right to steer."; }
   getKeyboardHint() { return "Arrow keys or WASD to steer, P to pause."; }
 
+  getScene() { return "grid"; }
   onInit() {
     this.createCanvas();
     this.cols = 20; this.rows = 20;
@@ -100,7 +101,7 @@ export class SnakeGame extends GameBase {
 
   onRender(ctx, dt) {
     this._foodPulse = (this._foodPulse || 0) + dt;
-    clearCanvas(ctx, this.canvas, "#080a12");
+    this.gfx.backdrop(ctx, dt);
     ctx.save();
     ctx.scale(this.dpr, this.dpr);
     const offX = (this.viewW - this.cell * this.cols) / 2;
@@ -111,18 +112,32 @@ export class SnakeGame extends GameBase {
     for (let y = 0; y <= this.rows; y++) { ctx.beginPath(); ctx.moveTo(offX, offY + y * this.cell); ctx.lineTo(offX + this.cols * this.cell, offY + y * this.cell); ctx.stroke(); }
 
     const pulse = 1 + Math.sin(this._foodPulse * 6) * 0.12;
-    ctx.fillStyle = "#ff4fd8";
-    ctx.shadowColor = "#ff4fd8"; ctx.shadowBlur = 14;
-    ctx.beginPath();
-    ctx.arc(offX + this.food.x * this.cell + this.cell / 2, offY + this.food.y * this.cell + this.cell / 2, (this.cell * 0.34) * pulse, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.shadowBlur = 0;
+    this.gfx.orb(ctx, offX + this.food.x * this.cell + this.cell / 2,
+                 offY + this.food.y * this.cell + this.cell / 2,
+                 this.cell * 0.34 * pulse, "#ff4fd8", { glow: 0.85 });
 
-    this.snake.forEach((s, i) => {
-      ctx.fillStyle = i === 0 ? "#2ee6a6" : `rgba(34,211,238,${Math.max(0.45, 1 - i * 0.03)})`;
-      roundRect(ctx, offX + s.x * this.cell + 1, offY + s.y * this.cell + 1, this.cell - 2, this.cell - 2, 5);
-      ctx.fill();
-    });
+    // Body drawn tail-first so each segment overlaps the one behind it.
+    for (let i = this.snake.length - 1; i >= 0; i--) {
+      const s = this.snake[i];
+      const t = i / Math.max(1, this.snake.length - 1);
+      const color = i === 0 ? "#3df2b4" : lerpColor("#22d3ee", "#1c7fa8", Math.min(1, t * 1.2));
+      const inset = i === 0 ? 0.5 : 1.5;
+      this.gfx.block(ctx, offX + s.x * this.cell + inset, offY + s.y * this.cell + inset,
+                     this.cell - inset * 2, this.cell - inset * 2, i === 0 ? 7 : 5, color,
+                     { glow: i === 0 ? 0.55 : 0.18 });
+      if (i === 0) {
+        // Eyes, oriented along the direction of travel.
+        const cx = offX + s.x * this.cell + this.cell / 2, cy = offY + s.y * this.cell + this.cell / 2;
+        const ox = this.dir.y !== 0 ? this.cell * 0.18 : 0, oy = this.dir.x !== 0 ? this.cell * 0.18 : 0;
+        const fx = this.dir.x * this.cell * 0.12, fy = this.dir.y * this.cell * 0.12;
+        ctx.fillStyle = "#06120f";
+        for (const sgn of [-1, 1]) {
+          ctx.beginPath();
+          ctx.arc(cx + fx + ox * sgn, cy + fy + oy * sgn, this.cell * 0.085, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+    }
     ctx.restore();
   }
 }

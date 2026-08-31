@@ -3,7 +3,6 @@
 // ==========================================================================
 import { GameBase } from "./gameBase.js";
 import { audioManager } from "../systems/audioManager.js";
-import { clearCanvas, roundRect } from "./canvasUtils.js";
 import { randInt } from "../core/utils.js";
 
 export class EndlessRunnerGame extends GameBase {
@@ -19,6 +18,7 @@ export class EndlessRunnerGame extends GameBase {
   getTouchHint() { return "Tap to jump, swipe down to slide."; }
   getKeyboardHint() { return "Space / Up to jump, Down to slide."; }
 
+  getScene() { return "grid"; }
   onInit() {
     this.createCanvas();
     this.input.onTap(() => this._jump());
@@ -91,20 +91,30 @@ export class EndlessRunnerGame extends GameBase {
   }
 
   onRender(ctx, dt) {
-    clearCanvas(ctx, this.canvas, "#0a0e1c");
+    this.gfx.backdrop(ctx, dt);
     ctx.save(); ctx.scale(this.dpr, this.dpr);
     this._bgOffset = ((this._bgOffset || 0) + this.speed * dt * 0.3) % 80;
     ctx.strokeStyle = "#7c5cff22";
     for (let i = -1; i < this.viewW / 80 + 1; i++) { ctx.beginPath(); ctx.moveTo(i * 80 - this._bgOffset, 0); ctx.lineTo(i * 80 - this._bgOffset, this.groundY); ctx.stroke(); }
-    ctx.fillStyle = "#12142a"; ctx.fillRect(0, this.groundY, this.viewW, this.viewH - this.groundY);
-    ctx.strokeStyle = "#22d3ee"; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(0, this.groundY); ctx.lineTo(this.viewW, this.groundY); ctx.stroke();
+    const ground = ctx.createLinearGradient(0, this.groundY, 0, this.viewH);
+    ground.addColorStop(0, "#161a34"); ground.addColorStop(1, "#0a0c1a");
+    ctx.fillStyle = ground; ctx.fillRect(0, this.groundY, this.viewW, this.viewH - this.groundY);
+    this.gfx.neonLine(ctx, 0, this.groundY, this.viewW, this.groundY, "#22d3ee", 2.5, 0.9);
 
-    ctx.fillStyle = "#ff4fd8";
-    for (const o of this.obstacles) { roundRect(ctx, o.x, o.y, o.w, o.h, 5); ctx.fill(); }
+    for (const o of this.obstacles) {
+      this.gfx.block(ctx, o.x, o.y, o.w, o.h, 6, o.type === "high" ? "#ff9f43" : "#ff4fd8", { glow: 0.55 });
+    }
 
+    // Runner with a speed-streak trail
     const p = this.player;
-    ctx.fillStyle = "#2ee6a6";
-    roundRect(ctx, p.x - p.w / 2, p.y, p.w, p.h, 8); ctx.fill();
+    for (let i = 3; i >= 1; i--) {
+      ctx.globalAlpha = 0.1 * i;
+      this.gfx.block(ctx, p.x - p.w / 2 - i * 9, p.y + 2, p.w, p.h - 4, 8, "#2ee6a6", { glow: 0, highlight: false });
+    }
+    ctx.globalAlpha = 1;
+    this.gfx.block(ctx, p.x - p.w / 2, p.y, p.w, p.h, 9, "#2ee6a6", { glow: 0.6 });
+    ctx.fillStyle = "#06231a";
+    ctx.beginPath(); ctx.arc(p.x + 4, p.y + p.h * 0.3, 2.4, 0, Math.PI * 2); ctx.fill();
     ctx.restore();
   }
 }

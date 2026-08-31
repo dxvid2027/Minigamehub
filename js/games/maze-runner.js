@@ -3,7 +3,6 @@
 // ==========================================================================
 import { GameBase } from "./gameBase.js";
 import { audioManager } from "../systems/audioManager.js";
-import { clearCanvas } from "./canvasUtils.js";
 import { formatTime, randInt } from "../core/utils.js";
 
 // Wall bit flags per cell
@@ -26,6 +25,7 @@ export class MazeRunnerGame extends GameBase {
   getTouchHint() { return "Use the D-pad or swipe to move through the maze."; }
   getKeyboardHint() { return "Arrow keys or WASD to move."; }
 
+  getScene() { return "grid"; }
   onInit() {
     this.createCanvas();
     this.input.onSwipe((dir) => this._move({ up: N, down: S, left: W, right: E }[dir]));
@@ -104,8 +104,8 @@ export class MazeRunnerGame extends GameBase {
     this.endGame({ result: "win", score, message: `Escaped in ${formatTime(this.elapsed)} with ${this.collected} gems.`, extraStats: [{ label: "Time", value: formatTime(this.elapsed) }, { label: "Moves", value: this.moves }] });
   }
 
-  onRender(ctx) {
-    clearCanvas(ctx, this.canvas, "#080b16");
+  onRender(ctx, dt) {
+    this.gfx.backdrop(ctx, dt);
     ctx.save(); ctx.scale(this.dpr, this.dpr);
     const cell = Math.floor(Math.min(this.viewW, this.viewH) / this.size);
     const offX = (this.viewW - cell * this.size) / 2, offY = (this.viewH - cell * this.size) / 2;

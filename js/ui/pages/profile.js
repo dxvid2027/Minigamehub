@@ -9,6 +9,8 @@ import { audioManager } from "../../systems/audioManager.js";
 import { getGame } from "../../../data/games.js";
 import { el, formatNumber, formatTime, timeAgo } from "../../core/utils.js";
 import { gameCard } from "../gameCard.js";
+import { iconMarkup } from "../icons.js";
+import { gameArtSVG } from "../gameArt.js";
 import { openModal, closeModal } from "../modal.js";
 
 function openEditModal(refresh) {
@@ -19,7 +21,7 @@ function openEditModal(refresh) {
     const unlocked = unlockedAvatars.includes(a);
     const sw = el("button", { class: `swatch${a === chosenAvatar ? " active" : ""}`, style: "font-size:1.6rem;", disabled: !unlocked || undefined,
       onClick: () => { chosenAvatar = a; swatches.querySelectorAll(".swatch").forEach(s => s.classList.remove("active")); sw.classList.add("active"); audioManager.play("select"); } },
-      [a, !unlocked ? el("div", { class: "lock" }, "🔒") : null]);
+      [a, !unlocked ? lockOverlay() : null]);
     return sw;
   }));
   const body = el("div", {}, [
@@ -55,13 +57,13 @@ export function renderProfile(container) {
       el("div", { class: "avatar avatar-lg" }, save.profile.avatarEmoji),
       el("div", { class: "name-block", style: "flex:1;" }, [
         el("h1", {}, save.profile.username),
-        el("span", { class: "level-pill" }, `⭐ Level ${lp.level}`),
+        levelPill(lp.level),
         el("div", { class: "xp-track" }, [
           el("div", { class: "lbl" }, [el("span", {}, `${formatNumber(lp.xp)} / ${formatNumber(lp.need)} XP`), el("span", {}, `${lp.pct}%`)]),
           el("div", { class: "pbar" }, el("span", { style: `width:${lp.pct}%` })),
         ]),
       ]),
-      el("button", { class: "btn btn-ghost", onClick: () => openEditModal(refresh) }, "✏️ Edit Profile"),
+      el("button", { class: "btn btn-ghost", onClick: () => openEditModal(refresh) }, editLabel()),
     ]),
 
     el("div", { class: "profile-stats-row" }, [
@@ -75,22 +77,22 @@ export function renderProfile(container) {
 
     el("div", { class: "dashboard-grid" }, [
       el("div", { class: "card mini-card" }, [
-        el("div", { class: "head" }, [el("h4", {}, "Favorite Games"), el("span", { class: "ic" }, "❤️")]),
+        el("div", { class: "head" }, [el("h4", {}, "Favorite Games"), headIcon("heart")]),
         favorites.length
           ? el("div", { class: "game-grid list", style: "gap:8px;" }, favorites.slice(0, 5).map(g => gameCard(g, { list: true })))
           : el("p", { style: "color:var(--text-2);font-size:.85rem;" }, "Favorite games from the Library to see them here."),
       ]),
       el("div", { class: "card mini-card" }, [
-        el("div", { class: "head" }, [el("h4", {}, "Recently Played"), el("span", { class: "ic" }, "🕒")]),
+        el("div", { class: "head" }, [el("h4", {}, "Recently Played"), headIcon("clock")]),
         recent.length
           ? el("div", { style: "display:flex;flex-direction:column;gap:8px;" }, recent.map(r => el("a", { class: "continue-row", href: `#/play/${r.gameId}`, style: "color:inherit;" }, [
-              el("div", { class: "thumb", style: `background:linear-gradient(135deg, ${r.game.grad[0]}, ${r.game.grad[1]})` }, r.game.emoji),
+              recentThumb(r.game),
               el("div", { class: "info" }, [el("div", { class: "t" }, r.game.title), el("div", { class: "s" }, timeAgo(r.ts))]),
             ])))
           : el("p", { style: "color:var(--text-2);font-size:.85rem;" }, "Nothing played yet."),
       ]),
       el("div", { class: "card mini-card" }, [
-        el("div", { class: "head" }, [el("h4", {}, "Recent Achievements"), el("span", { class: "ic" }, "🏆")]),
+        el("div", { class: "head" }, [el("h4", {}, "Recent Achievements"), headIcon("trophy")]),
         recentAch.length
           ? el("div", { style: "display:flex;flex-direction:column;gap:4px;" }, recentAch.map(a => el("div", { class: "ach-card unlocked", style: "padding:8px;" }, [
               el("div", { class: "ic" }, a.icon),
@@ -101,6 +103,36 @@ export function renderProfile(container) {
       ]),
     ]),
   ]));
+}
+
+function lockOverlay() {
+  const lock = el("div", { class: "lock" });
+  lock.innerHTML = iconMarkup("lock");
+  return lock;
+}
+function levelPill(level) {
+  const pill = el("span", { class: "level-pill" });
+  pill.innerHTML = iconMarkup("star");
+  pill.appendChild(document.createTextNode(`Level ${level}`));
+  return pill;
+}
+function headIcon(name) {
+  const span = el("span", { class: "ic" });
+  span.innerHTML = iconMarkup(name);
+  return span;
+}
+function recentThumb(game) {
+  const thumb = el("div", { class: "thumb" });
+  thumb.innerHTML = gameArtSVG(game, { compact: true });
+  return thumb;
+}
+function editLabel() {
+  const frag = document.createDocumentFragment();
+  const ic = document.createElement("span");
+  ic.style.display = "inline-flex";
+  ic.innerHTML = iconMarkup("edit");
+  frag.append(ic, document.createTextNode("Edit Profile"));
+  return frag;
 }
 
 function statBox(val, label) { return el("div", { class: "card stat-box" }, [el("b", {}, val), el("span", {}, label)]); }

@@ -9,8 +9,10 @@ import { progression } from "../systems/progression.js";
 import { audioManager } from "../systems/audioManager.js";
 import { ParticleSystem } from "../systems/particleSystem.js";
 import { createInput } from "../systems/inputManager.js";
+import { GameGfx } from "./gfx.js";
 import { eventBus } from "../core/eventBus.js";
 import { el, formatNumber, formatTime } from "../core/utils.js";
+import { iconMarkup } from "../ui/icons.js";
 
 export class GameBase {
   /**
@@ -36,6 +38,7 @@ export class GameBase {
     this._buildShell();
     this.input = createInput(this.stageEl);
     this.particles = new ParticleSystem();
+    this.gfx = new GameGfx(this.meta, this.getScene?.() || "aurora");
     this.input.onKey("KeyP", () => this.togglePause());
     this.input.onKey("Escape", () => this.togglePause());
 
@@ -60,9 +63,9 @@ export class GameBase {
       ]),
       this.hudStatsEl = el("div", { class: "hud-stats" }),
       el("div", { class: "hud-actions" }, [
-        this.pauseBtn = el("button", { class: "icon-btn", title: "Pause", onClick: () => this.togglePause() }, "⏸"),
-        el("button", { class: "icon-btn", title: "Restart", onClick: () => this.confirmRestart() }, "🔁"),
-        el("a", { class: "icon-btn", title: "Back to Library", href: "#/library" }, "✕"),
+        this.pauseBtn = iconButton("pause", "Pause", () => this.togglePause()),
+        iconButton("restart", "Restart", () => this.confirmRestart()),
+        iconLink("close", "Back to Library", "#/library"),
       ]),
     ]);
 
@@ -168,7 +171,7 @@ export class GameBase {
         onClick: (e) => { this.difficulty = d; [...e.target.parentNode.children].forEach(c => c.classList.remove("active")); e.target.classList.add("active"); audioManager.play("select"); },
       }, d))) : null,
       el("div", { class: "overlay-actions" }, [
-        el("button", { class: "btn btn-primary btn-lg", onClick: () => this.start() }, "▶ Start Game"),
+        labelledButton("play", "Start Game", "btn btn-primary btn-lg", () => this.start()),
       ]),
       el("ul", { class: "instructions" }, [...instructions.map(i => el("li", {}, i)), el("li", {}, controlsLine)]),
     );
@@ -181,9 +184,9 @@ export class GameBase {
       el("div", { class: "overlay-icon" }, "⏸"),
       el("h2", {}, "Paused"),
       el("div", { class: "overlay-actions" }, [
-        el("button", { class: "btn btn-primary btn-lg", onClick: () => this.resume() }, "▶ Resume"),
-        el("button", { class: "btn btn-ghost", onClick: () => this.confirmRestart() }, "🔁 Restart"),
-        el("a", { class: "btn btn-outline", href: "#/library" }, "Exit to Library"),
+        labelledButton("play", "Resume", "btn btn-primary btn-lg", () => this.resume()),
+        labelledButton("restart", "Restart", "btn btn-ghost", () => this.confirmRestart()),
+        labelledLink("library", "Exit to Library", "btn btn-outline", "#/library"),
       ]),
     );
   }
@@ -204,8 +207,8 @@ export class GameBase {
         ...extraStats.map(s => statBlock(s.label, s.value)),
       ]),
       el("div", { class: "overlay-actions" }, [
-        el("button", { class: "btn btn-primary btn-lg", onClick: () => this.restart() }, "🔁 Play Again"),
-        el("a", { class: "btn btn-ghost", href: "#/library" }, "Back to Library"),
+        labelledButton("restart", "Play Again", "btn btn-primary btn-lg", () => this.restart()),
+        labelledLink("library", "Back to Library", "btn btn-ghost", "#/library"),
       ]),
     );
     if (isHighScore) {
@@ -308,11 +311,27 @@ export class GameBase {
     this._lastT = now;
     this._sessionSeconds += dt;
     if (this._sessionSeconds - this._playtimeFlushed > 5) this._flushPlaytime();
+    this._watchFrameBudget(dt);
 
     this.onUpdate?.(dt);
     this.onRender?.(this.ctx, dt);
     this.input.endFrame();
     this._raf = requestAnimationFrame(() => this._loop());
+  }
+
+  /**
+   * Rolling frame-time monitor. If a device spends more than ~22ms per frame
+   * across a sustained window, the graphics kit drops glows and grain so the
+   * simulation keeps its 60fps budget. It steps back up if the device recovers.
+   */
+  _watchFrameBudget(dt) {
+    if (!this._frameSamples) { this._frameSamples = []; this._qualityChecked = 0; }
+    this._frameSamples.push(dt);
+    if (this._frameSamples.length < 90) return;
+    const avg = this._frameSamples.reduce((a, b) => a + b, 0) / this._frameSamples.length;
+    this._frameSamples.length = 0;
+    if (avg > 0.022 && this.gfx.quality === "high") this.gfx.setQuality("low");
+    else if (avg < 0.014 && this.gfx.quality === "low") this.gfx.setQuality("high");
   }
 
   _flushPlaytime() {
@@ -355,6 +374,29 @@ export class GameBase {
     this.onDestroy?.();
     this.input.destroy();
   }
+}
+
+function iconButton(name, title, onClick) {
+  const btn = el("button", { class: "icon-btn", title, "aria-label": title, onClick });
+  btn.innerHTML = iconMarkup(name);
+  return btn;
+}
+function iconLink(name, title, href) {
+  const a = el("a", { class: "icon-btn", title, "aria-label": title, href });
+  a.innerHTML = iconMarkup(name);
+  return a;
+}
+function labelledButton(iconName, label, className, onClick) {
+  const btn = el("button", { class: className, onClick });
+  btn.innerHTML = iconMarkup(iconName);
+  btn.appendChild(document.createTextNode(label));
+  return btn;
+}
+function labelledLink(iconName, label, className, href) {
+  const a = el("a", { class: className, href });
+  a.innerHTML = iconMarkup(iconName);
+  a.appendChild(document.createTextNode(label));
+  return a;
 }
 
 function statBlock(label, value) {

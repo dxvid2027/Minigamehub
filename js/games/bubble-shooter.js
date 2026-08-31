@@ -3,7 +3,6 @@
 // ==========================================================================
 import { GameBase } from "./gameBase.js";
 import { audioManager } from "../systems/audioManager.js";
-import { clearCanvas } from "./canvasUtils.js";
 import { clamp, randInt, choice } from "../core/utils.js";
 
 const COLS = 8;
@@ -23,6 +22,7 @@ export class BubbleShooterGame extends GameBase {
   getTouchHint() { return "Drag from the cannon to aim, release to shoot."; }
   getKeyboardHint() { return "Click and drag from the cannon to aim, release to shoot."; }
 
+  getScene() { return "stars"; }
   onInit() {
     this.createCanvas();
     this.input.onPointer("down", (p) => { this.aiming = { x: p.x, y: p.y }; });
@@ -150,8 +150,8 @@ export class BubbleShooterGame extends GameBase {
     this.endGame({ result: "loss", score: this.score, message: "The bubbles reached the bottom!" });
   }
 
-  onRender(ctx) {
-    clearCanvas(ctx, this.canvas, "#0a0e1c");
+  onRender(ctx, dt) {
+    this.gfx.backdrop(ctx, dt);
     ctx.save(); ctx.scale(this.dpr, this.dpr);
     for (let r = 0; r < MAX_ROWS; r++) for (let c = 0; c < COLS; c++) {
       const color = this.grid[r][c];

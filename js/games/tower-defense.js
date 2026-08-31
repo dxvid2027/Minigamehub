@@ -4,7 +4,6 @@
 // ==========================================================================
 import { GameBase } from "./gameBase.js";
 import { audioManager } from "../systems/audioManager.js";
-import { clearCanvas } from "./canvasUtils.js";
 import { clamp } from "../core/utils.js";
 
 const COLS = 12, ROWS = 7;
@@ -33,6 +32,7 @@ export class TowerDefenseGame extends GameBase {
   getTouchHint() { return "Tap a tile to build or upgrade a tower."; }
   getKeyboardHint() { return "Click a tile to build or upgrade a tower."; }
 
+  getScene() { return "grid"; }
   onInit() {
     this.createCanvas();
     this.path = buildPath();
@@ -162,8 +162,8 @@ export class TowerDefenseGame extends GameBase {
     this.endGame({ result: "loss", score: this.score, message: `Survived ${this.wave} waves, ${this.kills} kills.`, extraStats: [{ label: "Wave", value: this.wave }, { label: "Kills", value: this.kills }] });
   }
 
-  onRender(ctx) {
-    clearCanvas(ctx, this.canvas, "#0a0e14");
+  onRender(ctx, dt) {
+    this.gfx.backdrop(ctx, dt);
     ctx.save(); ctx.scale(this.dpr, this.dpr);
     const offX = (this.viewW - this.cell * COLS) / 2, offY = (this.viewH - this.cell * ROWS) / 2;
 
