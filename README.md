@@ -21,6 +21,7 @@ no build step and no external services: everything runs locally and offline.
 | **Design** | Dark-by-default glassmorphism UI, animated particle background, 5 themes |
 | **Accessibility** | Colorblind modes, high contrast, reduced motion, UI scaling, keyboard nav |
 | **Devices** | Desktop, laptop, iPad, Android tablets and phones — controls adapt automatically |
+| **Installable** | Web app manifest + service worker: add it to your home screen and it launches full-screen with its own icon and plays offline |
 
 ---
 
@@ -80,6 +81,30 @@ Pages, Netlify, GitHub Pages or any static host — just serve the repo root
 
 ---
 
+## 📱 Install it on a phone or tablet
+
+MegaPlay Hub is a full PWA, so it can live on the home screen like a native app:
+
+- **iOS / iPadOS** — open the site in Safari → *Share* → **Add to Home Screen**.
+- **Android / Chrome** — open the site → menu → **Install app** (or *Add to
+  Home screen*).
+- **Desktop Chrome/Edge** — click the install icon in the address bar.
+
+You get the MegaPlay Hub icon, a full-screen standalone window (no browser
+chrome), long-press shortcuts to Library / Achievements / Statistics, and — via
+`sw.js` — offline play: navigations are network-first so new deploys land
+immediately, while everything else is served cache-first and refreshed in the
+background.
+
+Icons are generated from a single master artwork into two variants: full-bleed
+for iOS (which applies its own squircle mask) and safe-zone padded for Android
+adaptive icons — see [`assets/icons/README.md`](assets/icons/README.md).
+
+> Installability requires HTTPS (or `localhost`). Once deployed to Workers,
+> both are satisfied automatically.
+
+---
+
 ## 🕹️ The games
 
 **Required classics (20)**
@@ -112,6 +137,8 @@ recursive-backtracker.
 
 ```
 index.html                 # SPA shell (sidebar, topbar, page outlet, overlays)
+manifest.webmanifest       # PWA manifest (icons, shortcuts, standalone mode)
+sw.js                      # service worker: offline play + install support
 wrangler.jsonc             # Cloudflare Workers config (static assets)
 scripts/build.mjs          # copies the deployable site into ./dist
 

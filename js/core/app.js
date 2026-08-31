@@ -47,6 +47,19 @@ function boot() {
 
   window.addEventListener("beforeunload", () => saveManager.saveNow());
   setInterval(() => saveManager.saveNow(), 15000);
+
+  registerServiceWorker();
+}
+
+// Registers the offline/installable service worker. Skipped on file:// where
+// service workers are unavailable.
+function registerServiceWorker() {
+  if (!("serviceWorker" in navigator)) return;
+  if (location.protocol !== "http:" && location.protocol !== "https:") return;
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register(new URL("../../sw.js", import.meta.url), { scope: "./" })
+      .catch((err) => console.warn("[app] service worker registration failed", err));
+  });
 }
 
 function outlet() { return document.getElementById("page-outlet"); }

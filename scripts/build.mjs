@@ -13,7 +13,7 @@ import { fileURLToPath } from "node:url";
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const dist = join(root, "dist");
 
-const ENTRIES = ["index.html", "css", "js", "data", "assets"];
+const ENTRIES = ["index.html", "manifest.webmanifest", "sw.js", "css", "js", "data", "assets"];
 
 async function countFiles(dir) {
   let count = 0;
