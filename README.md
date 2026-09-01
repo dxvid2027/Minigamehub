@@ -176,20 +176,19 @@ a 24px minesweeper flag and a 220px memory card at full sharpness. Emoji were
 placeholders that rendered as a different picture on every platform and could
 not be shaded to match the game around them.
 
-**Bastion TD** deserves its own line: three tower classes (single-target Cannon,
-area-slowing Frost, chaining Arc), ten upgrade levels each, and six enemy
-families — marchers, sprinters, armoured brutes, drones that fly straight over
-the road, menders that heal their neighbours and bulwarks behind a regenerating
-shield — plus a Titan every fifth wave that bursts into a squad when it dies.
-
-**The three defense games are built to be ground.** A run banks a currency
-earned from how deep you got (Rift Shards, Alloy, Crowns), and that currency
-buys permanent upgrades — starting gold, base HP, damage, income, a cheaper
-build cost, a faster ability cooldown, and a fourth tower class that stays
-locked until you pay for it. The shop opens from each game's start screen and
-everything lives in the normal save file, so progress carries between sessions
-exactly like a high score does. `js/systems/metaProgress.js` implements the
-whole thing once and all three games declare their own node list against it.
+**Bastion TD** deserves its own line: seven tower classes — single-target
+Cannon, area-slowing Frost, chaining Arc, anti-air Flak that triples its damage
+against flyers and cannot touch the ground, a Mortar that lobs a wide shell at
+ground targets only, Venom whose poison ignores armour entirely, and a Railgun
+that pierces every enemy on its line — ten upgrade levels each, and eleven
+enemy families. Marchers, sprinters and armoured brutes open; then swarmlings
+that leave two behind when they fall, drones that fly over the road, burrowers
+that dive underground where nothing can target them, menders that heal their
+escort, bulwarks behind a regenerating shield, hexers that shut one of your
+towers down for three seconds, and juggernauts that are both fast and plated.
+A Titan arrives every fifth wave and bursts into brutes; every tenth wave sends
+a Leviathan instead, which is immune to slowing, so a frost wall is not an
+answer on its own. Runs bank Bastion Cores toward permanent upgrades.
 
 Highlights worth calling out: **Chess** implements full legal-move generation
 including castling, en passant, promotion, check/checkmate/stalemate plus an
