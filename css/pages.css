@@ -197,9 +197,12 @@
 .game-overlay h2 { font-size: clamp(1.4rem, 4vw, 2rem); }
 .game-overlay .overlay-icon { font-size: 3rem; }
 .game-overlay .overlay-actions { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
-.game-overlay .stat-strip { display: flex; gap: 24px; margin: 6px 0; flex-wrap: wrap; justify-content: center; }
-.game-overlay .stat-strip .s b { display: block; font-family: var(--font-display); font-size: 1.3rem; }
-.game-overlay .stat-strip .s span { font-size: .72rem; color: var(--text-2); }
+/* Unscoped so the same strip works in the How-to-play modal, not just in the
+   start/win/lose overlays. */
+.stat-strip { display: flex; gap: 24px; margin: 6px 0; flex-wrap: wrap; }
+.stat-strip .s b { display: block; font-family: var(--font-display); font-size: 1.3rem; line-height: 1.15; }
+.stat-strip .s span { font-size: .72rem; color: var(--text-2); }
+.game-overlay .stat-strip { justify-content: center; }
 .game-overlay .instructions { max-width: 480px; color: var(--text-1); font-size: .88rem; text-align: left; background: var(--surface-2); border-radius: var(--radius-md); padding: 14px 18px; border: 1px solid var(--border); }
 .game-overlay .instructions li { padding: 3px 0; }
 .game-overlay .instructions li::before { content: "▸ "; color: var(--accent-2); }

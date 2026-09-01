@@ -23,10 +23,11 @@ export class MinesweeperGame extends GameBase {
   onInit() {
     this.stageEl.classList.add("dom-board");
     this.flagMode = false;
-    this.toolbar = el("div", { style: "position:absolute;top:8px;left:8px;z-index:3;" }, [
+    this.toolbar = el("div", { class: "board-toolbar" }, [
       this.flagBtn = el("button", { class: "chip", onClick: () => { this.flagMode = !this.flagMode; this.flagBtn.classList.toggle("active", this.flagMode); audioManager.play("toggle"); } }, "🚩 Flag Mode"),
     ]);
     this.boardEl = el("div", { class: "board-grid mine-board" });
+    this.stageEl.classList.add("stacked");
     this.stageEl.append(this.toolbar, this.boardEl);
   }
 

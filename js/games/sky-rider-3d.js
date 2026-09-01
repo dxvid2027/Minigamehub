@@ -25,12 +25,13 @@ export class SkyRider3DGame extends Game3D {
   }
   getTouchLayout() { return "dpad"; }
   getTouchButtons() { return ["a"]; }
-  getTouchHint() { return "Drag to fly, ● to boost."; }
+  getTouchHint() { return "Drag to fly; press the round ● button to boost."; }
   getKeyboardHint() { return "Arrow keys / WASD to fly, Space to boost."; }
 
   onInit() {
     if (!this.setup3D({
       clearColor: "#0a1338", fogColor: "#132048", fog: [90, 300],
+      sky: "linear-gradient(#070c2c 0%, #3b3f8e 60%, #c2609a 88%, #ffb37a 100%)",
       lightDir: [0.3, 0.8, 0.5], ambientSky: "#8390d8", ambientGround: "#232a52",
     })) return;
 

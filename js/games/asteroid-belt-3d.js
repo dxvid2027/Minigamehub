@@ -25,12 +25,13 @@ export class AsteroidBelt3DGame extends Game3D {
   }
   getTouchLayout() { return "dpad"; }
   getTouchButtons() { return ["a"]; }
-  getTouchHint() { return "Drag to fly, ● to fire (hold for continuous fire)."; }
+  getTouchHint() { return "Drag to fly; hold the round ● button to keep firing."; }
   getKeyboardHint() { return "Arrow keys / WASD to fly, Space to fire."; }
 
   onInit() {
     if (!this.setup3D({
       clearColor: "#04061a", fogColor: "#080c26", fog: [110, 260],
+      sky: "linear-gradient(#02030f 0%, #140f38 75%, #2a1550 100%)",
       lightDir: [0.5, 0.6, 0.6], ambientSky: "#3c4890", ambientGround: "#0d1024",
     })) return;
 

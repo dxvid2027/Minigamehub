@@ -30,8 +30,11 @@ export class Game2048 extends GameBase {
     this.stageEl.classList.add("dom-board");
     this.boardEl = el("div", { class: "board-grid g2048-board" });
     for (let i = 0; i < SIZE * SIZE; i++) this.boardEl.appendChild(el("div", { class: "cell" }));
-    this.tileLayer = el("div", { style: "position:absolute;inset:0;padding:10px;" });
-    this.stageEl.append(this.boardEl, this.tileLayer);
+    // The tile layer sits inside the board so it shares the grid's padding
+    // box — tile coordinates then line up with the cells exactly.
+    this.tileLayer = el("div", { class: "g2048-tiles" });
+    this.boardEl.appendChild(this.tileLayer);
+    this.stageEl.append(this.boardEl);
     this.input.onSwipe((dir) => this._move(dir));
     this._reachedGoal = false;
   }
@@ -47,12 +50,18 @@ export class Game2048 extends GameBase {
     this._render();
   }
 
+  /** Read the real cell geometry out of the grid rather than guessing it. */
   _layout() {
-    const rect = this.boardEl.getBoundingClientRect();
-    const stageRect = this.stageEl.getBoundingClientRect();
-    this.boardSize = Math.min(rect.width, rect.height) || Math.min(this.viewW, this.viewH);
-    this.cellSize = this.boardSize > 0 ? this.boardSize / SIZE : 0;
-    this.boardOffset = { x: rect.left - stageRect.left, y: rect.top - stageRect.top };
+    const first = this.boardEl.querySelector(".cell");
+    if (!first) { this.cellSize = 0; this.stride = 0; return; }
+    this.gap = parseFloat(getComputedStyle(this.boardEl).rowGap) || 0;
+    const cellRect = first.getBoundingClientRect();
+    const layerRect = this.tileLayer.getBoundingClientRect();
+    this.cellSize = cellRect.width;
+    this.stride = this.cellSize + this.gap;
+    // Measured, not assumed: whatever box the absolute layer resolves against,
+    // this delta puts tile (0,0) exactly on cell (0,0).
+    this.origin = { x: cellRect.left - layerRect.left, y: cellRect.top - layerRect.top };
   }
 
   onUpdate() {
@@ -122,10 +131,10 @@ export class Game2048 extends GameBase {
       const v = this.grid[r][c];
       if (!v) continue;
       const [bg, fg] = TILE_COLORS[v] || TILE_COLORS[4096];
-      const size = this.cellSize - 8;
+      const size = this.cellSize;
       const tile = el("div", {
         class: "g2048-tile",
-        style: `left:${this.boardOffset.x + c * this.cellSize + 4}px; top:${this.boardOffset.y + r * this.cellSize + 4}px; width:${size}px; height:${size}px; background:${bg}; color:${fg}; font-size:${size * 0.36}px;`,
+        style: `left:${this.origin.x + c * this.stride}px; top:${this.origin.y + r * this.stride}px; width:${size}px; height:${size}px; background:${bg}; color:${fg}; font-size:${size * 0.38}px;`,
       }, String(v));
       this.tileLayer.appendChild(tile);
     }

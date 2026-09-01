@@ -30,6 +30,7 @@ export class TowerBlocks3DGame extends Game3D {
   onInit() {
     if (!this.setup3D({
       clearColor: "#0a1030", fogColor: "#141d47", fog: [50, 190],
+      sky: "linear-gradient(#050827 0%, #16205a 70%, #1f2a72 100%)",
       lightDir: [0.42, 0.88, 0.42], ambientSky: "#7b86c8", ambientGround: "#252c52",
     })) return;
 

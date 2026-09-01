@@ -1,108 +1,375 @@
 /* ==========================================================================
-   MegaPlay Hub — In-Game Board / HUD styling for DOM-based games
+   MegaPlay Hub — DOM game boards
+   These games are built from elements rather than canvas, so their depth has
+   to come from CSS: every board is a physical object (an inset frame with a
+   rim highlight and grain) and every piece catches the same light from above.
    ========================================================================== */
-.board-grid { display: grid; gap: 6px; width: 100%; height: 100%; padding: 10px; }
 
-/* Tic Tac Toe / Connect Four / Minesweeper / Sudoku / Chess / Checkers share cell styling */
-.cell {
-  display: grid; place-items: center; border-radius: 8px;
-  background: var(--surface-2); border: 1px solid var(--border);
-  font-weight: 800; cursor: pointer; user-select: none;
-  transition: background var(--dur-fast), transform var(--dur-fast);
-  position: relative;
+.board-grid {
+  display: grid; gap: 6px; padding: 10px;
+  width: 100%; height: 100%; box-sizing: border-box;
+  min-width: 0; min-height: 0; margin: auto;
 }
-.cell:hover { background: var(--border-strong); }
+/* Grid items must be allowed to shrink below their content, otherwise a large
+   glyph (a chess piece, a 2048 tile) blows the track out and the board
+   overflows its stage instead of scaling down. */
+.board-grid > * { min-width: 0; min-height: 0; }
+
+/* Boards that carry their own controls (minesweeper's flag toggle, sudoku's
+   keypad) stack them with the board inside the stage, so the controls never
+   cover the playfield and never fall below the fold. */
+.game-stage.dom-board.stacked {
+  flex-direction: column; gap: 10px; padding: 12px; box-sizing: border-box;
+}
+.game-stage.dom-board.stacked > .board-grid {
+  height: min(100%, var(--board-cap, 560px)); width: auto;
+  max-width: 100%; flex: 0 1 auto; min-height: 0;
+}
+.board-toolbar { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; flex: none; }
+
+/* Boards that are square by nature: give them a real aspect ratio and let the
+   flex-centred stage place them, instead of capping only the width (which used
+   to stretch every board vertically). */
+.ttt-board, .chess-board, .checkers-board, .sudoku-board,
+.g2048-board, .whack-grid, .mine-board, .memory-grid {
+  height: auto; aspect-ratio: 1; max-height: 100%;
+}
+
+/* Shared frame treatment for the "physical" boards */
+.board-frame {
+  position: relative;
+  box-shadow:
+    inset 0 2px 6px #00000073,
+    inset 0 -1px 0 #ffffff14,
+    0 12px 34px #00000059;
+}
+.board-frame::after {
+  content: ""; position: absolute; inset: 0; border-radius: inherit;
+  background-image: var(--noise); background-size: 150px 150px;
+  opacity: .05; pointer-events: none;
+}
+
+/* ---------- Generic cell ---------- */
+.cell {
+  display: grid; place-items: center; border-radius: 9px;
+  background: linear-gradient(180deg, var(--surface-3), var(--surface-2));
+  border: 1px solid var(--border);
+  font-weight: 800; cursor: pointer; user-select: none;
+  position: relative;
+  box-shadow: inset 0 1px 0 #ffffff1a, 0 1px 2px #00000038;
+  transition: background var(--dur-fast), transform var(--dur-fast), box-shadow var(--dur-fast);
+}
+.cell:hover { background: linear-gradient(180deg, #ffffff14, var(--surface-3)); }
+.cell:active { transform: translateY(1px); box-shadow: inset 0 2px 5px #00000047; }
 .cell.disabled { cursor: default; }
-.cell.win { background: var(--accent-good) !important; color: #06210f; }
+.cell.win {
+  background: linear-gradient(180deg, #58f5c0, #16b183) !important;
+  color: #06210f;
+  box-shadow: 0 0 22px #2ee6a666, inset 0 1px 0 #ffffff80;
+  animation: cell-win-pop 420ms var(--ease-spring);
+}
+@keyframes cell-win-pop { 0% { transform: scale(.86); } 60% { transform: scale(1.07); } 100% { transform: scale(1); } }
 
-/* Tic-tac-toe */
-.ttt-board { grid-template-columns: repeat(3, 1fr); grid-template-rows: repeat(3, 1fr); max-width: 380px; margin: 0 auto; }
-.ttt-board .cell { font-size: 2.6rem; aspect-ratio: 1; }
+/* ---------- Tic-tac-toe ---------- */
+.ttt-board {
+  grid-template-columns: repeat(3, minmax(0, 1fr)); grid-template-rows: repeat(3, minmax(0, 1fr));
+  width: min(100%, 420px); gap: 10px;
+  background: linear-gradient(160deg, #1b2340, #10162b);
+  border-radius: var(--radius-lg); padding: 14px;
+}
+.ttt-board .cell { font-size: 2.7rem; aspect-ratio: 1; border-radius: 14px; }
+.ttt-board .cell:not(:empty) { text-shadow: 0 3px 10px #00000066; }
 
-/* Connect four */
-.c4-board { grid-template-columns: repeat(7, 1fr); background: #0d3a6b; border-radius: 14px; padding: 10px; gap: 8px; }
-.c4-board .cell { background: #071c33; border-radius: 50%; aspect-ratio: 1; }
-.c4-board .cell .disc { width: 82%; height: 82%; border-radius: 50%; transition: transform .25s var(--ease-out); }
-.c4-board .cell .disc.p1 { background: radial-gradient(circle at 35% 30%, #ffe27a, #ffb020); }
-.c4-board .cell .disc.p2 { background: radial-gradient(circle at 35% 30%, #ff8fd0, #ff4fd8); }
+/* ---------- Connect four ---------- */
+.c4-board {
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  width: min(100%, 660px); height: auto; aspect-ratio: 7 / 6; max-height: 100%;
+  background: linear-gradient(170deg, #ffffff26, #00000024), linear-gradient(180deg, #1a6cc4, #072346);
+  border-radius: 18px; padding: 14px; gap: 8px;
+  box-shadow:
+    inset 0 2px 0 #ffffff40, inset 0 -3px 8px #00000073,
+    inset 0 0 0 1px #ffffff1f, 0 18px 44px #00000073;
+}
+.c4-board .cell {
+  background: radial-gradient(circle at 50% 35%, #04101f, #061b30);
+  border-radius: 50%; aspect-ratio: 1; border-color: #ffffff12;
+  box-shadow: inset 0 3px 7px #000000a6, inset 0 -1px 0 #ffffff1a;
+}
+.c4-board .cell:hover { background: radial-gradient(circle at 50% 35%, #071a2e, #0a2542); }
+.c4-board .cell .disc {
+  width: 84%; height: 84%; border-radius: 50%;
+  box-shadow: inset 0 -3px 6px #00000059, inset 0 2px 3px #ffffff80, 0 2px 5px #00000073;
+  animation: c4-drop .34s var(--ease-out);
+}
+@keyframes c4-drop { from { transform: translateY(-260%); } to { transform: none; } }
+.c4-board .cell .disc.p1 { background: radial-gradient(circle at 35% 28%, #ffe89a, #f0a01b 62%, #b96f05); }
+.c4-board .cell .disc.p2 { background: radial-gradient(circle at 35% 28%, #ffb3e2, #ef3fc6 62%, #a8148a); }
 
-/* Minesweeper */
-.mine-board .cell { font-size: 1rem; aspect-ratio: 1; }
-.mine-board .cell.revealed { background: var(--bg-1); cursor: default; }
+/* ---------- Minesweeper ---------- */
+.mine-board { gap: 4px; }
+.mine-board .cell {
+  font-size: 1rem; aspect-ratio: 1; border-radius: 6px;
+  /* Unrevealed cells are raised buttons… */
+  background: linear-gradient(180deg, #38416b, #262d4d);
+  box-shadow: inset 0 1px 0 #ffffff2e, inset 0 -2px 0 #00000047, 0 1px 2px #00000047;
+}
+.mine-board .cell.revealed {
+  /* …revealed ones are pressed into the board. */
+  background: linear-gradient(180deg, #131829, #171d33);
+  box-shadow: inset 0 2px 5px #00000080;
+  cursor: default; transform: none;
+}
 .mine-board .cell.flag { color: var(--accent-warn); }
-.mine-board .cell.mine { background: var(--accent-bad); }
-.mine-n1 { color: #6fb8ff; } .mine-n2 { color: #6fe08a; } .mine-n3 { color: #ff8f6f; }
-.mine-n4 { color: #b98fff; } .mine-n5 { color: #ffb86f; } .mine-n6 { color: #6fe0d8; }
+.mine-board .cell.mine {
+  background: radial-gradient(circle at 50% 40%, #ff8a9e, #d92544);
+  box-shadow: 0 0 18px #ff547066, inset 0 1px 0 #ffffff5c;
+}
+.mine-n1 { color: #7cc4ff; } .mine-n2 { color: #6fe08a; } .mine-n3 { color: #ff9b7a; }
+.mine-n4 { color: #c39bff; } .mine-n5 { color: #ffc27a; } .mine-n6 { color: #6fe0d8; }
 .mine-n7 { color: #fff; } .mine-n8 { color: #cfd2e6; }
 
-/* Sudoku */
-.sudoku-board { grid-template-columns: repeat(9, 1fr); grid-template-rows: repeat(9, 1fr); gap: 2px; background: var(--border-strong); max-width: 460px; margin: 0 auto; padding: 3px; border-radius: 10px; }
-.sudoku-board .cell { border-radius: 3px; font-size: 1.1rem; aspect-ratio: 1; background: var(--bg-1); }
-.sudoku-board .cell.given { color: var(--text-0); background: var(--surface-2); cursor: default; }
-.sudoku-board .cell.selected { background: #22d3ee33; }
-.sudoku-board .cell.error { color: var(--accent-bad); }
-.sudoku-board .cell.block-b { box-shadow: inset 2px 0 0 var(--border-strong); }
-.sudoku-board .cell.block-r { box-shadow: inset 0 2px 0 var(--border-strong); }
-.sudoku-numpad { display: flex; gap: 6px; justify-content: center; margin-top: 12px; flex-wrap: wrap; }
-.sudoku-numpad button { width: 40px; height: 40px; border-radius: 8px; background: var(--surface-2); border: 1px solid var(--border); font-weight: 700; }
+/* ---------- Sudoku ---------- */
+.sudoku-board {
+  grid-template-columns: repeat(9, minmax(0, 1fr)); grid-template-rows: repeat(9, minmax(0, 1fr));
+  gap: 2px; background: #39406b; width: min(100%, 520px);
+  padding: 4px; border-radius: 12px;
+}
+.sudoku-board .cell {
+  border-radius: 3px; font-size: 1.12rem; aspect-ratio: 1;
+  background: linear-gradient(180deg, #171d33, #131829);
+  border: none; box-shadow: none;
+}
+.sudoku-board .cell.given {
+  color: var(--text-0);
+  background: linear-gradient(180deg, #262e4e, #1e2440);
+  cursor: default; text-shadow: 0 1px 2px #00000073;
+}
+.sudoku-board .cell:not(.given):hover { background: #1e2542; }
+.sudoku-board .cell.selected {
+  background: linear-gradient(180deg, #2b6d80, #1d4f61);
+  box-shadow: inset 0 0 0 2px var(--accent-2), 0 0 16px #22d3ee4d;
+}
+.sudoku-board .cell.error { color: var(--accent-bad); text-shadow: 0 0 10px #ff547073; }
+/* 3×3 block separators */
+.sudoku-board .cell.block-b { box-shadow: inset -3px 0 0 #8f9ada; }
+.sudoku-board .cell.block-r { box-shadow: inset 0 -3px 0 #8f9ada; }
+.sudoku-board .cell.block-b.block-r { box-shadow: inset -3px 0 0 #8f9ada, inset 0 -3px 0 #8f9ada; }
+.sudoku-numpad { display: flex; gap: 7px; justify-content: center; flex-wrap: wrap; flex: none; max-width: 100%; }
+.sudoku-numpad button {
+  width: 42px; height: 42px; border-radius: 11px; font-weight: 800; font-size: 1rem;
+  background: linear-gradient(180deg, var(--surface-3), var(--surface-2));
+  border: 1px solid var(--border); color: var(--text-0);
+  box-shadow: inset 0 1px 0 #ffffff1f, 0 2px 5px #00000047;
+  transition: transform var(--dur-fast), background var(--dur-fast);
+}
+.sudoku-numpad button:hover { background: linear-gradient(180deg, #ffffff1a, var(--surface-3)); }
+.sudoku-numpad button:active { transform: translateY(2px); }
 
-/* Chess / Checkers */
-.chess-board, .checkers-board { grid-template-columns: repeat(8, 1fr); grid-template-rows: repeat(8, 1fr); max-width: 480px; margin: 0 auto; gap: 0; padding: 0; border: 3px solid var(--surface-2); border-radius: 8px; overflow: hidden; }
-.chess-board .cell, .checkers-board .cell { border-radius: 0; border: none; font-size: 2rem; aspect-ratio: 1; }
-.chess-board .cell.light, .checkers-board .cell.light { background: #2b3252; }
-.chess-board .cell.dark, .checkers-board .cell.dark { background: #171b30; }
-.chess-board .cell.selected, .checkers-board .cell.selected { background: #22d3ee55 !important; }
-.chess-board .cell.move-hint::after { content: ""; width: 22%; height: 22%; border-radius: 50%; background: #22d3ee99; position: absolute; }
-.chess-board .cell.capture-hint::after { content: ""; position: absolute; inset: 6%; border: 3px solid #ff547099; border-radius: 50%; }
-.chess-board .cell.check { background: #ff547055 !important; }
-.checkers-board .piece { width: 76%; height: 76%; border-radius: 50%; box-shadow: 0 3px 6px #00000060; }
-.checkers-board .piece.p1 { background: radial-gradient(circle at 35% 30%, #ffefc2, #ff8f0e); }
-.checkers-board .piece.p2 { background: radial-gradient(circle at 35% 30%, #6b6f8f, #16192c); border: 1px solid #444; }
-.checkers-board .piece.king::after { content: "♛"; display: grid; place-items: center; height: 100%; color: #06070d; font-size: 1rem; }
+/* ---------- Chess / Checkers ---------- */
+.chess-board, .checkers-board {
+  grid-template-columns: repeat(8, minmax(0, 1fr)); grid-template-rows: repeat(8, minmax(0, 1fr));
+  width: min(100%, 560px); gap: 0; padding: 0;
+  border: 10px solid transparent;
+  border-image: linear-gradient(150deg, #4a3f6e 0%, #2b3252 100%) 1;
+  border-radius: 10px; overflow: hidden;
+  box-shadow: inset 0 2px 8px #00000080, 0 16px 40px #00000066;
+}
+.chess-board .cell, .checkers-board .cell {
+  border-radius: 0; border: none; box-shadow: none;
+  font-size: 2.1rem; aspect-ratio: 1;
+  transition: background var(--dur-fast);
+}
+/* The two square tones need real separation — a chessboard you have to squint
+   at is unusable. Light squares are a warm slate, dark ones a deep indigo. */
+.chess-board .cell.light, .checkers-board .cell.light {
+  background: linear-gradient(150deg, #cfd6ee, #a8b2d4);
+  box-shadow: inset 0 1px 0 #ffffff80;
+}
+.chess-board .cell.dark, .checkers-board .cell.dark {
+  background: linear-gradient(150deg, #3b4470, #262d4e);
+  box-shadow: inset 0 1px 0 #ffffff1f;
+}
 
-/* Memory match */
-.memory-grid { grid-auto-rows: 1fr; }
-.memory-card { aspect-ratio: 1; border-radius: 10px; position: relative; cursor: pointer; perspective: 600px; }
-.memory-card .inner { position: absolute; inset: 0; transform-style: preserve-3d; transition: transform .4s var(--ease-out); }
+/* ---------- Chess pieces ---------- */
+.piece-glyph {
+  line-height: 1; font-size: 1em;
+  -webkit-user-select: none; user-select: none;
+  transition: transform var(--dur-fast) var(--ease-out);
+}
+.chess-board .cell:hover .piece-glyph { transform: translateY(-2px) scale(1.05); }
+.piece-w {
+  color: #fbfcff;
+  text-shadow:
+    0 0 1px #2b2f45, 0 1px 0 #2b2f45, 1px 0 0 #2b2f45, -1px 0 0 #2b2f45, 0 -1px 0 #2b2f45,
+    0 3px 5px #00000073;
+}
+.piece-b {
+  color: #14172a;
+  text-shadow:
+    0 0 1px #cbd2ec, 0 1px 0 #8f98bd, 1px 0 0 #8f98bd, -1px 0 0 #8f98bd, 0 -1px 0 #8f98bd,
+    0 3px 5px #0000008c;
+}
+.chess-board .cell:hover, .checkers-board .cell:hover { filter: brightness(1.16); }
+.chess-board .cell.selected, .checkers-board .cell.selected {
+  background: linear-gradient(150deg, #46d4ef, #1d8ba8) !important;
+  box-shadow: inset 0 0 0 3px #eafcff, inset 0 0 22px #0a3a4a80;
+}
+.chess-board .cell.move-hint::after {
+  content: ""; width: 26%; height: 26%; border-radius: 50%;
+  background: radial-gradient(circle at 40% 32%, #ffffff, #23c7e6);
+  position: absolute; box-shadow: 0 0 14px #22d3eecc, 0 2px 4px #00000073;
+}
+.chess-board .cell.capture-hint::after,
+.checkers-board .cell.capture-hint::after {
+  content: ""; position: absolute; inset: 7%;
+  border: 3px solid #ff7a94cc; border-radius: 50%; box-shadow: 0 0 14px #ff547080;
+}
+.checkers-board .cell.move-hint::after {
+  content: ""; width: 24%; height: 24%; border-radius: 50%;
+  background: #7cf0ffcc; position: absolute; box-shadow: 0 0 12px #22d3ee99;
+}
+.chess-board .cell.check {
+  background: radial-gradient(circle at 50% 45%, #ff6f88, #8c1930) !important;
+  box-shadow: inset 0 0 20px #ff547080;
+}
+.checkers-board .piece {
+  width: 78%; height: 78%; border-radius: 50%;
+  box-shadow: inset 0 -4px 8px #00000059, inset 0 3px 4px #ffffff6b, 0 4px 8px #00000080;
+  display: grid; place-items: center;
+}
+.checkers-board .piece.p1 { background: radial-gradient(circle at 35% 28%, #fff0c8, #f0921a 60%, #b0640a); }
+.checkers-board .piece.p2 { background: radial-gradient(circle at 35% 28%, #8d93b8, #303755 60%, #14182b); }
+.checkers-board .piece.king::after {
+  content: "♛"; font-size: 1.1rem; color: #1b1200;
+  text-shadow: 0 1px 1px #ffffff73;
+}
+
+/* ---------- Memory match ---------- */
+.memory-grid { grid-auto-rows: minmax(0, 1fr); gap: 10px; }
+.memory-card { aspect-ratio: 1; border-radius: 12px; position: relative; cursor: pointer; perspective: 700px; }
+.memory-card .inner { position: absolute; inset: 0; transform-style: preserve-3d; transition: transform .45s var(--ease-out); }
 .memory-card.flipped .inner, .memory-card.matched .inner { transform: rotateY(180deg); }
-.memory-card .face { position: absolute; inset: 0; border-radius: 10px; display: grid; place-items: center; backface-visibility: hidden; font-size: 1.8rem; }
-.memory-card .front { background: var(--surface-2); border: 1px solid var(--border); }
-.memory-card .back { background: var(--grad-primary); transform: rotateY(180deg); }
-.memory-card.matched .back { filter: brightness(.7); }
+.memory-card .face {
+  position: absolute; inset: 0; border-radius: 12px; display: grid; place-items: center;
+  backface-visibility: hidden; font-size: 1.9rem;
+  box-shadow: inset 0 1px 0 #ffffff2e, 0 4px 12px #00000059;
+}
+.memory-card .front {
+  background: linear-gradient(160deg, #2b3357, #1b2340);
+  border: 1px solid var(--border); color: var(--text-3);
+}
+/* A diagonal sheen makes the face-down cards read as glossy playing cards */
+.memory-card .front::after {
+  content: ""; position: absolute; inset: 0; border-radius: inherit;
+  background: linear-gradient(135deg, #ffffff1a 0%, transparent 45%);
+}
+.memory-card .back {
+  background: var(--grad-primary); transform: rotateY(180deg); color: #06070d;
+}
+.memory-card.matched .back { filter: saturate(.5) brightness(.72); }
+.memory-card:hover:not(.matched) .inner { transform: translateY(-3px); }
+.memory-card.flipped:hover .inner, .memory-card.matched:hover .inner { transform: rotateY(180deg); }
 
-/* Whack a mole */
-.whack-grid { grid-template-columns: repeat(3, 1fr); grid-template-rows: repeat(3, 1fr); max-width: 420px; margin: 0 auto; }
-.whack-hole { border-radius: 50%; aspect-ratio: 1; background: radial-gradient(circle at 50% 30%, #3a2a1a, #14100a); position: relative; overflow: hidden; cursor: pointer; }
-.whack-hole .mole { position: absolute; left: 10%; right: 10%; bottom: -100%; top: 10%; background: #b97a4c; border-radius: 50% 50% 45% 45%; transition: bottom .16s var(--ease-out); display: grid; place-items: center; font-size: 1.6rem; }
-.whack-hole.up .mole { bottom: 0; }
-.whack-hole.hit .mole { filter: brightness(.6); }
+/* ---------- Whack a mole ---------- */
+.whack-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); grid-template-rows: repeat(3, minmax(0, 1fr)); width: min(100%, 460px); gap: 14px; }
+.whack-hole {
+  border-radius: 50%; aspect-ratio: 1; position: relative; overflow: hidden; cursor: pointer;
+  /* A pit: dark centre, lit rim, soil texture */
+  background:
+    radial-gradient(ellipse 74% 66% at 50% 60%, #000103 0%, #06040a 42%, #2a1e12 70%, #6b5031 92%, #8a6a42 100%);
+  box-shadow:
+    inset 0 12px 20px #000000cc, inset 0 -8px 14px #00000099,
+    inset 0 0 0 2px #ffffff12, 0 6px 14px #00000073;
+}
+.whack-hole::after {
+  content: ""; position: absolute; inset: 0; border-radius: 50%;
+  background-image: var(--noise); background-size: 120px 120px; opacity: .12; pointer-events: none;
+}
+.whack-hole .mole {
+  /* Anchored to the bottom of the pit and slid in with a transform — setting
+     both top and bottom used to leave the mole permanently visible. */
+  position: absolute; left: 14%; right: 14%; bottom: 0; height: 86%;
+  background: radial-gradient(circle at 38% 24%, #d79a68, #a9703f 62%, #7c4f28);
+  border-radius: 48% 48% 28% 28% / 58% 58% 22% 22%;
+  box-shadow: inset 0 -8px 16px #0000006b, inset 0 5px 9px #ffffff45;
+  transform: translateY(106%);
+  transition: transform .16s var(--ease-out), filter .12s linear;
+  display: flex; align-items: flex-start; justify-content: center;
+  padding-top: 12%; font-size: 2rem; line-height: 1;
+  text-shadow: 0 2px 4px #00000059;
+}
+.whack-hole.up .mole { transform: translateY(0); }
+.whack-hole.hit .mole { filter: brightness(.6) saturate(.6); transform: translateY(14%) scale(.94); }
 
-/* 2048 */
-.g2048-board { grid-template-columns: repeat(4, 1fr); grid-template-rows: repeat(4, 1fr); max-width: 420px; margin: 0 auto; background: var(--surface-2); border-radius: 12px; }
-.g2048-board .cell { background: #ffffff08; font-size: 1.5rem; aspect-ratio: 1; cursor: default; }
-.g2048-tile { position: absolute; display: grid; place-items: center; border-radius: 8px; font-weight: 800; font-family: var(--font-display); transition: transform .12s var(--ease-out), left .1s, top .1s; }
+/* ---------- 2048 ---------- */
+.g2048-board {
+  grid-template-columns: repeat(4, minmax(0, 1fr)); grid-template-rows: repeat(4, minmax(0, 1fr));
+  width: min(100%, 470px); gap: 10px;
+  background: linear-gradient(160deg, #232b4e, #171d36);
+  border-radius: 14px; padding: 10px; position: relative;
+}
+.g2048-tiles { position: absolute; inset: 0; pointer-events: none; }
+.g2048-board .cell {
+  background: #ffffff0a; font-size: 1.5rem; aspect-ratio: 1; cursor: default;
+  border: none; box-shadow: inset 0 2px 5px #00000047;
+}
+.g2048-tile {
+  position: absolute; display: grid; place-items: center; border-radius: 10px;
+  font-weight: 800; font-family: var(--font-display); letter-spacing: -.02em;
+  box-shadow: inset 0 1px 0 #ffffff59, inset 0 -2px 4px #00000038, 0 4px 10px #00000059;
+  animation: tile-pop 180ms var(--ease-spring);
+  transition: transform .12s var(--ease-out), left .1s, top .1s;
+}
+@keyframes tile-pop { from { transform: scale(.82); } to { transform: scale(1); } }
 
-/* Generic HUD icon row used inside DOM games header (fallback if canvas not used) */
-.board-wrap { width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; padding: 12px; }
+/* ---------- Simon says ---------- */
+.simon-pad {
+  display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr; gap: 12px;
+  width: min(86%, 460px); aspect-ratio: 1; margin: 0 auto;
+  padding: 14px; border-radius: 50%;
+  background: radial-gradient(circle at 50% 35%, #232b4e, #10142a);
+  box-shadow: inset 0 3px 10px #00000099, 0 14px 34px #00000066;
+}
+.simon-pad button {
+  /* Dimmed with brightness rather than opacity so the hue stays saturated
+     instead of washing out against the dark console. */
+  border: none; position: relative; overflow: hidden; cursor: pointer;
+  filter: brightness(.42) saturate(.9);
+  box-shadow: inset 0 -8px 16px #00000073, inset 0 5px 10px #ffffff33;
+  transition: filter .12s, transform .12s, box-shadow .12s;
+}
+.simon-pad button:hover { filter: brightness(.62) saturate(.95); }
+.simon-pad button::after {
+  content: ""; position: absolute; inset: 0;
+  background: linear-gradient(150deg, #ffffff40, transparent 55%);
+}
+.simon-pad button.lit {
+  filter: brightness(1.25) saturate(1.1); transform: scale(.972);
+  box-shadow: 0 0 46px currentColor, 0 0 14px #ffffff80, inset 0 5px 12px #ffffff73;
+}
+.simon-pad .b1 { background: #ff5470; color: #ff5470; border-radius: 100% 12px 12px 12px; }
+.simon-pad .b2 { background: #22d3ee; color: #22d3ee; border-radius: 12px 100% 12px 12px; }
+.simon-pad .b3 { background: #ffd76a; color: #ffd76a; border-radius: 12px 12px 12px 100%; }
+.simon-pad .b4 { background: #2ee6a6; color: #2ee6a6; border-radius: 12px 12px 100% 12px; }
 
-/* Simon says */
-.simon-pad { display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr; gap: 10px; width: min(360px, 80vw); aspect-ratio: 1; margin: 0 auto; }
-.simon-pad button { border-radius: 16px; border: none; opacity: .55; transition: opacity .12s, transform .12s; }
-.simon-pad button.lit { opacity: 1; transform: scale(.97); box-shadow: 0 0 30px currentColor; }
-.simon-pad .b1 { background: #ff5470; color: #ff5470; border-radius: 16px 4px 4px 4px; }
-.simon-pad .b2 { background: #22d3ee; color: #22d3ee; border-radius: 4px 16px 4px 4px; }
-.simon-pad .b3 { background: #ffd76a; color: #ffd76a; border-radius: 4px 4px 4px 16px; }
-.simon-pad .b4 { background: #2ee6a6; color: #2ee6a6; border-radius: 4px 4px 16px 4px; }
-
-/* Reaction time / color match */
+/* ---------- Reaction / colour match ---------- */
 .reaction-target { width: 60%; height: 60%; border-radius: 50%; margin: auto; }
 
-/* Typing rush */
+/* ---------- Typing rush ---------- */
 .type-word { font-family: var(--font-mono); font-size: 1.6rem; letter-spacing: .04em; }
 .type-word .done { color: var(--accent-good); }
 .type-word .next { color: var(--text-0); text-decoration: underline; }
 
+.board-wrap { width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; padding: 12px; }
+
 @media (max-width: 520px) {
-  .chess-board .cell, .checkers-board .cell { font-size: 1.4rem; }
-  .ttt-board .cell { font-size: 2rem; }
+  .chess-board .cell, .checkers-board .cell { font-size: 1.5rem; }
+  .ttt-board .cell { font-size: 2.1rem; }
+  .sudoku-board .cell { font-size: .95rem; }
+  .memory-grid { gap: 7px; }
+  .whack-grid { gap: 9px; }
+  /* Keep the keypad on one row so the puzzle keeps the height it needs. */
+  .sudoku-numpad { gap: 4px; }
+  .sudoku-numpad button { width: 30px; height: 30px; border-radius: 8px; font-size: .85rem; }
+  .game-stage.dom-board.stacked { padding: 8px; gap: 8px; }
 }

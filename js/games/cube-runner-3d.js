@@ -32,6 +32,7 @@ export class CubeRunner3DGame extends Game3D {
   onInit() {
     if (!this.setup3D({
       clearColor: "#070a1c", fogColor: "#0d1330", fog: [55, 165],
+      sky: "linear-gradient(#04061a 0%, #101a4a 55%, #1b2470 84%, #2a1c5e 100%)",
       lightDir: [0.35, 0.9, 0.3], ambientSky: "#4a4d92", ambientGround: "#111428",
     })) return;
 

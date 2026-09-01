@@ -41,9 +41,10 @@ export class SudokuGame extends GameBase {
   onInit() {
     this.stageEl.classList.add("dom-board");
     this.boardEl = el("div", { class: "board-grid sudoku-board" });
+    this.stageEl.classList.add("stacked");
     this.stageEl.appendChild(this.boardEl);
     this.numpad = el("div", { class: "sudoku-numpad" });
-    this.tipEl.before(this.numpad);
+    this.stageEl.appendChild(this.numpad);
     for (let n = 1; n <= 9; n++) this.numpad.appendChild(el("button", { onClick: () => this._setValue(n) }, String(n)));
     this.numpad.appendChild(el("button", { onClick: () => this._setValue(0) }, "✕"));
     for (let i = 1; i <= 9; i++) this.input.onKey(`Digit${i}`, () => this._setValue(i));
@@ -86,6 +87,9 @@ export class SudokuGame extends GameBase {
       if (given) cls.push("given");
       if (this.selected && this.selected.r === r && this.selected.c === c) cls.push("selected");
       if (wrong) cls.push("error");
+      // Thicker rules on the 3x3 block boundaries, the way a printed grid reads.
+      if (c === 2 || c === 5) cls.push("block-b");
+      if (r === 2 || r === 5) cls.push("block-r");
       const cell = el("div", { class: cls.join(" "), onClick: () => { if (!given) { this.selected = { r, c }; this._render(); } } }, val ? String(val) : "");
       this.boardEl.appendChild(cell);
     }

@@ -432,7 +432,8 @@ export class Engine3D {
    */
   constructor(canvas, opts = {}) {
     this.canvas = canvas;
-    const attrs = { antialias: true, alpha: false, depth: true, powerPreference: "high-performance" };
+    // alpha:true so a CSS backdrop can show through where nothing is drawn.
+    const attrs = { antialias: true, alpha: true, depth: true, premultipliedAlpha: false, powerPreference: "high-performance" };
     const gl = canvas.getContext("webgl", attrs) || canvas.getContext("experimental-webgl", attrs);
     if (!gl) throw new Error("WebGL is not available in this browser.");
     this.gl = gl;
@@ -476,6 +477,7 @@ export class Engine3D {
       ambientGround: hexToRgb01(opts.ambientGround || "#12141f"),
     };
     this.camera = { pos: [0, 4, 10], target: [0, 0, 0], fov: 60, near: 0.1, far: 400 };
+    this._clearAlpha = 1;
     this._white = this._makeSolidTexture([255, 255, 255, 255]);
     this.drawCalls = 0;
   }
@@ -541,7 +543,7 @@ export class Engine3D {
   beginFrame() {
     const gl = this.gl;
     const [r, g, b] = hexToRgb01(this.clearColor);
-    gl.clearColor(r, g, b, 1);
+    gl.clearColor(r, g, b, this._clearAlpha);
     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
     gl.useProgram(this.program);
 
@@ -593,6 +595,17 @@ export class Engine3D {
     gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, m.index);
     gl.drawElements(gl.TRIANGLES, m.count, gl.UNSIGNED_SHORT, 0);
     this.drawCalls++;
+  }
+
+  /**
+   * Screen-space sky. Because a camera-facing quad would be screen-fixed
+   * anyway, the gradient is painted onto the canvas with CSS and the colour
+   * buffer is cleared transparent — same picture, zero fill cost per frame.
+   * @param {string} css any CSS background value, e.g. a linear-gradient
+   */
+  backdrop(css) {
+    this.canvas.style.background = css;
+    this._clearAlpha = 0;
   }
 
   /**

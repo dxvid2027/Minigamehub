@@ -6,7 +6,10 @@ import { GameBase } from "./gameBase.js";
 import { audioManager } from "../systems/audioManager.js";
 import { el, choice } from "../core/utils.js";
 
-const GLYPH = { wk: "♔", wq: "♕", wr: "♖", wb: "♗", wn: "♘", wp: "♙", bk: "♚", bq: "♛", br: "♜", bb: "♝", bn: "♞", bp: "♟" };
+// Both sides use the *solid* glyphs; the two armies are told apart by fill and
+// outline (see .piece-w / .piece-b in games.css), which reads far better on a
+// dark board than mixing outline and solid figures.
+const GLYPH = { k: "♚", q: "♛", r: "♜", b: "♝", n: "♞", p: "♟" };
 const VALUE = { p: 1, n: 3, b: 3.1, r: 5, q: 9, k: 0 };
 
 function initialBoard() {
@@ -174,9 +177,9 @@ export class ChessGame extends GameBase {
       const cell = el("div", { class: `cell ${light ? "light" : "dark"}`, onClick: () => this._onCellClick(r, c) });
       const piece = this.board[r][c];
       if (piece) {
-        cell.textContent = GLYPH[piece.color + piece.type];
-        cell.style.color = piece.color === "w" ? "#f6f8ff" : "#ff8fd0";
-        cell.style.textShadow = piece.color === "w" ? "0 1px 3px #00000090" : "0 1px 3px #00000090";
+        const glyph = el("span", { class: `piece-glyph piece-${piece.color}` });
+        glyph.textContent = GLYPH[piece.type];
+        cell.appendChild(glyph);
       }
       if (this.selected && this.selected.r === r && this.selected.c === c) cell.classList.add("selected");
       const hint = legalForSel.find(m => m.to.r === r && m.to.c === c);

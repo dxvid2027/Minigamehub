@@ -7,6 +7,7 @@ import { router } from "../core/router.js";
 import { eventBus } from "../core/eventBus.js";
 import { el, formatNumber } from "../core/utils.js";
 import { iconMarkup } from "./icons.js";
+import { GAMES } from "../../data/games.js";
 
 const NAV_ITEMS = [
   { path: "/home", icon: "home", label: "Home" },
@@ -81,6 +82,8 @@ export function initNavigation() {
   muteBtn?.addEventListener("click", () => { audioManager.toggleMute(); syncMute(); });
 
   const search = document.getElementById("global-search");
+  // Read the count from the registry so it can never drift from reality.
+  if (search) search.placeholder = `Search ${GAMES.length} games…`;
   search?.addEventListener("keydown", (e) => {
     if (e.key === "Enter" && search.value.trim()) {
       router.navigate(`/library?q=${encodeURIComponent(search.value.trim())}`);

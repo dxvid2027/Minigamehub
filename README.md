@@ -13,7 +13,7 @@ no build step and no external services: everything runs locally and offline.
 | Area | What you get |
 |---|---|
 | **Games** | 35 complete games — arcade, puzzle, board, action, sports, skill and five 3D titles |
-| **3D** | A dependency-free WebGL renderer (`js/games/engine3d.js`): lit shading, fog, procedural textures, blob shadows |
+| **3D** | A dependency-free WebGL renderer (`js/games/engine3d.js`): lit shading, fog, procedural textures, blob shadows, free CSS sky backdrops |
 | **Framework** | Every game inherits start/pause/win/lose screens, a HUD with an in-game **How to play** panel, difficulty levels, high scores, statistics, sound and touch controls from a shared `GameBase` class |
 | **Progression** | XP, levels, coins, achievement points, unlockable themes and avatars |
 | **Achievements** | 174 achievements with live progress tracking and rewards |
@@ -222,6 +222,13 @@ assets/                    # audio / images / icons (all generated at runtime)
   blitted; gradients are cached and painted in translated space; glows are
   pre-rendered sprites blitted additively rather than `shadowBlur`. A rolling
   frame monitor drops glow and grain automatically if a device falls behind.
+  In 3D the sky is a CSS gradient behind a transparent colour buffer, so the
+  horizon costs no fill rate at all.
+- **Physical boards** — the DOM games are styled as real objects: raised and
+  pressed minesweeper cells, glossy Connect Four discs that drop, sculpted
+  chess pieces on a high-contrast board, a whack-a-mole pit with soil texture.
+  Every board keeps its own aspect ratio and is centred in its stage, so
+  nothing stretches or overflows on any screen.
 - **One visual language** — the same palette drives a game's cover art, its
   in-game lighting and its card, because all three read `grad` from the registry.
 - **Navigation is race-proof** — every navigation carries a token, so a slow

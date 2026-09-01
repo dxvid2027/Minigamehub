@@ -27,12 +27,13 @@ export class TurboCircuit3DGame extends Game3D {
   }
   getTouchLayout() { return "dpad"; }
   getTouchButtons() { return ["a"]; }
-  getTouchHint() { return "D-pad or drag to steer, ● for a speed boost."; }
+  getTouchHint() { return "D-pad or drag to steer; press the round ● button for a speed boost."; }
   getKeyboardHint() { return "Arrow keys / A-D to steer, Space for a boost."; }
 
   onInit() {
     if (!this.setup3D({
       clearColor: "#0a1024", fogColor: "#101a38", fog: [60, 210],
+      sky: "linear-gradient(#080d2c 0%, #2a2f6e 38%, #5a3f92 66%, #b85f8e 86%, #ff9f6b 100%)",
       lightDir: [0.4, 0.85, 0.35], ambientSky: "#43508c", ambientGround: "#131829",
     })) return;
 
@@ -47,24 +48,11 @@ export class TurboCircuit3DGame extends Game3D {
     e.mesh("lampHead", () => Geometry.box(1.5, 0.3, 0.4));
     e.mesh("tree", () => Geometry.cone(1.6, 4.4, 10));
     e.mesh("ground", () => Geometry.plane(600, 1400));
-    e.mesh("sky", () => Geometry.quad(900, 300));
 
     e.texture("asphalt", () => Textures.asphalt(256));
     e.texture("metal", () => Textures.metal(128, "#9fb0e8"));
     e.texture("hazard", () => Textures.stripes(128, { bg: "#ffd76a", stripe: "#20160a", count: 8 }));
     e.texture("grass", () => Textures.rock(256, "#1d3a2c"));
-    e.texture("sky", () => {
-      // Dusk gradient with a low sun — gives the road a horizon to run toward.
-      const c = document.createElement("canvas"); c.width = 8; c.height = 256;
-      const g = c.getContext("2d");
-      const grad = g.createLinearGradient(0, 0, 0, 256);
-      grad.addColorStop(0, "#0a1038");
-      grad.addColorStop(0.55, "#2a2f6e");
-      grad.addColorStop(0.82, "#6b4a9c");
-      grad.addColorStop(1, "#ff9f6b");
-      g.fillStyle = grad; g.fillRect(0, 0, 8, 256);
-      return c;
-    });
 
     this.input.onPointer("move", (p) => { this._dragX = p.x; });
   }
@@ -216,11 +204,6 @@ export class TurboCircuit3DGame extends Game3D {
     e.camera.target = [this._curveAt(d + 26) + this.carX * 0.18, this._heightAt(d + 26) + 1.6, -(d + 26)];
     e.beginFrame();
 
-    // Sky wall parked far down the road; the fog blends the road into it.
-    e.draw("sky", {
-      pos: [this._curveAt(d + 320), this._heightAt(d + 320) + 84, -(d + 340)],
-      color: "#ffffff", texture: "sky", emissive: 1,
-    });
 
     // Ground plane far below the road, tinted like distant terrain.
     e.draw("ground", { pos: [this._curveAt(d + 200), this._heightAt(d + 200) - 3.4, -(d + 200)], color: "#16301f", texture: "grass", uvScale: [40, 90] });

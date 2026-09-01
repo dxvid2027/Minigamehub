@@ -36,6 +36,10 @@ export class Game3D extends GameBase {
       return false;
     }
 
+    // A gradient sky costs nothing when it is a CSS backdrop behind a
+    // transparent colour buffer, so games declare it as `sky` in their opts.
+    if (opts.sky) this.engine.backdrop(opts.sky);
+
     // 3D fills far more pixels than a 2D game, so the pixel ratio is capped
     // lower — the difference is invisible, the frame time is not.
     this.maxDpr = opts.maxDpr ?? 1.5;
