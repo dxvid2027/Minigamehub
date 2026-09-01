@@ -282,7 +282,7 @@
   body.in-game .bottom-nav { display: none; }
   body.in-game .app-shell { padding-bottom: 0; }
   body.in-game .topbar { display: none; }
-  body.in-game .page { padding-top: 10px; }
+  body.in-game .page { padding-top: max(12px, env(safe-area-inset-top)); }
 }
 
 /* ---------------------------------------------------------------- */
@@ -303,7 +303,7 @@ body.immersive .page { padding: 0; max-width: none; }
   position: fixed; inset: 0; z-index: 400;
   width: 100vw; height: 100dvh;
   margin: 0;
-  padding: max(6px, env(safe-area-inset-top)) max(6px, env(safe-area-inset-right))
+  padding: max(20px, env(safe-area-inset-top)) max(6px, env(safe-area-inset-right))
            max(6px, env(safe-area-inset-bottom)) max(6px, env(safe-area-inset-left));
   gap: 6px;
   background: var(--bg-0);
@@ -326,6 +326,15 @@ body.immersive .page { padding: 0; max-width: none; }
   position: fixed; inset: auto;
   transform: rotate(90deg);
   transform-origin: center center;
+  /* Safe-area insets are physical, but this surface is turned a quarter
+     clockwise: its left edge is the screen's top, its top edge is the
+     screen's right. Un-rotate them so the HUD clears the status bar and the
+     notch instead of sitting underneath them. */
+  padding:
+    max(8px, env(safe-area-inset-right))
+    max(8px, env(safe-area-inset-bottom))
+    max(8px, env(safe-area-inset-left))
+    max(28px, env(safe-area-inset-top));
 }
 @media (max-width: 520px) {
   .profile-header { justify-content: center; text-align: center; }

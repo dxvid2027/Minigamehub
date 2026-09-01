@@ -51,12 +51,13 @@ export class Game3D extends GameBase {
 
   _resize3D() {
     if (!this.engine) return;
-    const rect = this.stageEl.getBoundingClientRect();
-    if (!rect.width || !rect.height) return;
+    // Layout-space size: a rotated stage reports a swapped bounding box.
+    const w = this.stageEl.offsetWidth, h = this.stageEl.offsetHeight;
+    if (!w || !h) return;
     const dpr = Math.min(window.devicePixelRatio || 1, this.maxDpr);
-    this.viewW = rect.width;
-    this.viewH = rect.height;
-    this.engine.resize(rect.width, rect.height, dpr);
+    this.viewW = w;
+    this.viewH = h;
+    this.engine.resize(w, h, dpr);
     this._sizeOverlay();
     this.onResize?.(rect.width, rect.height);
   }

@@ -149,15 +149,21 @@ export class GameBase {
 
   _resizeCanvas() {
     if (!this.canvas) return;
-    const rect = this.stageEl.getBoundingClientRect();
+    // offsetWidth/Height are layout-space. getBoundingClientRect() would
+    // report the *transformed* box, so in rotated fullscreen the canvas came
+    // out with its width and height swapped and was then letterboxed down to
+    // a fraction of the stage.
+    const w = this.stageEl.offsetWidth || this.stageEl.getBoundingClientRect().width;
+    const h = this.stageEl.offsetHeight || this.stageEl.getBoundingClientRect().height;
+    if (!w || !h) return;
     const dpr = Math.min(window.devicePixelRatio || 1, 2);
-    this.canvas.width = Math.max(1, Math.round(rect.width * dpr));
-    this.canvas.height = Math.max(1, Math.round(rect.height * dpr));
-    this.canvas.style.width = rect.width + "px";
-    this.canvas.style.height = rect.height + "px";
+    this.canvas.width = Math.max(1, Math.round(w * dpr));
+    this.canvas.height = Math.max(1, Math.round(h * dpr));
+    this.canvas.style.width = w + "px";
+    this.canvas.style.height = h + "px";
     this.dpr = dpr;
-    this.viewW = rect.width; this.viewH = rect.height;
-    this.onResize?.(rect.width, rect.height);
+    this.viewW = w; this.viewH = h;
+    this.onResize?.(w, h);
   }
 
   // ------------------------------------------------------------- HUD/DOM ---
