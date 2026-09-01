@@ -24,7 +24,7 @@ export class SpaceShooterGame extends GameBase {
     return [
       "Move to dodge enemy fire — your ship fires automatically.",
       "Each wave arrives as a formation that slides across the screen and drops lower every time it turns.",
-      "Clear the whole formation to advance. Every 5th wave sends a boss.",
+      "Clear the whole formation to advance — the next one arrives sooner every time. Every 5th wave sends a boss.",
       "You have 3 lives; losing them all — or letting a wave reach your line — ends the run.",
     ];
   }
@@ -46,7 +46,7 @@ export class SpaceShooterGame extends GameBase {
     this.wave = 0;
     this.kills = 0;
     this.setScore(0);
-    this.intermission = 1.4;   // short beat before the first wave drops in
+    this.intermission = 0.9;   // short beat before the first wave drops in
     this._updateHud();
   }
 
@@ -107,6 +107,14 @@ export class SpaceShooterGame extends GameBase {
     return ((f.cols - 1) * CELL_W + ENEMY_W) / 2;
   }
 
+  /**
+   * Breathing room between waves — generous at the start, then tightening, so
+   * a long run keeps ramping up the pressure instead of settling into a
+   * rhythm. Never drops below half a second: the player still gets to see the
+   * next formation drop in.
+   */
+  _waveGap() { return Math.max(0.5, 1.6 - this.wave * 0.1); }
+
   _syncEnemyPositions() {
     const f = this.formation;
     const originX = f.x - ((f.cols - 1) * CELL_W) / 2;
@@ -123,7 +131,7 @@ export class SpaceShooterGame extends GameBase {
 
     if (!this.enemies.length) {
       this.intermission -= dt;
-      if (this.intermission <= 0) { this._spawnWave(); this.intermission = 2.6; }
+      if (this.intermission <= 0) { this._spawnWave(); this.intermission = this._waveGap(); }
       return;
     }
 

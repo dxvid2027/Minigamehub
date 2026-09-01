@@ -1,6 +1,6 @@
 // ==========================================================================
 // Achievement definitions — 30+ global achievements plus 4 tiers per game
-// (30 games × 4 = 120), for 150+ achievements total.
+// (38 games x 4 = 152), for 180+ achievements total.
 // Each achievement exposes getCurrent(save) so AchievementSystem can compute
 // live progress without duplicating state.
 // ==========================================================================
@@ -18,12 +18,13 @@ const WIN_BASED = new Set(["pong", "tic-tac-toe", "connect-four", "chess", "chec
 // Sensible high-score goals for the "Legend" tier of score-based games.
 const SCORE_GOALS = {
   snake: 300, tetris: 8000, "flappy-bird": 40, breakout: 4000, "space-shooter": 5000,
-  "endless-runner": 2000, "tower-defense": 15, "whack-a-mole": 400, platformer: 3000,
+  "endless-runner": 2000, "tower-defense": 4000, "whack-a-mole": 400, platformer: 3000,
   racing: 5000, basketball: 18, "fruit-slice": 150, "2048": 2048, "simon-says": 14,
   "color-match": 25, "bubble-shooter": 2500, "typing-rush": 18, "stack-tower": 18,
   "word-scramble": 12, "reaction-time": 1, // reaction: "current" is inverted (see below)
   "turbo-circuit-3d": 900, "cube-runner-3d": 700, "sky-rider-3d": 1800,
   "tower-blocks-3d": 320, "asteroid-belt-3d": 1400,
+  "sky-parkour-3d": 1200, "storm-arena-3d": 2200, "fruit-merge": 3500,
 };
 
 function buildGlobalAchievements() {

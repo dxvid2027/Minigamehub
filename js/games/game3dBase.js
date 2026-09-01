@@ -57,7 +57,33 @@ export class Game3D extends GameBase {
     this.viewW = rect.width;
     this.viewH = rect.height;
     this.engine.resize(rect.width, rect.height, dpr);
+    this._sizeOverlay();
     this.onResize?.(rect.width, rect.height);
+  }
+
+  /**
+   * Optional 2D layer above the WebGL canvas — crosshairs, health bars,
+   * warnings. Call once from onInit(); it returns the same context after.
+   */
+  overlay2D() {
+    if (this.hudCtx) return this.hudCtx;
+    const c = el("canvas");
+    c.style.cssText = "position:absolute;inset:0;pointer-events:none;";
+    this.stageEl.appendChild(c);
+    this.hudCanvas = c;
+    this.hudCtx = c.getContext("2d");
+    this._sizeOverlay();
+    return this.hudCtx;
+  }
+
+  _sizeOverlay() {
+    if (!this.hudCanvas || !this.viewW) return;
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    this.hudCanvas.width = Math.max(1, Math.round(this.viewW * dpr));
+    this.hudCanvas.height = Math.max(1, Math.round(this.viewH * dpr));
+    this.hudCanvas.style.width = `${this.viewW}px`;
+    this.hudCanvas.style.height = `${this.viewH}px`;
+    this.hudCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
   }
 
   /** Guard used by 3D games so they never simulate without a renderer. */

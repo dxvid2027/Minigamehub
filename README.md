@@ -1,6 +1,6 @@
 # 🎮 MegaPlay Hub
 
-A premium browser gaming platform — **35 polished games, five of them real-time 3D
+A premium browser gaming platform — **38 polished games, seven of them real-time 3D
 (WebGL)** — with a full progression system, 174 achievements, daily challenges,
 profiles, statistics and unlockables.
 Written in **vanilla JavaScript (ES modules)** with **zero runtime dependencies**,
@@ -12,11 +12,11 @@ no build step and no external services: everything runs locally and offline.
 
 | Area | What you get |
 |---|---|
-| **Games** | 35 complete games — arcade, puzzle, board, action, sports, skill and five 3D titles |
+| **Games** | 38 complete games — arcade, puzzle, board, action, sports, skill and seven 3D titles |
 | **3D** | A dependency-free WebGL renderer (`js/games/engine3d.js`): lit shading, fog, procedural textures, blob shadows, free CSS sky backdrops |
 | **Framework** | Every game inherits start/pause/win/lose screens, a HUD with an in-game **How to play** panel, difficulty levels, high scores, statistics, sound and touch controls from a shared `GameBase` class |
 | **Progression** | XP, levels, coins, achievement points, unlockable themes and avatars |
-| **Achievements** | 174 achievements with live progress tracking and rewards |
+| **Achievements** | 186 achievements with live progress tracking and rewards |
 | **Daily challenges** | 3 rotating challenges per day (deterministic, seeded by date) + streaks |
 | **Save system** | Robust `localStorage` save with schema-merge migration, export/import, autosave |
 | **Audio** | Fully procedural Web Audio SFX + ambient music with master/music/SFX volume |
@@ -118,18 +118,24 @@ Whack-a-Mole · Tic Tac Toe · Connect Four · Minesweeper · Sudoku Master · C
 Checkers · Pixel Quest (platformer) · Turbo Rush (racing) · Hoop Shot
 (basketball) · Fruit Slice
 
-**Original additions (10)**
+**Original additions (11)**
 
 2048 · Simon Says · Reaction Test · Color Match (Stroop) · Bubble Shooter ·
-Air Hockey · Typing Rush · Maze Runner · Stack Tower · Word Scramble
+Air Hockey · Typing Rush · Maze Runner · Stack Tower · Word Scramble ·
+Fruit Merge (drop fruit into a box; two of a kind fuse up a ten-tier ladder,
+and only the first four ever fall from the chute)
 
-**3D games (5, WebGL)**
+**3D games (7, WebGL)**
 
 Turbo Circuit 3D (third-person racer on a curving, cresting circuit) ·
 Cube Runner 3D (three-lane endless runner with jump and slide) ·
 Sky Rider 3D (glider flight through a canyon of light rings) ·
 Tower Blocks 3D (stack sliding blocks; overhang is sliced off) ·
-Asteroid Belt 3D (space shooter with travel-time projectiles and splitting rocks)
+Asteroid Belt 3D (space shooter with travel-time projectiles and splitting rocks) ·
+Sky Parkour 3D (endless obstacle course over floating platforms — gaps, spinners,
+pushers, bouncers and a double jump) ·
+Storm Arena 3D (third-person arena shooter: drone waves, buildable cover, a
+closing storm ring)
 
 They run on a small renderer written for this project — mat4/vec3 maths, one
 lit shader with directional + hemisphere light and fog, primitive mesh
@@ -140,6 +146,12 @@ has no WebGL, the game shows a clear notice instead of failing.
 Every game ships with a tutorial/instructions screen, difficulty levels, pause
 menu, restart, win/lose screens, high scores, statistics, achievements, sound
 effects and adaptive touch controls.
+
+**Bastion TD** deserves its own line: three tower classes (single-target Cannon,
+area-slowing Frost, chaining Arc), ten upgrade levels each, and six enemy
+families — marchers, sprinters, armoured brutes, drones that fly straight over
+the road, menders that heal their neighbours and bulwarks behind a regenerating
+shield — plus a Titan every fifth wave that bursts into a squad when it dies.
 
 Highlights worth calling out: **Chess** implements full legal-move generation
 including castling, en passant, promotion, check/checkmate/stalemate plus an
@@ -177,7 +189,7 @@ js/
   systems/
     saveManager.js         # single localStorage save file + migrations
     progression.js         # XP curve, levels, coins, level rewards
-    achievementSystem.js   # evaluates 154 achievements, grants rewards
+    achievementSystem.js   # evaluates 186 achievements, grants rewards
     dailyChallenge.js      # date-seeded challenges, progress, streaks
     statsManager.js        # derived cross-game statistics
     audioManager.js        # procedural Web Audio SFX + ambient music
@@ -199,11 +211,11 @@ js/
     gfx.js                 # in-game graphics kit: backdrops, lighting, glow
     color.js               # shared colour parser (hex / rgb() / hsl())
     canvasUtils.js         # shared canvas drawing helpers
-    <30 game modules>      # one self-contained module per game
+    <38 game modules>      # one self-contained module per game
 
 data/
   games.js                 # game registry (metadata + lazy module paths)
-  achievements.js          # 154 achievement definitions
+  achievements.js          # 186 achievement definitions
   dailyChallenges.js       # daily challenge template pool
 
 assets/                    # audio / images / icons (all generated at runtime)
