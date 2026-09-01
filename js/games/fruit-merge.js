@@ -260,6 +260,11 @@ export class FruitMergeGame extends GameBase {
   onRender(ctx, dt) {
     const { viewW: W, viewH: H } = this;
     this.gfx.backdrop(ctx, dt);
+    // The backdrop is blitted in device pixels; everything below is authored
+    // in CSS pixels, so it has to be scaled by the device pixel ratio. Without
+    // this the whole game drew into the top-left corner of a retina canvas.
+    ctx.save();
+    ctx.scale(this.dpr, this.dpr);
     const b = this.box;
 
     // Box: glass walls with a lit rim and a soft floor shadow.
@@ -299,6 +304,7 @@ export class FruitMergeGame extends GameBase {
     if (heat > 0.25) {
       this.gfx.label(ctx, "OVERFLOWING", W / 2, b.y + 26, { size: 15, weight: 800, color: `rgba(255,120,140,${heat})` });
     }
+    ctx.restore();
   }
 
   _drawFruit(ctx, f) {
