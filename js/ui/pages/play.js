@@ -15,6 +15,9 @@ export function disposeActiveGame() {
     try { activeGame.destroy(); } catch (err) { console.error("[play] destroy failed", err); }
     activeGame = null;
   }
+  // Mobile hides the top bar and bottom nav while a game is mounted; both
+  // come back the moment we leave.
+  document.body.classList.remove("in-game");
 }
 
 export async function renderPlay(container, gameId, token) {
@@ -46,6 +49,7 @@ export async function renderPlay(container, gameId, token) {
     if (token !== undefined && router.isStale(token)) return;
     loading.remove();
     activeGame = new GameClass({ root: wrap, meta });
+    document.body.classList.add("in-game");
   } catch (err) {
     console.error("[play] failed to load game", err);
     loading.innerHTML = "";

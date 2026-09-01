@@ -82,8 +82,9 @@ export class FruitMergeGame extends GameBase {
 
   /** The playfield is a box inset in the stage, with the chute above it. */
   _layout() {
-    const pad = Math.min(this.viewW, this.viewH) * 0.05;
-    const chute = Math.min(this.viewH * 0.16, 92);
+    // Tight margins: the box should own the stage, so the fruit read large.
+    const pad = Math.min(this.viewW, this.viewH) * 0.028;
+    const chute = clamp(this.viewH * 0.115, 46, 78);
     const w = this.viewW - pad * 2;
     const h = this.viewH - pad - chute;
     this.box = { x: pad, y: chute, w, h };

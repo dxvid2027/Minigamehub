@@ -54,6 +54,8 @@ export const ICONS = {
   info: svg(`<circle cx="12" cy="12" r="8.2"/><path d="M12 11.2v5"/><circle cx="12" cy="7.9" r="1.05" fill="currentColor" stroke="none"/>`),
   book: svg(`<path d="M4.6 5.2h5a3 3 0 0 1 3 3v11a2.4 2.4 0 0 0-2.4-2.2H4.6z"/><path d="M19.4 5.2h-5a3 3 0 0 0-3 3v11a2.4 2.4 0 0 1 2.4-2.2h5.6z"/>`),
   users: svg(`<circle cx="9.4" cy="8.6" r="3.2"/><path d="M3.6 19.2c.6-3 2.8-4.8 5.8-4.8s5.2 1.8 5.8 4.8"/><path d="M16.2 5.9a3.2 3.2 0 0 1 0 5.9M17.2 14.8c2 .6 3.3 2.2 3.7 4.4"/>`),
+  expand: svg(`<path d="M9 4.6H4.6V9M15 4.6h4.4V9M9 19.4H4.6V15M15 19.4h4.4V15"/>`),
+  collapse: svg(`<path d="M4.6 9H9V4.6M19.4 9H15V4.6M4.6 15H9v4.4M19.4 15H15v4.4"/>`),
 };
 
 /** Returns an <span> containing the requested icon, sized by CSS. */

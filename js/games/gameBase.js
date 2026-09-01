@@ -46,6 +46,11 @@ export class GameBase {
     document.addEventListener("visibilitychange", this._onVisibility = () => {
       if (document.hidden && this.state === "playing") this.pause();
     });
+    document.addEventListener("fullscreenchange", this._onFsChange = () => {
+      if (!document.fullscreenElement) this._immersive(false);
+      this._syncFullscreenUI();
+      this._afterFullscreenChange();
+    });
 
     this.onInit?.();
     this.showStartOverlay();
@@ -65,6 +70,7 @@ export class GameBase {
       this.hudStatsEl = el("div", { class: "hud-stats" }),
       el("div", { class: "hud-actions" }, [
         iconButton("info", "How to play", () => this.showHowToPlay()),
+        this.fsBtn = iconButton("expand", "Fullscreen", () => this.toggleFullscreen()),
         this.pauseBtn = iconButton("pause", "Pause", () => this.togglePause()),
         iconButton("restart", "Restart", () => this.confirmRestart()),
         iconLink("close", "Back to Library", "#/library"),
@@ -75,15 +81,15 @@ export class GameBase {
     this.stageEl = el("div", { class: "game-stage" + (g.domBoard ? " dom-board" : "") });
     this.touchEl = el("div", { class: "touch-controls" });
     this.overlayEl = el("div", { class: "game-overlay", hidden: true });
-    this.stageOuter.append(this.stageEl, this.touchEl, this.overlayEl);
+    this.stageOuter.append(this.stageEl, this.overlayEl);
 
     this.tipEl = el("p", { class: "game-tip" }, "Tip: press P to pause anytime.");
 
-    this.root.append(this.hud, this.stageOuter, this.tipEl);
+    this.root.append(this.hud, this.stageOuter, this.touchEl, this.tipEl);
     this.setHud({ Score: 0 });
 
     this._fitStage();
-    this._onWindowResize = () => this._fitStage();
+    this._onWindowResize = () => { this._layoutTouchControls(); this._fitStage(); };
     window.addEventListener("resize", this._onWindowResize);
     window.addEventListener("orientationchange", this._onWindowResize);
   }
@@ -96,13 +102,33 @@ export class GameBase {
   _fitStage() {
     const [rw, rh] = String(this.meta.ratio || "4/3").split("/").map(Number);
     const ratio = rw && rh ? rw / rh : 4 / 3;
-    const maxW = Math.min(this.root.clientWidth || window.innerWidth, this.meta.wide ? 980 : 860);
-    const rect = this.stageOuter.getBoundingClientRect();
-    // rect.top is viewport-relative; when the page is scrolled fall back to a
-    // conservative estimate of the chrome above the stage.
-    const above = rect.top > 0 ? rect.top : 150;
-    const reserve = window.matchMedia("(max-width: 780px)").matches ? 86 : 34;
-    const maxH = Math.max(240, window.innerHeight - above - reserve);
+    const full = this.isFullscreen?.();
+    const rotated = this._applyRotation();
+    const mobile = window.matchMedia("(max-width: 780px)").matches;
+    // When the surface is turned sideways, "screen height" is the width.
+    const screenW = rotated ? window.innerHeight : window.innerWidth;
+    const screenH = rotated ? window.innerWidth : window.innerHeight;
+
+    // Fullscreen drops the desktop width cap: the point is to fill the screen.
+    const cap = full ? Infinity : (this.meta.wide ? 980 : 860);
+    const maxW = Math.min(this.root.clientWidth || screenW, cap);
+
+    const hudH = this.hud?.offsetHeight || 0;
+    const band = this.touchEl?.classList.contains("band") ? (this.touchEl.offsetHeight || 148) : 0;
+    let maxH;
+    if (full) {
+      maxH = Math.max(180, (screenH || 600) - hudH - band - 20);
+    } else {
+      const rect = this.stageOuter.getBoundingClientRect();
+      // rect.top is viewport-relative; when the page is scrolled fall back to
+      // a conservative estimate of the chrome above the stage.
+      const above = rect.top > 0 ? rect.top : 150;
+      // On phones the bottom nav is hidden while playing, so the stage can
+      // claim almost everything below the HUD.
+      const reserve = mobile ? 18 : 34;
+      maxH = Math.max(200, screenH - above - reserve - band);
+    }
+
     let w = maxW, h = w / ratio;
     if (h > maxH) { h = maxH; w = h * ratio; }
     this.stageOuter.style.width = `${Math.floor(w)}px`;
@@ -150,6 +176,15 @@ export class GameBase {
   addScore(n) { this.setScore(this.score + n); }
 
   // ---------------------------------------------------------- OVERLAYS -----
+  /**
+   * Start / pause / end screens hide the on-screen controls: a d-pad floating
+   * over a "Game Over" panel is both ugly and tappable by accident.
+   */
+  _setOverlay(visible) {
+    this.overlayEl.hidden = !visible;
+    this.root.classList.toggle("overlay-open", visible);
+  }
+
   showStartOverlay() {
     this.state = "idle";
     const gameData = saveManager.ensureGame(this.id);
@@ -157,7 +192,7 @@ export class GameBase {
     const instructions = this.getInstructions?.() || ["Have fun!"];
     const controlsLine = this.input.isTouch ? (this.getTouchHint?.() || "Use the on-screen controls.") : (this.getKeyboardHint?.() || "Use your keyboard / mouse to play.");
 
-    this.overlayEl.hidden = false;
+    this._setOverlay(true);
     this.overlayEl.innerHTML = "";
     this.overlayEl.append(
       el("div", { class: "overlay-icon" }, this.meta.emoji),
@@ -180,7 +215,7 @@ export class GameBase {
   }
 
   showPauseOverlay() {
-    this.overlayEl.hidden = false;
+    this._setOverlay(true);
     this.overlayEl.innerHTML = "";
     this.overlayEl.append(
       el("div", { class: "overlay-icon" }, "⏸"),
@@ -197,7 +232,7 @@ export class GameBase {
     this.state = "ended";
     this.pauseBtn.disabled = true;
     const icon = result === "win" ? "🎉" : result === "loss" ? "💀" : "🏁";
-    this.overlayEl.hidden = false;
+    this._setOverlay(true);
     this.overlayEl.innerHTML = "";
     this.overlayEl.append(
       el("div", { class: "overlay-icon pop-in" }, icon),
@@ -281,10 +316,117 @@ export class GameBase {
     requestAnimationFrame(loop);
   }
 
+  // ----------------------------------------------------------- FULLSCREEN --
+  /**
+   * Native fullscreen where the browser allows it, with a CSS "immersive"
+   * fallback everywhere else — iOS Safari refuses element fullscreen, and
+   * that is exactly the device where filling the screen matters most.
+   */
+  toggleFullscreen() {
+    audioManager.play("click");
+    if (this.isFullscreen()) this.exitFullscreen();
+    else this.enterFullscreen();
+  }
+
+  isFullscreen() {
+    return document.fullscreenElement === this.root || document.body.classList.contains("immersive");
+  }
+
+  enterFullscreen() {
+    const done = () => { this._syncFullscreenUI(); this._afterFullscreenChange(); };
+    // A natively fullscreened element cannot be transformed — the UA
+    // stylesheet pins its size and clears transforms — so whenever we intend
+    // to turn the surface sideways we use our own immersive mode instead.
+    if (this.root.requestFullscreen && !this._rotationUseful()) {
+      this.root.requestFullscreen({ navigationUI: "hide" })
+        .then(done)
+        .catch(() => { this._immersive(true); done(); });
+    } else {
+      this._immersive(true);
+      done();
+    }
+    // Landscape suits almost every game better on a phone; browsers that
+    // reject the request just carry on in whatever orientation they are in.
+    screen.orientation?.lock?.("landscape").catch(() => {});
+  }
+
+  exitFullscreen() {
+    if (document.fullscreenElement) document.exitFullscreen?.().catch(() => {});
+    this._immersive(false);
+    screen.orientation?.unlock?.();
+    this._syncFullscreenUI();
+    this._afterFullscreenChange();
+  }
+
+  _immersive(on) {
+    document.body.classList.toggle("immersive", on);
+    this.root.classList.toggle("immersive-target", on);
+    if (!on) this._applyRotation(false);
+  }
+
+  /**
+   * A 16:9 game on an upright phone gets about a quarter of the screen. In
+   * fullscreen we therefore turn the whole play surface sideways, which is
+   * what a player would do with the device anyway. DOM buttons keep working
+   * through the CSS transform; the canvas gets its coordinates un-rotated by
+   * the input controller.
+   */
+  /** Geometry only: would turning the surface sideways actually help here? */
+  _rotationUseful() {
+    // _fitStage runs from _buildShell, before the input controller exists.
+    if (!this.input?.isTouch) return false;
+    const [rw, rh] = String(this.meta.ratio || "4/3").split("/").map(Number);
+    const gameRatio = rw && rh ? rw / rh : 4 / 3;
+    return gameRatio > 1.2 && window.innerHeight > window.innerWidth * 1.05;
+  }
+
+  _wantsRotation() { return this.isFullscreen() && this._rotationUseful(); }
+
+  _applyRotation(want = this._wantsRotation()) {
+    const rotate = !!want;
+    if (rotate === this._rotated) return rotate;
+    this._rotated = rotate;
+    this.root.classList.toggle("rotated", rotate);
+    if (rotate) {
+      const W = window.innerWidth, H = window.innerHeight;
+      Object.assign(this.root.style, {
+        width: `${H}px`, height: `${W}px`,
+        left: `${(W - H) / 2}px`, top: `${(H - W) / 2}px`,
+      });
+    } else {
+      Object.assign(this.root.style, { width: "", height: "", left: "", top: "" });
+    }
+    this.input?.setStageRotation?.(rotate ? 90 : 0);
+    return rotate;
+  }
+
+  _syncFullscreenUI() {
+    if (!this.fsBtn) return;
+    const on = this.isFullscreen();
+    this.fsBtn.innerHTML = iconMarkup(on ? "collapse" : "expand");
+    this.fsBtn.title = on ? "Exit fullscreen" : "Fullscreen";
+    this.fsBtn.setAttribute("aria-label", this.fsBtn.title);
+  }
+
+  /** The stage has to be re-measured once the browser has resized us. */
+  _afterFullscreenChange() {
+    requestAnimationFrame(() => {
+      this._layoutTouchControls();
+      this._fitStage();
+      this._resizeCanvas?.();
+      this._resize3D?.();
+    });
+    setTimeout(() => {
+      this._fitStage();
+      this._resizeCanvas?.();
+      this._resize3D?.();
+    }, 260);
+  }
+
   // ------------------------------------------------------------ LIFECYCLE --
   start() {
     this.state = "playing";
-    this.overlayEl.hidden = true;
+    this._setOverlay(false);
     this.pauseBtn.disabled = false;
     this.score = 0;
     this._sessionSeconds = 0;
@@ -292,6 +434,12 @@ export class GameBase {
     saveManager.recordPlay(this.id);
     eventBus.emit("game:played", { gameId: this.id });
     audioManager.play("start");
+    // On a phone the windowed stage is a small letterbox in a tall page, so
+    // starting a game goes straight to fullscreen. The Start button click is
+    // the user gesture browsers require, and the HUD button toggles back.
+    if (this.input.isTouch && window.matchMedia("(max-width: 780px)").matches && !this.isFullscreen()) {
+      try { this.enterFullscreen(); } catch { /* not fatal — play windowed */ }
+    }
     this._setupTouchControls();
     this.onStart?.(this.difficulty);
     this._lastT = performance.now();
@@ -311,7 +459,7 @@ export class GameBase {
   resume() {
     if (this.state !== "paused") return;
     this.state = "playing";
-    this.overlayEl.hidden = true;
+    this._setOverlay(false);
     this._lastT = performance.now();
     this.onResume?.();
     this._loop();
@@ -325,7 +473,7 @@ export class GameBase {
   restart() {
     this._flushPlaytime();
     this.onDestroyRound?.();
-    this.overlayEl.hidden = true;
+    this._setOverlay(false);
     this.pauseBtn.disabled = false;
     this.start();
   }
@@ -389,12 +537,30 @@ export class GameBase {
   // -------------------------------------------------------- TOUCH CONTROL --
   _setupTouchControls() {
     this.touchEl.innerHTML = "";
-    this.touchEl.classList.remove("active");
+    this.touchEl.classList.remove("active", "band");
     const layout = this.getTouchLayout?.() || "none";
     if (!this.input.isTouch && layout !== "swipe-only-hint") return;
     if (layout === "dpad") this.input.buildDPad(this.touchEl, { buttons: this.getTouchButtons?.() || ["a"] });
     else if (layout === "single") this.input.buildSingleButton(this.touchEl, this.getTouchIcon?.() || "▲");
-    // "swipe" and "none" layouts need no injected DOM controls.
+    else return;  // "swipe" and "none" layouts need no injected DOM controls.
+
+    this._layoutTouchControls();
+  }
+
+  /**
+   * On a portrait screen the controls get their own band under the stage
+   * instead of sitting on top of the playfield; in landscape there is no
+   * room for that, so they overlay the stage as before.
+   */
+  _layoutTouchControls() {
+    if (!this.touchEl.firstChild) return;
+    // Resolve rotation first: a sideways surface is landscape, whatever the
+    // physical device is doing, and landscape has no room for a control band.
+    const rotated = this._applyRotation();
+    const portrait = !rotated && window.innerHeight >= window.innerWidth * 1.12;
+    this.touchEl.classList.toggle("band", portrait);
+    this.touchEl.classList.add("active");
+    this._fitStage();
   }
 
   // --------------------------------------------------------------- UTILS ---
@@ -412,6 +578,8 @@ export class GameBase {
     cancelAnimationFrame(this._raf);
     this._flushPlaytime();
     document.removeEventListener("visibilitychange", this._onVisibility);
+    document.removeEventListener("fullscreenchange", this._onFsChange);
+    this._immersive(false);
     window.removeEventListener("resize", this._onWindowResize);
     window.removeEventListener("orientationchange", this._onWindowResize);
     this._resizeObs?.disconnect();

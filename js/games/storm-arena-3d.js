@@ -28,15 +28,15 @@ export class StormArena3DGame extends Game3D {
   getInstructions() {
     return [
       "Survive waves of drones in a shrinking arena — the storm ring drains your health outside it.",
-      "WASD moves, the mouse aims, click to fire. Reload with R before a wave lands on you.",
+      "WASD moves. Click once to take aim, then the mouse turns you and holding the button fires. Reload with R.",
       "Build a wall with E (or the ■ button): instant cover that soaks fire and fades after a few seconds. Kills refill materials.",
       "Shields absorb damage first and drop from every fourth drone. Score is kills, waves and time survived.",
     ];
   }
   getTouchLayout() { return "dpad"; }
   getTouchButtons() { return ["a", "b"]; }
-  getTouchHint() { return "D-pad to move, drag the right half of the screen to aim, ● fires and ■ builds a wall."; }
-  getKeyboardHint() { return "WASD to move, mouse to aim, click to fire, R reloads, E builds a wall, Space jumps."; }
+  getTouchHint() { return "D-pad to move, drag anywhere on the view to aim, ● fires and ■ builds a wall."; }
+  getKeyboardHint() { return "Click the view once to take aim. WASD moves, the mouse turns you, hold the button to fire, R reloads, E builds, Space jumps."; }
 
   onInit() {
     if (!this.setup3D({
@@ -59,20 +59,73 @@ export class StormArena3DGame extends Game3D {
     e.texture("rock", () => Textures.rock(256, "#5b6390"));
     e.texture("hazard", () => Textures.stripes(128, { bg: "#ffd76a", stripe: "#1b1408", count: 6 }));
 
-    // Look controls: dragging anywhere turns the camera.
-    this.input.onPointer("down", (p) => { this._look = { x: p.x, y: p.y }; this._wantFire = true; });
-    this.input.onPointer("move", (p) => {
-      if (!this._look) return;
-      this.yaw -= (p.x - this._look.x) * 0.0055;
-      this.pitch = clamp(this.pitch - (p.y - this._look.y) * 0.004, -0.5, 0.62);
-      if (Math.hypot(p.x - this._look.x, p.y - this._look.y) > 6) this._wantFire = false;
-      this._look = { x: p.x, y: p.y };
-    });
-    this.input.onPointer("up", () => { this._look = null; });
     this.overlay2D();
+    this._bindLook();
     this.input.onKey("KeyR", () => this._reload());
     this.input.onKey("KeyE", () => this._build());
     this.input.onKey("Space", () => this._jump());
+  }
+
+  /**
+   * Mouse look uses pointer lock, so moving the mouse aims and holding the
+   * button fires — the two used to cancel each other out, because any drag
+   * that turned the camera also cancelled the shot.
+   * Without pointer lock (touch, or a browser that refuses it) dragging aims
+   * and the on-screen buttons fire, which keeps the two inputs separate.
+   */
+  _bindLook() {
+    const el = this.stageEl;
+    this.pointerLocked = false;
+
+    this._onLockChange = () => {
+      this.pointerLocked = document.pointerLockElement === el;
+    };
+    document.addEventListener("pointerlockchange", this._onLockChange);
+
+    this._onRawMove = (ev) => {
+      if (!this.pointerLocked || this.state !== "playing") return;
+      this.yaw -= ev.movementX * 0.0022;
+      this.pitch = clamp(this.pitch - ev.movementY * 0.0018, -0.5, 0.62);
+    };
+    document.addEventListener("mousemove", this._onRawMove);
+
+    this._onDown = (ev) => {
+      if (this.state !== "playing") return;
+      if (!this.pointerLocked && el.requestPointerLock) {
+        // The first click grabs the pointer; after that clicks are shots.
+        el.requestPointerLock();
+        return;
+      }
+      this.firing = true;
+      ev.preventDefault?.();
+    };
+    this._onUp = () => { this.firing = false; };
+    el.addEventListener("mousedown", this._onDown);
+    window.addEventListener("mouseup", this._onUp);
+
+    // Touch: dragging aims, and never fires — that is what the ● button is for.
+    el.addEventListener("touchstart", this._onTouchStart = (ev) => {
+      const t = ev.touches[0];
+      this._look = { x: t.clientX, y: t.clientY };
+    }, { passive: true });
+    el.addEventListener("touchmove", this._onTouchMove = (ev) => {
+      if (!this._look) return;
+      const t = ev.touches[0];
+      this.yaw -= (t.clientX - this._look.x) * 0.006;
+      this.pitch = clamp(this.pitch - (t.clientY - this._look.y) * 0.0045, -0.5, 0.62);
+      this._look = { x: t.clientX, y: t.clientY };
+    }, { passive: true });
+    el.addEventListener("touchend", this._onTouchEnd = () => { this._look = null; }, { passive: true });
+  }
+
+  onPause() { if (this.pointerLocked) document.exitPointerLock?.(); }
+
+  onDestroy() {
+    document.removeEventListener("pointerlockchange", this._onLockChange);
+    document.removeEventListener("mousemove", this._onRawMove);
+    window.removeEventListener("mouseup", this._onUp);
+    if (document.pointerLockElement === this.stageEl) document.exitPointerLock?.();
+    super.onDestroy();
   }
 
   onStart(difficulty) {
@@ -83,6 +136,7 @@ export class StormArena3DGame extends Game3D {
       Hard:   { hp: 130, dmg: 9,  droneHp: 42, droneSpeed: 5.6, fire: 1.9, perWave: 4, walls: 5 },
     }[difficulty] || {};
 
+    this.firing = false;
     this.px = 0; this.pz = 0; this.py = 0; this.vy = 0;
     this.yaw = 0; this.pitch = 0.06;
     this.hp = this.cfg.hp; this.maxHp = this.cfg.hp;
@@ -299,9 +353,9 @@ export class StormArena3DGame extends Game3D {
 
     this._movePlayer(dt);
 
-    // Firing: hold the mouse button, or the ● pad button.
+    // Firing: hold the mouse button (pointer-locked) or the ● pad button.
     const v = this.input.virtual;
-    if ((this._look && this._wantFire) || v.a) this._fire();
+    if (this.firing || v.a) this._fire();
     if (v.b && !this._vb) this._build();
     this._vb = v.b;
 
@@ -595,6 +649,11 @@ export class StormArena3DGame extends Game3D {
     }
     if (!this.enemies.length && this.intermission > 0) {
       this.gfx.label(ctx, `WAVE ${this.wave + 1}`, W / 2, H * 0.3, { size: 30, weight: 800, color: "rgba(255,255,255,0.92)" });
+    }
+    // Mouse players need to know the first click grabs the pointer.
+    if (!this.pointerLocked && !this.input.isTouch) {
+      this.gfx.label(ctx, "Click to take aim — then hold to fire", W / 2, H - 16,
+        { size: 13, weight: 700, color: "rgba(255,255,255,0.66)" });
     }
   }
 }

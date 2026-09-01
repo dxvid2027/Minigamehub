@@ -23,7 +23,7 @@ no build step and no external services: everything runs locally and offline.
 | **Design** | Self-hosted Inter + Sora, layered glass surfaces, film-grain texture, procedural cover art for every game, 5 themes |
 | **Performance** | 60 fps across all games; expensive effects (backdrop blur, blend passes, glow) are budgeted, and the graphics kit auto-downgrades on slow devices |
 | **Accessibility** | Colorblind modes, high contrast, reduced motion, UI scaling, keyboard nav |
-| **Devices** | Desktop, laptop, iPad, Android tablets and phones — controls adapt automatically |
+| **Devices** | Desktop, laptop, iPad, Android tablets and phones — a compact HUD, on-screen controls in their own band and a fullscreen mode that turns landscape games sideways on an upright phone |
 | **Installable** | Web app manifest + service worker: add it to your home screen and it launches full-screen with its own icon and plays offline |
 
 ---
@@ -253,6 +253,16 @@ assets/                    # audio / images / icons (all generated at runtime)
 - **Device-adaptive input** — `InputController` exposes keyboard state, pointer,
   swipe gestures and virtual D-pad/buttons behind one API; a game declares
   `getTouchLayout()` and the framework injects the right on-screen controls.
+- **Built for a phone, not shrunk onto one** — starting a game on a phone goes
+  straight to fullscreen, the top bar and bottom nav step aside, the HUD
+  collapses to one row and the on-screen controls get their own band under the
+  playfield instead of covering it. A landscape game on an upright phone is
+  displayed rotated, so it fills the screen (73% of it, up from 27%); the input
+  controller un-rotates pointer coordinates and swipe directions to match.
+- **Virtual world units** — games whose level has a fixed vertical extent
+  (Pixel Quest) author it against a virtual world height and scale to the
+  stage, so the same level is fully visible on a 200px-tall phone stage and a
+  desktop one.
 
 ---
 

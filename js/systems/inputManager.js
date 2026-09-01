@@ -17,6 +17,7 @@ export class InputController {
     this.pointer = { x: 0, y: 0, down: false };
     this.virtual = { up: false, down: false, left: false, right: false, a: false, b: false };
     this._touchStart = null;
+    this._rot = 0;   // stage rotation in degrees; see setStageRotation()
     this._onKeyDown = (e) => {
       const code = e.code || e.key;
       if (!this.keys.has(code)) this.pressedThisFrame.add(code);
@@ -45,13 +46,42 @@ export class InputController {
   }
   endFrame() { this.pressedThisFrame.clear(); }
 
+  /**
+   * Tells the controller that the stage is displayed rotated (fullscreen on a
+   * portrait phone turns landscape games sideways). DOM buttons are hit-tested
+   * through the CSS transform by the browser, but canvas coordinates are not,
+   * so pointer positions and swipe directions are un-rotated here.
+   */
+  setStageRotation(deg) { this._rot = ((deg % 360) + 360) % 360; }
+
+  /** Client-space point to stage-local coordinates, undoing any rotation. */
+  _toLocal(x, y) {
+    const r = this.stageEl.getBoundingClientRect();
+    if (!this._rot) return { x: x - r.left, y: y - r.top, w: r.width, h: r.height };
+    // Rotation is about the centre, which the bounding box preserves; a
+    // quarter turn also swaps the element's own width and height.
+    const cx = r.left + r.width / 2, cy = r.top + r.height / 2;
+    const dx = x - cx, dy = y - cy;
+    const w = r.height, h = r.width;
+    return this._rot === 90
+      ? { x: dy + w / 2, y: -dx + h / 2, w, h }
+      : { x: -dy + w / 2, y: dx + h / 2, w, h };
+  }
+
+  /** Rotates a client-space delta into stage space. */
+  _rotateDelta(dx, dy) {
+    if (this._rot === 90) return { dx: dy, dy: -dx };
+    if (this._rot === 270) return { dx: -dy, dy: dx };
+    return { dx, dy };
+  }
+
   _bindPointer(el) {
     const move = (x, y) => {
-      const r = el.getBoundingClientRect();
-      this.pointer.x = x - r.left;
-      this.pointer.y = y - r.top;
-      this.pointer.nx = this.pointer.x / r.width;
-      this.pointer.ny = this.pointer.y / r.height;
+      const l = this._toLocal(x, y);
+      this.pointer.x = l.x;
+      this.pointer.y = l.y;
+      this.pointer.nx = l.x / l.w;
+      this.pointer.ny = l.y / l.h;
     };
     const down = (e) => {
       this.pointer.down = true;
@@ -70,7 +100,8 @@ export class InputController {
       this._pointerHandlers.forEach(h => h.type === "up" && h.fn({ ...this.pointer }));
       if (this._touchStart) {
         const p = e.changedTouches ? e.changedTouches[0] : e;
-        const dx = p.clientX - this._touchStart.x, dy = p.clientY - this._touchStart.y;
+        const rawX = p.clientX - this._touchStart.x, rawY = p.clientY - this._touchStart.y;
+        const { dx, dy } = this._rotateDelta(rawX, rawY);
         const dt = Date.now() - this._touchStart.t;
         const dist = Math.hypot(dx, dy);
         if (dist > 32 && dt < 700) {

@@ -208,9 +208,28 @@
 .game-overlay .instructions li::before { content: "▸ "; color: var(--accent-2); }
 .diff-row { display: flex; gap: 8px; }
 
+/* Two placements: an overlay on top of the stage (landscape, where there is
+   no spare height) and a band underneath it (portrait, where covering the
+   playfield with a thumb-sized d-pad is the worst possible choice). */
 .touch-controls { position: absolute; inset: 0; z-index: 5; pointer-events: none; display: none; }
 .touch-controls.active { display: block; }
+/* Never float controls over a start / pause / game-over panel. */
+.play-wrap.overlay-open .touch-controls { display: none !important; }
 .touch-controls .zone { pointer-events: auto; position: absolute; }
+
+.touch-controls.band {
+  position: static; inset: auto; display: flex; pointer-events: auto;
+  align-items: center; justify-content: space-between; gap: 14px;
+  width: 100%; max-width: var(--game-max-w, 900px);
+  padding: 2px 6px;
+}
+.touch-controls.band .zone { position: static; }
+.touch-controls.band .dpad { width: 144px; height: 144px; }
+.touch-controls.band .action-btns { gap: 14px; }
+.touch-controls.band .action-btns button { width: 68px; height: 68px; }
+.touch-controls.band .single-btn { position: static; transform: none; margin: 0 auto; }
+/* With no action buttons the d-pad centres itself rather than hugging a corner. */
+.touch-controls.band:not(:has(.action-btns)) { justify-content: center; }
 .dpad { bottom: 18px; left: 18px; width: 132px; height: 132px; display: grid; grid-template-columns: repeat(3, 1fr); grid-template-rows: repeat(3, 1fr); gap: 4px; }
 .dpad button { background: #ffffff14; border: 1px solid #ffffff26; border-radius: 10px; color: #fff; font-size: 1.1rem; display: grid; place-items: center; backdrop-filter: blur(4px); }
 .dpad button:active { background: #ffffff30; }
@@ -235,14 +254,78 @@
   .bottom-nav { display: flex; }
   .topbar .search-box { max-width: none; }
 
-  .play-hud { gap: 6px; }
-  .play-hud .hud-title { font-size: .98rem; }
-  .play-hud .hud-stat { padding: 4px 10px; min-width: 54px; }
-  .play-hud .hud-stat b { font-size: .92rem; }
-  .play-hud .hud-stat span { font-size: .58rem; }
-  .play-hud .icon-btn { width: 34px; height: 34px; font-size: .95rem; }
+  /* One compact HUD row: the title shrinks to its emoji, the stats scroll
+     sideways and the action buttons never wrap onto a second line. */
+  .play-wrap { gap: 8px; }
+  .play-hud { gap: 6px; flex-wrap: nowrap; align-items: stretch; }
+  .play-hud .hud-left { flex: none; }
+  .play-hud .hud-title { font-size: 0; gap: 0; }
+  .play-hud .hud-title::first-letter { font-size: 1.35rem; }
+  .play-hud .hud-stats {
+    flex: 1; min-width: 0; gap: 6px; flex-wrap: nowrap;
+    overflow-x: auto; scrollbar-width: none; -webkit-overflow-scrolling: touch;
+  }
+  .play-hud .hud-stats::-webkit-scrollbar { display: none; }
+  .play-hud .hud-stat { padding: 3px 8px; min-width: 46px; flex: none; }
+  .play-hud .hud-stat b { font-size: .88rem; }
+  .play-hud .hud-stat span { font-size: .54rem; letter-spacing: .02em; }
+  .play-hud .hud-actions { flex: none; gap: 5px; }
+  .play-hud .icon-btn { width: 32px; height: 32px; font-size: .9rem; }
+  .play-hud .icon-btn svg { width: 17px; height: 17px; }
   .game-tip { display: none; }
   .game-overlay .instructions { font-size: .8rem; padding: 10px 14px; }
+  .game-overlay { padding: 14px; gap: 10px; }
+  .game-overlay h2 { font-size: 1.3rem; }
+  .game-overlay .overlay-icon { font-size: 2.1rem; }
+
+  /* While a game is mounted the bottom nav just steals playfield height. */
+  body.in-game .bottom-nav { display: none; }
+  body.in-game .app-shell { padding-bottom: 0; }
+  body.in-game .topbar { display: none; }
+  body.in-game .page { padding-top: 10px; }
+}
+
+/* ---------------------------------------------------------------- */
+/* Fullscreen / immersive play                                       */
+/* Native fullscreen where the browser supports it, and the same look */
+/* driven by a body class where it does not (iOS Safari).             */
+/* ---------------------------------------------------------------- */
+body.immersive { overflow: hidden; }
+body.immersive .sidebar,
+body.immersive .topbar,
+body.immersive .bottom-nav,
+body.immersive #bg-canvas { display: none !important; }
+body.immersive .app-shell { padding: 0; }
+body.immersive .page { padding: 0; max-width: none; }
+
+.play-wrap.immersive-target,
+.play-wrap:fullscreen {
+  position: fixed; inset: 0; z-index: 400;
+  width: 100vw; height: 100dvh;
+  margin: 0;
+  padding: max(6px, env(safe-area-inset-top)) max(6px, env(safe-area-inset-right))
+           max(6px, env(safe-area-inset-bottom)) max(6px, env(safe-area-inset-left));
+  gap: 6px;
+  background: var(--bg-0);
+  justify-content: center;
+  overflow: hidden;
+}
+.play-wrap.immersive-target .game-tip,
+.play-wrap:fullscreen .game-tip { display: none; }
+.play-wrap.immersive-target .play-hud,
+.play-wrap:fullscreen .play-hud { max-width: none; }
+/* In fullscreen the stage gets whatever is left after the HUD. */
+.play-wrap.immersive-target .game-stage-outer,
+.play-wrap:fullscreen .game-stage-outer { max-width: none; }
+.play-wrap.immersive-target .touch-controls.band,
+.play-wrap:fullscreen .touch-controls.band { max-width: none; padding-bottom: 2px; }
+
+/* Sideways fullscreen: the surface is laid out in landscape and displayed
+   rotated, so a 16:9 game fills an upright phone instead of banding it. */
+.play-wrap.rotated {
+  position: fixed; inset: auto;
+  transform: rotate(90deg);
+  transform-origin: center center;
 }
 @media (max-width: 520px) {
   .profile-header { justify-content: center; text-align: center; }
