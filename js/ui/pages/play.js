@@ -7,6 +7,9 @@ import { router } from "../../core/router.js";
 
 let activeGame = null;
 
+/** The game currently mounted, or null. Used by tooling and debugging. */
+export function getActiveGame() { return activeGame; }
+
 export function disposeActiveGame() {
   if (activeGame) {
     try { activeGame.destroy(); } catch (err) { console.error("[play] destroy failed", err); }
@@ -14,7 +17,7 @@ export function disposeActiveGame() {
   }
 }
 
-export async function renderPlay(container, gameId) {
+export async function renderPlay(container, gameId, token) {
   disposeActiveGame();
   const meta = getGame(gameId);
   if (!meta) {
@@ -38,8 +41,9 @@ export async function renderPlay(container, gameId) {
     const mod = await import(/* @vite-ignore */ meta.module);
     const GameClass = mod[meta.exportName] || mod.default;
     if (!GameClass) throw new Error(`Export "${meta.exportName}" not found in ${meta.module}`);
-    // Bail out if the user navigated away while the module was loading.
+    // Bail out if the player navigated away while the module was loading.
     if (router.current?.path !== `/play/${gameId}`) return;
+    if (token !== undefined && router.isStale(token)) return;
     loading.remove();
     activeGame = new GameClass({ root: wrap, meta });
   } catch (err) {

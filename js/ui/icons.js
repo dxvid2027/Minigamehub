@@ -51,6 +51,8 @@ export const ICONS = {
   gauge: svg(`<path d="M4.6 17.4a8.4 8.4 0 1 1 14.8 0"/><path d="m12 12.6 3.6-3"/><circle cx="12" cy="13.4" r="1.2" fill="currentColor" stroke="none"/>`),
   save: svg(`<path d="M5.6 4.8h9.6l3.6 3.6v10.8a1.2 1.2 0 0 1-1.2 1.2H5.6a1.2 1.2 0 0 1-1.2-1.2V6a1.2 1.2 0 0 1 1.2-1.2z"/><path d="M8 4.8v5h6v-5M8 20.4v-5.6h8v5.6"/>`),
   flag: svg(`<path d="M6 20.4V4.6M6 5.4h11.4l-2 3.6 2 3.6H6"/>`),
+  info: svg(`<circle cx="12" cy="12" r="8.2"/><path d="M12 11.2v5"/><circle cx="12" cy="7.9" r="1.05" fill="currentColor" stroke="none"/>`),
+  book: svg(`<path d="M4.6 5.2h5a3 3 0 0 1 3 3v11a2.4 2.4 0 0 0-2.4-2.2H4.6z"/><path d="M19.4 5.2h-5a3 3 0 0 0-3 3v11a2.4 2.4 0 0 1 2.4-2.2h5.6z"/>`),
   users: svg(`<circle cx="9.4" cy="8.6" r="3.2"/><path d="M3.6 19.2c.6-3 2.8-4.8 5.8-4.8s5.2 1.8 5.8 4.8"/><path d="M16.2 5.9a3.2 3.2 0 0 1 0 5.9M17.2 14.8c2 .6 3.3 2.2 3.7 4.4"/>`),
 };
 

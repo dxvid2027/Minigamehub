@@ -9,7 +9,7 @@ import { dailyChallengeSystem } from "../../systems/dailyChallenge.js";
 import { statsManager } from "../../systems/statsManager.js";
 import { progression } from "../../systems/progression.js";
 import { el, formatNumber, shuffle } from "../../core/utils.js";
-import { gameCard } from "../gameCard.js";
+import { gameCard, isRecentlyAdded } from "../gameCard.js";
 import { gameArtSVG } from "../gameArt.js";
 import { iconMarkup } from "../icons.js";
 
@@ -73,7 +73,7 @@ function heroSection() {
     el("div", { class: "hero-copy" }, [
       withIcon("bolt", `${GAMES.length} games · New content every week`, "eyebrow"),
       h1,
-      el("p", { class: "lead" }, "A premium browser arcade — polished mini games, real progression, daily challenges and 154 achievements. No installs, no ads, just play."),
+      el("p", { class: "lead" }, `A premium browser arcade — polished 2D and 3D games, real progression, daily challenges and ${achievementSystem.summary().total} achievements. No installs, no ads, just play.`),
       el("div", { class: "hero-actions" }, [playBtn, browseBtn]),
       el("div", { class: "hero-stats" }, [
         statItem(GAMES.length, "Games"),
@@ -158,10 +158,15 @@ export function renderHome(container) {
   const catRow = el("div", { class: "chip-row" }, CATEGORIES.map(c =>
     el("a", { class: "chip", href: `#/library?cat=${encodeURIComponent(c)}` }, c)));
 
+  // Games that joined the library in the last few hours get their own rail,
+  // which disappears together with their badge.
+  const justAdded = GAMES.filter(isRecentlyAdded);
+
   container.append(
     el("div", { class: "container" }, [
       heroSection(),
       el("div", { class: "dashboard-grid" }, [continuePlayingCard(), dailyChallengeCard(), achievementProgressCard()]),
+      rail("Recently Added", "Fresh arrivals — grab them while they're new", justAdded, "#/library?cat=3D"),
       rail("Featured Games", "Hand-picked favorites from the MegaPlay team", featured, "#/library"),
       rail("Trending Now", "What you've been playing most", trending, "#/library"),
       rail("New Releases", "Fresh additions to the library", newGames, "#/library"),

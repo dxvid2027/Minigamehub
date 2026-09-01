@@ -1,7 +1,8 @@
 # 🎮 MegaPlay Hub
 
-A premium browser gaming platform — **30 polished mini games**, a full progression
-system, 150+ achievements, daily challenges, profiles, statistics and unlockables.
+A premium browser gaming platform — **35 polished games, five of them real-time 3D
+(WebGL)** — with a full progression system, 174 achievements, daily challenges,
+profiles, statistics and unlockables.
 Written in **vanilla JavaScript (ES modules)** with **zero runtime dependencies**,
 no build step and no external services: everything runs locally and offline.
 
@@ -11,10 +12,11 @@ no build step and no external services: everything runs locally and offline.
 
 | Area | What you get |
 |---|---|
-| **Games** | 30 complete games — arcade, puzzle, board, action, sports and skill |
-| **Framework** | Every game inherits start/pause/win/lose screens, HUD, difficulty levels, high scores, statistics, sound and touch controls from a shared `GameBase` class |
+| **Games** | 35 complete games — arcade, puzzle, board, action, sports, skill and five 3D titles |
+| **3D** | A dependency-free WebGL renderer (`js/games/engine3d.js`): lit shading, fog, procedural textures, blob shadows |
+| **Framework** | Every game inherits start/pause/win/lose screens, a HUD with an in-game **How to play** panel, difficulty levels, high scores, statistics, sound and touch controls from a shared `GameBase` class |
 | **Progression** | XP, levels, coins, achievement points, unlockable themes and avatars |
-| **Achievements** | 154 achievements with live progress tracking and rewards |
+| **Achievements** | 174 achievements with live progress tracking and rewards |
 | **Daily challenges** | 3 rotating challenges per day (deterministic, seeded by date) + streaks |
 | **Save system** | Robust `localStorage` save with schema-merge migration, export/import, autosave |
 | **Audio** | Fully procedural Web Audio SFX + ambient music with master/music/SFX volume |
@@ -121,6 +123,20 @@ Checkers · Pixel Quest (platformer) · Turbo Rush (racing) · Hoop Shot
 2048 · Simon Says · Reaction Test · Color Match (Stroop) · Bubble Shooter ·
 Air Hockey · Typing Rush · Maze Runner · Stack Tower · Word Scramble
 
+**3D games (5, WebGL)**
+
+Turbo Circuit 3D (third-person racer on a curving, cresting circuit) ·
+Cube Runner 3D (three-lane endless runner with jump and slide) ·
+Sky Rider 3D (glider flight through a canyon of light rings) ·
+Tower Blocks 3D (stack sliding blocks; overhang is sliced off) ·
+Asteroid Belt 3D (space shooter with travel-time projectiles and splitting rocks)
+
+They run on a small renderer written for this project — mat4/vec3 maths, one
+lit shader with directional + hemisphere light and fog, primitive mesh
+builders, canvas-generated textures (asphalt, brushed metal, rock, neon grid)
+and blob shadows. No 3D library, nothing downloaded at runtime. If a device
+has no WebGL, the game shows a clear notice instead of failing.
+
 Every game ships with a tutorial/instructions screen, difficulty levels, pause
 menu, restart, win/lose screens, high scores, statistics, achievements, sound
 effects and adaptive touch controls.
@@ -178,7 +194,10 @@ js/
                            # statistics, settings, play
   games/
     gameBase.js            # the framework every game extends
+    game3dBase.js          # WebGL bridge: same framework, 3D renderer
+    engine3d.js            # the WebGL renderer (maths, shader, meshes, textures)
     gfx.js                 # in-game graphics kit: backdrops, lighting, glow
+    color.js               # shared colour parser (hex / rgb() / hsl())
     canvasUtils.js         # shared canvas drawing helpers
     <30 game modules>      # one self-contained module per game
 
@@ -205,6 +224,13 @@ assets/                    # audio / images / icons (all generated at runtime)
   frame monitor drops glow and grain automatically if a device falls behind.
 - **One visual language** — the same palette drives a game's cover art, its
   in-game lighting and its card, because all three read `grad` from the registry.
+- **Navigation is race-proof** — every navigation carries a token, so a slow
+  page import can never render over a newer page (which used to wipe a game
+  that had just mounted).
+- **Balance is measured, not assumed** — bot-driven tests play Pong and Air
+  Hockey with human-like reaction, speed and aim error to confirm the AI is
+  beatable on Easy/Normal and a real fight on Hard, and that matches always
+  end rather than stalling into endless rallies.
 - **Device-adaptive input** — `InputController` exposes keyboard state, pointer,
   swipe gestures and virtual D-pad/buttons behind one API; a game declares
   `getTouchLayout()` and the framework injects the right on-screen controls.

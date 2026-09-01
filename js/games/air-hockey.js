@@ -5,14 +5,15 @@ import { GameBase } from "./gameBase.js";
 import { audioManager } from "../systems/audioManager.js";
 import { clamp } from "../core/utils.js";
 
-const WIN_GOALS = 7;
+const WIN_GOALS = 5;
+const MATCH_SECONDS = 90;
 
 export class AirHockeyGame extends GameBase {
   getDifficulties() { return ["Easy", "Normal", "Hard"]; }
   getInstructions() {
     return [
       "Drag your mallet (bottom half) to strike the puck.",
-      `First to ${WIN_GOALS} goals wins the match.`,
+      `First to ${WIN_GOALS} goals wins — or the higher score when the ${MATCH_SECONDS}s clock runs out.`,
       "Hit the puck with a moving mallet for extra power.",
     ];
   }
@@ -27,18 +28,35 @@ export class AirHockeyGame extends GameBase {
   }
 
   onStart(difficulty) {
-    this.aiSpeed = difficulty === "Hard" ? 420 : difficulty === "Normal" ? 310 : 220;
-    this.goalW = this.viewW * 0.42;
-    this.puck = { x: this.viewW / 2, y: this.viewH / 2, vx: 0, vy: 0, r: 13 };
+    // Same handicap model as Pong: capped speed, a reaction interval and an
+    // aim error, so the AI defends convincingly but can be beaten.
+    const profiles = {
+      Easy:   { speed: 200, reaction: 0.30, aimError: 60 },
+      Normal: { speed: 285, reaction: 0.18, aimError: 34 },
+      Hard:   { speed: 360, reaction: 0.10, aimError: 16 },
+    };
+    this.aiCfg = profiles[difficulty] || profiles.Normal;
+    this.aiSpeed = this.aiCfg.speed;
+    this._aiTimer = 0;
+    this._aiTarget = { x: this.viewW / 2, y: 70 };
+    this.goalW = this.viewW * 0.52;
+    // Serve the puck immediately so a match opens with play, not a stand-off.
+    this.puck = { x: this.viewW / 2, y: this.viewH / 2, vx: (Math.random() * 2 - 1) * 120, vy: (Math.random() > 0.5 ? 1 : -1) * 240, r: 13 };
     this.player = { x: this.viewW / 2, y: this.viewH - 70, r: 24, vx: 0, vy: 0 };
     this.ai = { x: this.viewW / 2, y: 70, r: 24 };
     this.scoreP = 0; this.scoreAI = 0;
     this._target = null;
-    this.setHud({ You: 0, AI: 0 });
+    this.timeLeft = MATCH_SECONDS;
+    this.setHud({ You: 0, AI: 0, Time: MATCH_SECONDS });
     this.setScore(0);
   }
 
   onUpdate(dt) {
+    // A running clock guarantees every match ends, even between two players
+    // who never miss.
+    this.timeLeft -= dt;
+    if (this.timeLeft <= 0) { this.timeLeft = 0; return this._timeUp(); }
+
     const p = this.player;
     const speed = 520;
     const prevX = p.x, prevY = p.y;
@@ -55,18 +73,31 @@ export class AirHockeyGame extends GameBase {
     p.vx = (p.x - prevX) / Math.max(dt, 0.001);
     p.vy = (p.y - prevY) / Math.max(dt, 0.001);
 
-    // AI mallet tracks the puck when it's on its half, otherwise recenters.
+    // AI mallet: re-reads the puck on an interval, aims imperfectly, and
+    // falls back to guarding its goal when the puck is on the player's half.
     const ai = this.ai;
-    const targetX = this.puck.y < this.viewH / 2 ? this.puck.x : this.viewW / 2;
-    const targetY = this.puck.y < this.viewH / 2 ? Math.min(this.puck.y - 6, this.viewH / 2 - ai.r) : 70;
-    ai.x += clamp(targetX - ai.x, -this.aiSpeed * dt, this.aiSpeed * dt);
-    ai.y += clamp(targetY - ai.y, -this.aiSpeed * dt, this.aiSpeed * dt);
+    this._aiTimer -= dt;
+    if (this._aiTimer <= 0) {
+      this._aiTimer = this.aiCfg.reaction;
+      const err = () => (Math.random() * 2 - 1) * this.aiCfg.aimError;
+      if (this.puck.y < this.viewH / 2) {
+        this._aiTarget = {
+          x: this.puck.x + err(),
+          y: Math.min(this.puck.y - 8, this.viewH / 2 - ai.r) + err() * 0.3,
+        };
+      } else {
+        // Guard position: stay between the puck and the goal, not dead centre.
+        this._aiTarget = { x: this.viewW / 2 + (this.puck.x - this.viewW / 2) * 0.35 + err() * 0.5, y: 78 };
+      }
+    }
+    ai.x += clamp(this._aiTarget.x - ai.x, -this.aiSpeed * dt, this.aiSpeed * dt);
+    ai.y += clamp(this._aiTarget.y - ai.y, -this.aiSpeed * dt, this.aiSpeed * dt);
     ai.x = clamp(ai.x, ai.r, this.viewW - ai.r);
     ai.y = clamp(ai.y, ai.r, this.viewH / 2 - ai.r);
 
     const k = this.puck;
     k.x += k.vx * dt; k.y += k.vy * dt;
-    k.vx *= 0.995; k.vy *= 0.995;
+    k.vx *= 0.998; k.vy *= 0.998;   // near-frictionless table, like the real thing
 
     if (k.x - k.r < 0) { k.x = k.r; k.vx = Math.abs(k.vx); audioManager.play("hit"); }
     if (k.x + k.r > this.viewW) { k.x = this.viewW - k.r; k.vx = -Math.abs(k.vx); audioManager.play("hit"); }
@@ -83,6 +114,19 @@ export class AirHockeyGame extends GameBase {
 
     this._collide(p, true);
     this._collide(ai, false);
+    this.setHud({ You: this.scoreP, AI: this.scoreAI, Time: Math.ceil(this.timeLeft) });
+  }
+
+  _timeUp() {
+    const won = this.scoreP > this.scoreAI;
+    const drew = this.scoreP === this.scoreAI;
+    audioManager.play(won ? "win" : drew ? "gameover" : "lose");
+    this.endGame({
+      result: drew ? "draw" : won ? "win" : "loss",
+      score: this.scoreP,
+      message: drew ? `Full time — ${this.scoreP}-${this.scoreAI}, honours even.`
+                    : `Full time — ${this.scoreP}-${this.scoreAI}.`,
+    });
   }
 
   _collide(mallet, isPlayer) {
@@ -96,7 +140,7 @@ export class AirHockeyGame extends GameBase {
     k.y = mallet.y + ny * minDist;
     const impact = isPlayer ? Math.hypot(mallet.vx || 0, mallet.vy || 0) * 0.35 : 180;
     const base = Math.hypot(k.vx, k.vy) * 0.6;
-    const power = clamp(base + impact + 220, 220, 900);
+    const power = clamp(base + impact + 260, 300, 1000);
     k.vx = nx * power; k.vy = ny * power;
     audioManager.play("pop");
     this.vibrateOn(15);
@@ -105,7 +149,7 @@ export class AirHockeyGame extends GameBase {
   _goal(scorer) {
     if (scorer === "player") { this.scoreP++; audioManager.play("coin"); this.particles.confetti(this.viewW / 2, 40, 16); }
     else { this.scoreAI++; audioManager.play("error"); this.shake(); }
-    this.setHud({ You: this.scoreP, AI: this.scoreAI });
+    this.setHud({ You: this.scoreP, AI: this.scoreAI, Time: Math.ceil(this.timeLeft) });
     this.setScore(this.scoreP);
     if (this.scoreP >= WIN_GOALS) return this.endGame({ result: "win", score: this.scoreP, message: `You won ${this.scoreP}-${this.scoreAI}!` });
     if (this.scoreAI >= WIN_GOALS) return this.endGame({ result: "loss", score: this.scoreP, message: `The AI won ${this.scoreAI}-${this.scoreP}.` });

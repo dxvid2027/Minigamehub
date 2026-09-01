@@ -13,6 +13,7 @@
 import { seededRng } from "../core/utils.js";
 
 const SCENES = {
+  "3D": "space",
   Arcade: "grid",
   Action: "stars",
   Puzzle: "blocks",
@@ -73,6 +74,24 @@ function scene(kind, rng, c1, c2) {
     for (let i = 0; i < 12; i++) {
       const r = rand(10, 40);
       out += `<circle cx="${rand(0, 320).toFixed(0)}" cy="${rand(0, 200).toFixed(0)}" r="${r.toFixed(0)}" fill="${i % 2 ? c1 : c2}" fill-opacity="${rand(.12, .32).toFixed(2)}"/>`;
+    }
+  } else if (kind === "space") {
+    // Perspective corridor: a vanishing-point grid with floating solids, which
+    // reads as "3D" at thumbnail size.
+    out += `<rect width="320" height="200" fill="none"/>`;
+    for (let i = 0; i <= 12; i++) {
+      const x = i * 26.6;
+      out += `<line x1="${x}" y1="200" x2="160" y2="86" stroke="${c2}" stroke-opacity=".28" stroke-width="1"/>`;
+    }
+    for (let i = 1; i < 8; i++) {
+      const t = Math.pow(i / 7, 2.2);
+      const y = 86 + t * 118;
+      out += `<line x1="${(160 - 160 * t).toFixed(0)}" y1="${y.toFixed(0)}" x2="${(160 + 160 * t).toFixed(0)}" y2="${y.toFixed(0)}" stroke="${c2}" stroke-opacity="${(0.3 - i * 0.03).toFixed(2)}" stroke-width="1"/>`;
+    }
+    out += `<circle cx="160" cy="86" r="46" fill="${c1}" fill-opacity=".45" filter="url(#soft)"/>`;
+    for (let i = 0; i < 4; i++) {
+      const x = rand(30, 290), y = rand(20, 90), s2 = rand(14, 30);
+      out += `<rect x="${x.toFixed(0)}" y="${y.toFixed(0)}" width="${s2.toFixed(0)}" height="${s2.toFixed(0)}" rx="4" fill="${i % 2 ? c1 : c2}" fill-opacity="${rand(.2, .45).toFixed(2)}" transform="rotate(${rand(-30, 30).toFixed(0)} ${(x + s2 / 2).toFixed(0)} ${(y + s2 / 2).toFixed(0)})"/>`;
     }
   } else { // rings
     for (let i = 0; i < 5; i++) {

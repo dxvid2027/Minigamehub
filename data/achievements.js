@@ -22,6 +22,8 @@ const SCORE_GOALS = {
   racing: 5000, basketball: 18, "fruit-slice": 150, "2048": 2048, "simon-says": 14,
   "color-match": 25, "bubble-shooter": 2500, "typing-rush": 18, "stack-tower": 18,
   "word-scramble": 12, "reaction-time": 1, // reaction: "current" is inverted (see below)
+  "turbo-circuit-3d": 900, "cube-runner-3d": 700, "sky-rider-3d": 1800,
+  "tower-blocks-3d": 320, "asteroid-belt-3d": 1400,
 };
 
 function buildGlobalAchievements() {

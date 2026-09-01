@@ -8,6 +8,16 @@ import { gameArt } from "./gameArt.js";
 import { iconMarkup } from "./icons.js";
 
 const NEW_WINDOW_DAYS = 21;
+// A freshly added game wears its badge for three hours of wall-clock time,
+// counted from the moment this player first saw it (see saveManager.markSeen).
+export const RECENT_WINDOW_MS = 3 * 60 * 60 * 1000;
+
+export function isRecentlyAdded(meta) {
+  if (!meta.addedAt) return false;
+  const seen = saveManager.firstSeenAt(meta.id);
+  if (!seen) return false;
+  return Date.now() - seen < RECENT_WINDOW_MS;
+}
 
 function isNew(meta) {
   if (!meta.newIn) return false;
@@ -45,7 +55,9 @@ export function gameCard(meta, { list = false } = {}) {
     "aria-label": `Play ${meta.title}`,
     onClick: () => audioManager.play("click"),
   }, [
-    isNew(meta) ? el("span", { class: "tag new" }, "New") : (isHot(meta) ? el("span", { class: "tag hot" }, "Hot") : null),
+    isRecentlyAdded(meta)
+      ? el("span", { class: "tag recent" }, "Recently added")
+      : (isNew(meta) ? el("span", { class: "tag new" }, "New") : (isHot(meta) ? el("span", { class: "tag hot" }, "Hot") : null)),
     favBtn,
     gameArt(meta, { compact: list }),
     el("div", { class: "body" }, [

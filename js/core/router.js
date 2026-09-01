@@ -9,8 +9,16 @@ class Router {
     this.routes = [];
     this.notFound = null;
     this.current = null;
+    // Every navigation gets a token. Route handlers are async (they import
+    // their page module), so a slow handler can finish *after* the user has
+    // already moved on — without this guard it would render its page over
+    // the newer one and wipe it out.
+    this._navId = 0;
     window.addEventListener("hashchange", () => this._resolve());
   }
+
+  /** True when `token` belongs to a navigation that has been superseded. */
+  isStale(token) { return token !== this._navId; }
 
   register(pattern, handler) {
     const paramNames = [];
@@ -52,10 +60,11 @@ class Router {
       if (match) {
         const params = {};
         route.paramNames.forEach((name, i) => { params[name] = decodeURIComponent(match[i + 1]); });
+        const token = ++this._navId;
         this.current = { path, params, query };
         eventBus.emit("route:before", this.current);
         try {
-          await route.handler({ params, query, path });
+          await route.handler({ params, query, path, token });
         } catch (err) {
           console.error("[Router] handler error", err);
         }

@@ -13,6 +13,7 @@ import { GameGfx } from "./gfx.js";
 import { eventBus } from "../core/eventBus.js";
 import { el, formatNumber, formatTime } from "../core/utils.js";
 import { iconMarkup } from "../ui/icons.js";
+import { openModal, closeModal } from "../ui/modal.js";
 
 export class GameBase {
   /**
@@ -63,6 +64,7 @@ export class GameBase {
       ]),
       this.hudStatsEl = el("div", { class: "hud-stats" }),
       el("div", { class: "hud-actions" }, [
+        iconButton("info", "How to play", () => this.showHowToPlay()),
         this.pauseBtn = iconButton("pause", "Pause", () => this.togglePause()),
         iconButton("restart", "Restart", () => this.confirmRestart()),
         iconLink("close", "Back to Library", "#/library"),
@@ -215,6 +217,48 @@ export class GameBase {
       const r = this.stageOuter.getBoundingClientRect();
       this._confettiBurst(r.width / 2, r.height / 2);
     }
+  }
+
+  /**
+   * "How to play" panel, reachable at any time from the HUD. It reuses the
+   * same content the start screen shows, plus the control scheme for the
+   * device actually in use, and pauses a running game while it is open.
+   */
+  showHowToPlay() {
+    audioManager.play("click");
+    const wasPlaying = this.state === "playing";
+    if (wasPlaying) this.pause();
+
+    const instructions = this.getInstructions?.() || ["Have fun!"];
+    const diffs = this.getDifficulties?.() || [];
+    const gameData = saveManager.ensureGame(this.id);
+
+    const section = (title, node) => el("div", { style: "margin-bottom:18px;" }, [
+      el("div", { style: "font-size:.72rem;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--text-3);margin-bottom:8px;" }, title),
+      node,
+    ]);
+
+    const body = el("div", {}, [
+      el("p", { style: "margin-top:0;" }, this.meta.desc),
+      section("Objective & rules", el("ul", { class: "howto-list" }, instructions.map(i => el("li", {}, i)))),
+      section("Controls", el("div", { class: "howto-controls" }, [
+        controlRow("Keyboard / mouse", this.getKeyboardHint?.() || "Use your keyboard and mouse to play."),
+        controlRow("Touch", this.getTouchHint?.() || "Tap and drag on the playfield."),
+        controlRow("Anytime", "Press P or Escape to pause. The restart button starts a fresh run."),
+      ])),
+      diffs.length > 1
+        ? section("Difficulty", el("p", { style: "margin:0;font-size:.86rem;color:var(--text-1);" },
+            `${diffs.join(" · ")} — currently set to ${this.difficulty}. Change it on the start screen.`))
+        : null,
+      section("Your record", el("div", { class: "stat-strip", style: "justify-content:flex-start;" }, [
+        statBlock("High score", formatNumber(gameData.highScore)),
+        statBlock("Plays", formatNumber(gameData.plays)),
+        statBlock("Wins", formatNumber(gameData.wins)),
+      ])),
+    ]);
+
+    const footer = el("button", { class: "btn btn-primary", onClick: () => closeModal() }, "Got it");
+    openModal({ title: `How to play — ${this.meta.title}`, bodyNode: body, footerNode: footer });
   }
 
   _confettiBurst(x, y) {
@@ -374,6 +418,13 @@ export class GameBase {
     this.onDestroy?.();
     this.input.destroy();
   }
+}
+
+function controlRow(label, text) {
+  return el("div", { class: "howto-row" }, [
+    el("span", { class: "k" }, label),
+    el("span", { class: "v" }, text),
+  ]);
 }
 
 function iconButton(name, title, onClick) {

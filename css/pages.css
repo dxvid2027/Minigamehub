@@ -273,3 +273,35 @@
 .library-toolbar .chip svg { width: 15px; height: 15px; }
 .library-toolbar .search-box svg { width: 16px; height: 16px; color: var(--text-3); }
 .see-all svg { width: 15px; height: 15px; }
+
+/* ---------- "How to play" panel ---------- */
+.howto-list { margin: 0; padding: 0; }
+.howto-list li { position: relative; padding: 5px 0 5px 20px; font-size: .88rem; color: var(--text-1); }
+.howto-list li::before {
+  content: ""; position: absolute; left: 2px; top: 12px;
+  width: 6px; height: 6px; border-radius: 50%; background: var(--grad-primary);
+}
+.howto-controls { display: flex; flex-direction: column; gap: 8px; }
+.howto-row {
+  display: flex; gap: 12px; align-items: baseline;
+  background: var(--surface-2); border: 1px solid var(--border);
+  border-radius: var(--radius-md); padding: 10px 13px;
+}
+.howto-row .k {
+  flex: 0 0 110px; font-size: .72rem; font-weight: 800; letter-spacing: .04em;
+  text-transform: uppercase; color: var(--accent-2);
+}
+.howto-row .v { flex: 1; font-size: .85rem; color: var(--text-1); }
+@media (max-width: 520px) {
+  .howto-row { flex-direction: column; gap: 3px; }
+  .howto-row .k { flex: none; }
+}
+
+/* Fallback shown when a 3D game cannot get a WebGL context */
+.gl-fallback {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 10px; text-align: center; padding: 28px; height: 100%;
+  color: var(--text-1);
+}
+.gl-fallback .ic { font-size: 2.6rem; }
+.gl-fallback p { max-width: 42ch; font-size: .88rem; }

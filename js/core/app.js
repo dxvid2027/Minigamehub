@@ -11,6 +11,8 @@ import { audioManager } from "../systems/audioManager.js";
 import { BackgroundFX } from "../systems/particleSystem.js";
 import { initNavigation } from "../ui/navigation.js";
 import { toastAchievement, toastLevelUp, toast } from "../ui/toast.js";
+import { disposeActiveGame } from "../ui/pages/play.js";
+import { GAMES } from "../../data/games.js";
 
 function boot() {
   settingsManager.applyAll();
@@ -41,6 +43,9 @@ function boot() {
     toast({ type: "error", title: "Save failed", message: "Your browser storage may be full or private-browsing is blocking it." });
   });
 
+  // Stamp the "recently added" window for any game flagged as a new arrival.
+  GAMES.filter(g => g.addedAt).forEach(g => saveManager.markSeen(g.id));
+
   registerRoutes();
   router.start();
 
@@ -70,44 +75,30 @@ function registerServiceWorker() {
 function outlet() { return document.getElementById("page-outlet"); }
 
 function registerRoutes() {
+  // Each page module is imported on demand; `token` guards against a slow
+  // import landing after the player has already navigated elsewhere.
+  const page = (loader, render) => async (ctx) => {
+    const mod = await loader();
+    if (router.isStale(ctx.token)) return;
+    render(mod, ctx);
+  };
+
   router
-    .register("/home", async () => {
-      const { renderHome } = await import("../ui/pages/home.js");
-      renderHome(outlet());
-    })
-    .register("/library", async ({ query }) => {
-      const { renderLibrary } = await import("../ui/pages/library.js");
-      renderLibrary(outlet(), query);
-    })
-    .register("/profile", async () => {
-      const { renderProfile } = await import("../ui/pages/profile.js");
-      renderProfile(outlet());
-    })
-    .register("/achievements", async () => {
-      const { renderAchievements } = await import("../ui/pages/achievements.js");
-      renderAchievements(outlet());
-    })
-    .register("/statistics", async () => {
-      const { renderStatistics } = await import("../ui/pages/statistics.js");
-      renderStatistics(outlet());
-    })
-    .register("/settings", async () => {
-      const { renderSettings } = await import("../ui/pages/settings.js");
-      renderSettings(outlet());
-    })
-    .register("/play/:id", async ({ params }) => {
-      const { renderPlay } = await import("../ui/pages/play.js");
-      renderPlay(outlet(), params.id);
-    })
+    .register("/home", page(() => import("../ui/pages/home.js"), (m) => m.renderHome(outlet())))
+    .register("/library", page(() => import("../ui/pages/library.js"), (m, ctx) => m.renderLibrary(outlet(), ctx.query)))
+    .register("/profile", page(() => import("../ui/pages/profile.js"), (m) => m.renderProfile(outlet())))
+    .register("/achievements", page(() => import("../ui/pages/achievements.js"), (m) => m.renderAchievements(outlet())))
+    .register("/statistics", page(() => import("../ui/pages/statistics.js"), (m) => m.renderStatistics(outlet())))
+    .register("/settings", page(() => import("../ui/pages/settings.js"), (m) => m.renderSettings(outlet())))
+    .register("/play/:id", page(() => import("../ui/pages/play.js"), (m, ctx) => m.renderPlay(outlet(), ctx.params.id, ctx.token)))
     .setNotFound(() => router.navigate("/home"));
 }
 
 // Tear down any active game instance when the route changes away from /play.
-eventBus.on("route:before", async (next) => {
-  if (!next.path.startsWith("/play/")) {
-    const { disposeActiveGame } = await import("../ui/pages/play.js");
-    disposeActiveGame();
-  }
+// Imported statically: awaiting an import here would let the teardown land
+// after the *next* game had already mounted, destroying the wrong instance.
+eventBus.on("route:before", (next) => {
+  if (!next.path.startsWith("/play/")) disposeActiveGame();
 });
 
 document.addEventListener("DOMContentLoaded", boot);

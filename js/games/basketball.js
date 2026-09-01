@@ -67,14 +67,23 @@ export class BasketballGame extends GameBase {
     if (this.hoopMove) this.hoop.x = this.baseHoopX + Math.sin(this._t * this.hoopSpeed) * this.hoopMove;
 
     if (this.inFlight) {
+      this._prevBallY = this.ball.y;
       this.ball.vy += GRAVITY * dt;
       this.ball.x += this.ball.vx * dt;
       this.ball.y += this.ball.vy * dt;
 
-      if (!this._scoredThisFlight && this.ball.vy > 0 && Math.abs(this.ball.y - this.hoop.y) < 14 && Math.abs(this.ball.x - this.hoop.x) < this.hoop.w / 2 - 8) {
+      // Score when the ball falls through the rim plane anywhere inside the
+      // hoop mouth. The old window was so tight that clean-looking shots
+      // passed straight through without counting.
+      if (!this._scoredThisFlight && this.ball.vy > 0 &&
+          this._prevBallY <= this.hoop.y && this.ball.y >= this.hoop.y &&
+          Math.abs(this.ball.x - this.hoop.x) < this.hoop.w / 2 - 2) {
         this._score();
       }
-      if (this.ball.y > this.viewH + 40 || this.ball.x < -40 || this.ball.x > this.viewW + 40) this._resetBall();
+      // Bounce off the side walls instead of vanishing — keeps rebounds alive.
+      if (this.ball.x - this.ball.r < 0) { this.ball.x = this.ball.r; this.ball.vx = Math.abs(this.ball.vx) * 0.7; audioManager.play("hit"); }
+      if (this.ball.x + this.ball.r > this.viewW) { this.ball.x = this.viewW - this.ball.r; this.ball.vx = -Math.abs(this.ball.vx) * 0.7; audioManager.play("hit"); }
+      if (this.ball.y > this.viewH + 40) this._resetBall();
     } else if (!this.drag) {
       this.ball.x = this.startPos.x; this.ball.y = this.startPos.y;
     } else {

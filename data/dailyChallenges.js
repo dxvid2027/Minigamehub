@@ -35,6 +35,12 @@ export const CHALLENGE_POOL = [
   { id: "c_maze_plays", type: "plays", gameId: "maze-runner", target: 2, label: "Solve 2 mazes in Maze Runner", coins: 40, xp: 35 },
   { id: "c_word_plays", type: "plays", gameId: "word-scramble", target: 5, label: "Solve 5 words in Word Scramble", coins: 35, xp: 30 },
 
+  { id: "c_turbo3d_score", type: "score", gameId: "turbo-circuit-3d", target: 400, label: "Score 400 in Turbo Circuit 3D", coins: 50, xp: 45 },
+  { id: "c_cube3d_score", type: "score", gameId: "cube-runner-3d", target: 300, label: "Score 300 in Cube Runner 3D", coins: 50, xp: 45 },
+  { id: "c_sky3d_score", type: "score", gameId: "sky-rider-3d", target: 800, label: "Score 800 in Sky Rider 3D", coins: 50, xp: 45 },
+  { id: "c_tower3d_score", type: "score", gameId: "tower-blocks-3d", target: 150, label: "Score 150 in Tower Blocks 3D", coins: 45, xp: 40 },
+  { id: "c_asteroid3d_score", type: "score", gameId: "asteroid-belt-3d", target: 600, label: "Score 600 in Asteroid Belt 3D", coins: 50, xp: 45 },
+
   { id: "c_playtime_5m", type: "playtime", gameId: null, target: 300, label: "Play for 5 minutes total", coins: 30, xp: 25 },
   { id: "c_playtime_15m", type: "playtime", gameId: null, target: 900, label: "Play for 15 minutes total", coins: 60, xp: 50 },
   { id: "c_survive_runner", type: "score", gameId: "endless-runner", target: 60, label: "Survive 60 seconds in Neon Runner", coins: 40, xp: 35, isTime: true },

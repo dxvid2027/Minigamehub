@@ -3,7 +3,7 @@
 // `module` is dynamically imported by the play page; `exportName` is the
 // class exported from that module which extends GameBase.
 // ==========================================================================
-export const CATEGORIES = ["Arcade", "Puzzle", "Strategy", "Board", "Action", "Casual", "Sports", "Skill"];
+export const CATEGORIES = ["3D", "Arcade", "Puzzle", "Strategy", "Board", "Action", "Casual", "Sports", "Skill"];
 
 export const GAMES = [
   { id: "snake", title: "Snake", category: "Arcade", emoji: "🐍", grad: ["#2ee6a6", "#22d3ee"], desc: "Grow as long as you can without biting your own tail.", tags: ["classic", "single-player"], ratio: "1/1", controls: "both", module: "../../games/snake.js", exportName: "SnakeGame", newIn: "2026-08-01" },
@@ -36,6 +36,12 @@ export const GAMES = [
   { id: "maze-runner", title: "Maze Runner", category: "Puzzle", emoji: "🌀", grad: ["#ffd76a", "#2ee6a6"], desc: "Navigate procedurally generated mazes against the clock.", tags: ["maze", "exploration"], ratio: "1/1", controls: "both", module: "../../games/maze-runner.js", exportName: "MazeRunnerGame" },
   { id: "stack-tower", title: "Stack Tower", category: "Skill", emoji: "🗼", grad: ["#ff9f43", "#7c5cff"], desc: "Stack blocks perfectly to build the tallest tower.", tags: ["timing", "one-touch"], ratio: "3/4", controls: "both", module: "../../games/stack-tower.js", exportName: "StackTowerGame" },
   { id: "word-scramble", title: "Word Scramble", category: "Puzzle", emoji: "🔤", grad: ["#22d3ee", "#ff4fd8"], desc: "Unscramble letters to find the hidden word before time's up.", tags: ["words", "brain"], ratio: "4/3", controls: "both", module: "../../games/word-scramble.js", exportName: "WordScrambleGame" },
+  // --- 3D games (WebGL) -----------------------------------------------------
+  { id: "turbo-circuit-3d", title: "Turbo Circuit 3D", category: "3D", emoji: "🏁", grad: ["#ff4fd8", "#22d3ee"], desc: "Third-person racer on an endless circuit that curves, crests and fills with traffic.", tags: ["3d", "racing", "webgl"], ratio: "16/9", wide: true, controls: "both", module: "../../games/turbo-circuit-3d.js", exportName: "TurboCircuit3DGame", addedAt: "2026-09-01T07:37:15Z" },
+  { id: "cube-runner-3d", title: "Cube Runner 3D", category: "3D", emoji: "🧊", grad: ["#2ee6a6", "#22d3ee"], desc: "Three-lane endless runner — switch lanes, jump blocks, slide under bars.", tags: ["3d", "endless", "webgl"], ratio: "16/9", wide: true, controls: "both", module: "../../games/cube-runner-3d.js", exportName: "CubeRunner3DGame", addedAt: "2026-09-01T07:37:15Z" },
+  { id: "sky-rider-3d", title: "Sky Rider 3D", category: "3D", emoji: "🛩️", grad: ["#7c5cff", "#22d3ee"], desc: "Fly a glider through a canyon of light rings and dodge the rock pillars.", tags: ["3d", "flight", "webgl"], ratio: "16/9", wide: true, controls: "both", module: "../../games/sky-rider-3d.js", exportName: "SkyRider3DGame", addedAt: "2026-09-01T07:37:15Z" },
+  { id: "tower-blocks-3d", title: "Tower Blocks 3D", category: "3D", emoji: "🏗️", grad: ["#ffd76a", "#7c5cff"], desc: "Stack sliding blocks into a tower — every sloppy drop slices it thinner.", tags: ["3d", "timing", "webgl"], ratio: "4/3", controls: "both", module: "../../games/tower-blocks-3d.js", exportName: "TowerBlocks3DGame", addedAt: "2026-09-01T07:37:15Z" },
+  { id: "asteroid-belt-3d", title: "Asteroid Belt 3D", category: "3D", emoji: "☄️", grad: ["#22d3ee", "#ff5470"], desc: "Space shooter in real 3D: lead your shots, split the big rocks, keep your shield.", tags: ["3d", "shooter", "webgl"], ratio: "16/9", wide: true, controls: "both", module: "../../games/asteroid-belt-3d.js", exportName: "AsteroidBelt3DGame", addedAt: "2026-09-01T07:37:15Z" },
 ];
 
 export function getGame(id) { return GAMES.find(g => g.id === id); }

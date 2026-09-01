@@ -50,7 +50,7 @@ function defaultSave() {
     favorites: [],
     recentlyPlayed: [],
     dailyChallenge: { dateKey: null, challenges: [], claimedToday: false, streak: 0, lastCompletedKey: null },
-    meta: { firstPlayTs: Date.now(), totalSessions: 1, lastActiveKey: null },
+    meta: { firstPlayTs: Date.now(), totalSessions: 1, lastActiveKey: null, firstSeen: {} },
   };
 }
 
@@ -171,6 +171,21 @@ class SaveManager {
     list.unshift({ gameId, ts: Date.now() });
     this.data.recentlyPlayed = list.slice(0, 12);
   }
+
+  /**
+   * Records the first time this player laid eyes on a game. Used for the
+   * "Recently added" badge, which runs for a fixed window from that moment
+   * rather than from a fixed release date — so the badge is meaningful no
+   * matter when someone opens the platform.
+   */
+  markSeen(gameId) {
+    if (!this.data.meta.firstSeen) this.data.meta.firstSeen = {};
+    if (this.data.meta.firstSeen[gameId]) return this.data.meta.firstSeen[gameId];
+    this.data.meta.firstSeen[gameId] = Date.now();
+    this.save();
+    return this.data.meta.firstSeen[gameId];
+  }
+  firstSeenAt(gameId) { return this.data.meta.firstSeen?.[gameId] || null; }
 
   toggleFavorite(gameId) {
     const idx = this.data.favorites.indexOf(gameId);
