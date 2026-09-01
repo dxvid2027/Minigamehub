@@ -92,6 +92,7 @@ export class RacingGame extends GameBase {
 
   _drawCar(ctx, cx, cy, w, h, color, isPlayer) {
     const x = cx - w / 2, y = cy - h / 2;
+    this.gfx.contactShadow(ctx, x + w / 2, y + h * 0.98, w * 0.62, h * 0.14, 0.42);
     this.gfx.block(ctx, x, y, w, h, 8, color, { glow: isPlayer ? 0.6 : 0.3 });
     // Cabin glass
     ctx.fillStyle = "rgba(6,10,24,0.55)";

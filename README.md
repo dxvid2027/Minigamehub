@@ -157,7 +157,24 @@ has no WebGL, the game shows a clear notice instead of failing.
 
 Every game ships with a tutorial/instructions screen, difficulty levels, pause
 menu, restart, win/lose screens, high scores, statistics, achievements, sound
-effects and adaptive touch controls.
+effects and adaptive controls.
+
+**Controls** are either keyboard/mouse or touch, and the choice is the
+player's: Settings → Controls (and a button in every game's HUD) switches
+between Automatic, Keyboard & mouse, and Touch. Keyboard mode removes the
+on-screen buttons entirely rather than hiding them. Free-movement games use an
+analog thumb stick whose base follows the thumb that grabs it and whose
+deflection sets the speed, not a four-way d-pad — a d-pad cannot express
+"forward and slightly left", which is most of moving in 3D. On-screen controls
+sit in a band under the stage and never cover the playfield; the stick overlays
+the stage only when the stage fills the screen. Fullscreen is always an
+explicit button press, and leaving a game always leaves fullscreen.
+
+**Artwork** is drawn, not borrowed. `js/games/sprites.js` paints twelve fruit,
+a mole, a bomb, a flag, a heart and a card back as paths, so one painter serves
+a 24px minesweeper flag and a 220px memory card at full sharpness. Emoji were
+placeholders that rendered as a different picture on every platform and could
+not be shaded to match the game around them.
 
 **Bastion TD** deserves its own line: three tower classes (single-target Cannon,
 area-slowing Frost, chaining Arc), ten upgrade levels each, and six enemy

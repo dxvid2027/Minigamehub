@@ -144,7 +144,8 @@ export class BreakoutGame extends GameBase {
         roundRect(ctx, brick.x + 1, brick.y + 1, brick.w - 2, brick.h - 2, 4); ctx.stroke();
       }
     }
-    this.gfx.block(ctx, this.paddle.x, this.viewH - 24, this.paddle.w, this.paddle.h, 7, "#7c5cff", { glow: 0.6 });
+    this.gfx.glow(ctx, this.paddle.x + this.paddle.w / 2, this.viewH - 24 + this.paddle.h / 2, this.paddle.w * 0.32, "#7c5cff", 0.5);
+    this.gfx.panel(ctx, this.paddle.x, this.viewH - 24, this.paddle.w, this.paddle.h, 7, "#7c5cff");
     this.gfx.orb(ctx, this.ball.x, this.ball.y, this.ball.r, "#ffffff", { glow: 0.9 });
     if (!this._launched) {
       this.gfx.label(ctx, "Press Space / Tap to launch", this.viewW / 2, this.viewH - 44, { size: 13 });

@@ -164,8 +164,12 @@ export class PongGame extends GameBase {
     ctx.strokeStyle = "#ffffff10"; ctx.lineWidth = 1;
     ctx.beginPath(); ctx.arc(this.viewW / 2, this.viewH / 2, 62, 0, Math.PI * 2); ctx.stroke();
 
-    this.gfx.block(ctx, 4, this.p1.y, this.pW, this.pH, 6, "#22d3ee", { glow: 0.7 });
-    this.gfx.block(ctx, this.viewW - this.pW - 4, this.p2.y, this.pW, this.pH, 6, "#2ee6a6", { glow: 0.7 });
+    // Brushed plates rather than flat bars: the grain gives the paddles a
+    // material, and the glow underneath keeps the neon read.
+    this.gfx.glow(ctx, 4 + this.pW / 2, this.p1.y + this.pH / 2, this.pH * 0.5, "#22d3ee", 0.5);
+    this.gfx.panel(ctx, 4, this.p1.y, this.pW, this.pH, 6, "#22d3ee");
+    this.gfx.glow(ctx, this.viewW - this.pW / 2 - 4, this.p2.y + this.pH / 2, this.pH * 0.5, "#2ee6a6", 0.5);
+    this.gfx.panel(ctx, this.viewW - this.pW - 4, this.p2.y, this.pW, this.pH, 6, "#2ee6a6");
 
     // Motion trail behind the ball
     for (let i = 4; i >= 1; i--) {

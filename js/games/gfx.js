@@ -252,8 +252,14 @@ export class GameGfx {
     ctx.restore();
   }
 
-  /** Rounded rect with a top-lit gradient body, inner highlight and glow. */
-  block(ctx, x, y, w, h, r, color, { glow = 0.35, highlight = true } = {}) {
+  /**
+   * Rounded rect with a top-lit gradient body, bevel and glow.
+   *
+   * The bevel is what turns a flat rounded rectangle into a moulded piece: a
+   * bright inner edge along the lit sides and a dark one along the shaded
+   * sides, which is how a real chamfer catches light. Cheap — two strokes.
+   */
+  block(ctx, x, y, w, h, r, color, { glow = 0.35, highlight = true, bevel = true } = {}) {
     if (glow && this.quality !== "low") {
       this.glow(ctx, x + w / 2, y + h / 2, Math.max(w, h) * 0.4, color, glow * 0.5);
     }
@@ -261,10 +267,80 @@ export class GameGfx {
     ctx.translate(x, y);
     ctx.fillStyle = this._bodyGrad(ctx, color, h);
     roundRect(ctx, 0, 0, w, h, r); ctx.fill();
+
+    if (bevel && this.quality !== "low" && Math.min(w, h) > 9) {
+      const t = Math.max(1, Math.min(w, h) * 0.09);
+      ctx.save();
+      roundRect(ctx, 0, 0, w, h, r); ctx.clip();
+      ctx.lineWidth = t;
+      ctx.strokeStyle = "rgba(255,255,255,0.30)";
+      ctx.beginPath();
+      ctx.moveTo(t * 0.5, h - r);
+      ctx.lineTo(t * 0.5, t * 0.5);
+      ctx.lineTo(w - r, t * 0.5);
+      ctx.stroke();
+      ctx.strokeStyle = "rgba(0,0,0,0.34)";
+      ctx.beginPath();
+      ctx.moveTo(w - t * 0.5, r);
+      ctx.lineTo(w - t * 0.5, h - t * 0.5);
+      ctx.lineTo(r, h - t * 0.5);
+      ctx.stroke();
+      ctx.restore();
+    }
+
     if (highlight && h > 8) {
       ctx.fillStyle = "rgba(255,255,255,0.22)";
       roundRect(ctx, r * 0.6, 1.5, w - r * 1.2, Math.max(1.5, h * 0.16), r * 0.5); ctx.fill();
     }
+    ctx.restore();
+  }
+
+  /**
+   * Brushed-metal panel — a plate with directional grain, for HUD strips,
+   * paddles and machine parts that should not read as flat plastic.
+   */
+  panel(ctx, x, y, w, h, r, color, { grain: grainStrength = 0.5 } = {}) {
+    ctx.save();
+    ctx.translate(x, y);
+    const g = ctx.createLinearGradient(0, 0, 0, h);
+    g.addColorStop(0, shade(color, 0.28));
+    g.addColorStop(0.42, color);
+    g.addColorStop(0.58, shade(color, -0.14));
+    g.addColorStop(1, shade(color, 0.06));
+    ctx.fillStyle = g;
+    roundRect(ctx, 0, 0, w, h, r); ctx.fill();
+    if (this.quality !== "low" && grainStrength > 0) {
+      ctx.save();
+      roundRect(ctx, 0, 0, w, h, r); ctx.clip();
+      ctx.globalAlpha = 0.1 * grainStrength;
+      ctx.strokeStyle = "#ffffff";
+      ctx.lineWidth = 1;
+      // Deterministic streak spacing: a random pattern would shimmer between
+      // frames on anything that redraws every tick.
+      for (let i = 0; i < w; i += 3) {
+        const a = ((i * 2654435761) % 97) / 97;
+        ctx.globalAlpha = 0.04 + a * 0.09 * grainStrength;
+        ctx.beginPath(); ctx.moveTo(i, 0); ctx.lineTo(i, h); ctx.stroke();
+      }
+      ctx.restore();
+    }
+    ctx.strokeStyle = "rgba(255,255,255,0.22)";
+    ctx.lineWidth = 1;
+    roundRect(ctx, 0.5, 0.5, w - 1, h - 1, r); ctx.stroke();
+    ctx.restore();
+  }
+
+  /** Soft contact shadow under a 2D body, so it sits on the field. */
+  contactShadow(ctx, x, y, rx, ry = rx * 0.34, alpha = 0.34) {
+    if (this.quality === "low") return;
+    ctx.save();
+    const g = ctx.createRadialGradient(x, y, 0, x, y, Math.max(rx, ry));
+    g.addColorStop(0, `rgba(0,0,0,${alpha})`);
+    g.addColorStop(1, "rgba(0,0,0,0)");
+    ctx.fillStyle = g;
+    ctx.beginPath();
+    ctx.ellipse(x, y, rx, ry, 0, 0, Math.PI * 2);
+    ctx.fill();
     ctx.restore();
   }
 
