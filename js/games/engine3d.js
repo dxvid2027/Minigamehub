@@ -91,6 +91,28 @@ export const M4 = {
       b21 * det, (-a21 * a00 + a01 * a20) * det, (a11 * a00 - a01 * a10) * det,
     ]);
   },
+  /** Full 4x4 inverse — needed to turn a screen pixel back into a world ray. */
+  invert(m) {
+    const a00=m[0],a01=m[1],a02=m[2],a03=m[3], a10=m[4],a11=m[5],a12=m[6],a13=m[7];
+    const a20=m[8],a21=m[9],a22=m[10],a23=m[11], a30=m[12],a31=m[13],a32=m[14],a33=m[15];
+    const b00=a00*a11-a01*a10, b01=a00*a12-a02*a10, b02=a00*a13-a03*a10;
+    const b03=a01*a12-a02*a11, b04=a01*a13-a03*a11, b05=a02*a13-a03*a12;
+    const b06=a20*a31-a21*a30, b07=a20*a32-a22*a30, b08=a20*a33-a23*a30;
+    const b09=a21*a32-a22*a31, b10=a21*a33-a23*a31, b11=a22*a33-a23*a32;
+    let det = b00*b11-b01*b10+b02*b09+b03*b08-b04*b07+b05*b06;
+    if (!det) return null;
+    det = 1 / det;
+    return new Float32Array([
+      (a11*b11-a12*b10+a13*b09)*det, (a02*b10-a01*b11-a03*b09)*det,
+      (a31*b05-a32*b04+a33*b03)*det, (a22*b04-a21*b05-a23*b03)*det,
+      (a12*b08-a10*b11-a13*b07)*det, (a00*b11-a02*b08+a03*b07)*det,
+      (a32*b02-a30*b05-a33*b01)*det, (a20*b05-a22*b02+a23*b01)*det,
+      (a10*b10-a11*b08+a13*b06)*det, (a01*b08-a00*b10-a03*b06)*det,
+      (a30*b04-a31*b02+a33*b00)*det, (a21*b02-a20*b04-a23*b00)*det,
+      (a11*b07-a10*b09-a12*b06)*det, (a00*b09-a01*b07+a02*b06)*det,
+      (a31*b01-a30*b03-a32*b00)*det, (a20*b03-a21*b01+a22*b00)*det,
+    ]);
+  },
 };
 
 export const V3 = {
@@ -628,6 +650,64 @@ export class Engine3D {
         return c;
       }),
     });
+  }
+
+  /**
+   * Turns a click into a point on a horizontal plane.
+   *
+   * A tower-defense board is flat, so a full mesh raycast would be wasted
+   * work: unproject the pixel to a world ray and intersect it with y = planeY.
+   * @param {number} sx  pixel x inside the canvas, in CSS pixels
+   * @param {number} sy  pixel y inside the canvas, in CSS pixels
+   * @param {number} w   canvas CSS width
+   * @param {number} h   canvas CSS height
+   * @returns {{x:number,y:number,z:number}|null} null when the ray never
+   *          meets the plane (a click on the sky).
+   */
+  pickGround(sx, sy, w, h, planeY = 0) {
+    const proj = M4.perspective(this.camera.fov, this.aspect || w / h, this.camera.near, this.camera.far);
+    const view = M4.lookAt(this.camera.pos, this.camera.target, this.camera.up || [0, 1, 0]);
+    const inv = M4.invert(M4.multiply(proj, view));
+    if (!inv) return null;
+    const ndcX = (sx / w) * 2 - 1;
+    const ndcY = 1 - (sy / h) * 2;
+    const un = (z) => {
+      const x = inv[0]*ndcX + inv[4]*ndcY + inv[8]*z + inv[12];
+      const y = inv[1]*ndcX + inv[5]*ndcY + inv[9]*z + inv[13];
+      const zz = inv[2]*ndcX + inv[6]*ndcY + inv[10]*z + inv[14];
+      const ww = inv[3]*ndcX + inv[7]*ndcY + inv[11]*z + inv[15];
+      return ww ? [x / ww, y / ww, zz / ww] : null;
+    };
+    const near = un(-1), far = un(1);
+    if (!near || !far) return null;
+    const dy = far[1] - near[1];
+    if (Math.abs(dy) < 1e-6) return null;
+    const t = (planeY - near[1]) / dy;
+    if (t < 0) return null;
+    return { x: near[0] + (far[0] - near[0]) * t, y: planeY, z: near[2] + (far[2] - near[2]) * t };
+  }
+
+  /**
+   * The inverse of pickGround: where a world point lands on screen. Health
+   * bars, damage numbers and range rings are drawn on the 2D overlay, so they
+   * need this every frame.
+   * @returns {{x:number,y:number,visible:boolean,depth:number}}
+   */
+  project(p, w, h) {
+    const proj = M4.perspective(this.camera.fov, this.aspect || w / h, this.camera.near, this.camera.far);
+    const view = M4.lookAt(this.camera.pos, this.camera.target, this.camera.up || [0, 1, 0]);
+    const m = M4.multiply(proj, view);
+    const x = m[0]*p[0] + m[4]*p[1] + m[8]*p[2] + m[12];
+    const y = m[1]*p[0] + m[5]*p[1] + m[9]*p[2] + m[13];
+    const z = m[2]*p[0] + m[6]*p[1] + m[10]*p[2] + m[14];
+    const cw = m[3]*p[0] + m[7]*p[1] + m[11]*p[2] + m[15];
+    if (cw <= 1e-6) return { x: 0, y: 0, visible: false, depth: Infinity };
+    return {
+      x: ((x / cw) * 0.5 + 0.5) * w,
+      y: (1 - ((y / cw) * 0.5 + 0.5)) * h,
+      visible: z / cw >= -1 && z / cw <= 1,
+      depth: cw,
+    };
   }
 
   /** Positions the camera behind/above a target — the standard chase view. */

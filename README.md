@@ -1,6 +1,6 @@
 # 🎮 MegaPlay Hub
 
-A premium browser gaming platform — **38 polished games, seven of them real-time 3D
+A premium browser gaming platform — **41 polished games, eight of them real-time 3D
 (WebGL)** — with a full progression system, 174 achievements, daily challenges,
 profiles, statistics and unlockables.
 Written in **vanilla JavaScript (ES modules)** with **zero runtime dependencies**,
@@ -12,7 +12,7 @@ no build step and no external services: everything runs locally and offline.
 
 | Area | What you get |
 |---|---|
-| **Games** | 38 complete games — arcade, puzzle, board, action, sports, skill and seven 3D titles |
+| **Games** | 41 complete games — arcade, puzzle, board, action, sports, skill and eight 3D titles |
 | **3D** | A dependency-free WebGL renderer (`js/games/engine3d.js`): lit shading, fog, procedural textures, blob shadows, free CSS sky backdrops |
 | **Framework** | Every game inherits start/pause/win/lose screens, a HUD with an in-game **How to play** panel, difficulty levels, high scores, statistics, sound and touch controls from a shared `GameBase` class |
 | **Progression** | XP, levels, coins, achievement points, unlockable themes and avatars |
@@ -125,7 +125,16 @@ Air Hockey · Typing Rush · Maze Runner · Stack Tower · Word Scramble ·
 Fruit Merge (drop fruit into a box; two of a kind fuse up a ten-tier ladder,
 and only the first four ever fall from the chute)
 
-**3D games (7, WebGL)**
+**Defense / grind games (2)**
+
+Rift Siege (maze-building tower defense: there is no fixed road, so every
+tower you plant re-routes the walk to your core — and a build that would seal
+it off completely is rejected) ·
+Iron Vanguard (360° base defense on a polar grid: turrets have their own hit
+points, Lancers park at range and shell them, and an Overcharge doubles every
+turret's fire rate for five seconds)
+
+**3D games (8, WebGL)**
 
 Turbo Circuit 3D (third-person racer on a curving, cresting circuit) ·
 Cube Runner 3D (three-lane endless runner with jump and slide) ·
@@ -135,7 +144,10 @@ Asteroid Belt 3D (space shooter with travel-time projectiles and splitting rocks
 Sky Parkour 3D (endless obstacle course over floating platforms — gaps, spinners,
 pushers, bouncers and a double jump) ·
 Storm Arena 3D (third-person arena shooter: drone waves, buildable cover, a
-closing storm ring)
+closing storm ring) ·
+Citadel Wars 3D (tower defense on height-mapped terrain: the road winds through
+a valley, plateaus give a real range bonus, and clicks are resolved by
+raycasting the camera ray against each elevation's own plane)
 
 They run on a small renderer written for this project — mat4/vec3 maths, one
 lit shader with directional + hemisphere light and fog, primitive mesh
@@ -152,6 +164,15 @@ area-slowing Frost, chaining Arc), ten upgrade levels each, and six enemy
 families — marchers, sprinters, armoured brutes, drones that fly straight over
 the road, menders that heal their neighbours and bulwarks behind a regenerating
 shield — plus a Titan every fifth wave that bursts into a squad when it dies.
+
+**The three defense games are built to be ground.** A run banks a currency
+earned from how deep you got (Rift Shards, Alloy, Crowns), and that currency
+buys permanent upgrades — starting gold, base HP, damage, income, a cheaper
+build cost, a faster ability cooldown, and a fourth tower class that stays
+locked until you pay for it. The shop opens from each game's start screen and
+everything lives in the normal save file, so progress carries between sessions
+exactly like a high score does. `js/systems/metaProgress.js` implements the
+whole thing once and all three games declare their own node list against it.
 
 Highlights worth calling out: **Chess** implements full legal-move generation
 including castling, en passant, promotion, check/checkmate/stalemate plus an
@@ -211,7 +232,7 @@ js/
     gfx.js                 # in-game graphics kit: backdrops, lighting, glow
     color.js               # shared colour parser (hex / rgb() / hsl())
     canvasUtils.js         # shared canvas drawing helpers
-    <38 game modules>      # one self-contained module per game
+    <41 game modules>      # one self-contained module per game
 
 data/
   games.js                 # game registry (metadata + lazy module paths)

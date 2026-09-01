@@ -25,6 +25,7 @@ const SCORE_GOALS = {
   "turbo-circuit-3d": 900, "cube-runner-3d": 700, "sky-rider-3d": 1800,
   "tower-blocks-3d": 320, "asteroid-belt-3d": 1400,
   "sky-parkour-3d": 1200, "storm-arena-3d": 2200, "fruit-merge": 3500,
+  "rift-siege": 4500, "iron-vanguard": 4000, "citadel-wars-3d": 5000,
 };
 
 function buildGlobalAchievements() {

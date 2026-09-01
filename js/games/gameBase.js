@@ -197,6 +197,7 @@ export class GameBase {
     const diffs = this.getDifficulties?.() || ["Normal"];
     const instructions = this.getInstructions?.() || ["Have fun!"];
     const controlsLine = this.input.isTouch ? (this.getTouchHint?.() || "Use the on-screen controls.") : (this.getKeyboardHint?.() || "Use your keyboard / mouse to play.");
+    const upgrades = this.getUpgrades?.();
 
     this._setOverlay(true);
     this.overlayEl.innerHTML = "";
@@ -215,6 +216,11 @@ export class GameBase {
       }, d))) : null,
       el("div", { class: "overlay-actions" }, [
         labelledButton("play", "Start Game", "btn btn-primary btn-lg", () => this.start()),
+        // Games with permanent between-run upgrades expose their shop here.
+        upgrades
+          ? labelledButton("sparkles", `Upgrades (${upgrades.cfg.icon} ${formatNumber(upgrades.currency)})`,
+              "btn btn-ghost btn-lg", () => upgrades.openShop(() => this.showStartOverlay()))
+          : null,
       ]),
       el("ul", { class: "instructions" }, [...instructions.map(i => el("li", {}, i)), el("li", {}, controlsLine)]),
     );

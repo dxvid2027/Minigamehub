@@ -59,7 +59,7 @@ export class Game3D extends GameBase {
     this.viewH = h;
     this.engine.resize(w, h, dpr);
     this._sizeOverlay();
-    this.onResize?.(rect.width, rect.height);
+    this.onResize?.(w, h);
   }
 
   /**

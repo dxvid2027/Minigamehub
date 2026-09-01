@@ -35,6 +35,10 @@ const GRAVITY = 2100;        // px/s^2 at a 1000px-wide box, scaled at runtime
 const SUBSTEPS = 3;
 const RESTITUTION = 0.12;
 const WALL_DAMP = 0.55;
+// Fruit should settle with a lazy turn, not spin like a top: angular speed is
+// capped and bleeds away every step.
+const MAX_SPIN = 0.55;
+const SPIN_DECAY = 2.4;
 
 export class FruitMergeGame extends GameBase {
   getDifficulties() { return ["Easy", "Normal", "Hard"]; }
@@ -111,7 +115,7 @@ export class FruitMergeGame extends GameBase {
       x: clamp(this.dropX, this.box.x + r, this.box.x + this.box.w - r),
       y: this.box.y - r * 0.2,
       vx: 0, vy: 0, r, tier,
-      rot: Math.random() * Math.PI * 2, va: (Math.random() - 0.5) * 1.4,
+      rot: Math.random() * Math.PI * 2, va: (Math.random() - 0.5) * 0.45,
       // A freshly dropped fruit is exempt from the overflow check until it
       // has been inside the box for a moment — otherwise dropping *is* losing.
       settle: 0,
@@ -156,8 +160,8 @@ export class FruitMergeGame extends GameBase {
       f.vx *= 0.999;
 
       // Walls and floor.
-      if (f.x - f.r < b.x) { f.x = b.x + f.r; f.vx = Math.abs(f.vx) * WALL_DAMP; f.va += 0.4; }
-      if (f.x + f.r > b.x + b.w) { f.x = b.x + b.w - f.r; f.vx = -Math.abs(f.vx) * WALL_DAMP; f.va -= 0.4; }
+      if (f.x - f.r < b.x) { f.x = b.x + f.r; f.vx = Math.abs(f.vx) * WALL_DAMP; f.va += 0.12; }
+      if (f.x + f.r > b.x + b.w) { f.x = b.x + b.w - f.r; f.vx = -Math.abs(f.vx) * WALL_DAMP; f.va -= 0.12; }
       if (f.y + f.r > b.y + b.h) {
         f.y = b.y + b.h - f.r;
         f.vy = -Math.abs(f.vy) * RESTITUTION;
@@ -194,10 +198,17 @@ export class FruitMergeGame extends GameBase {
           const imp = (-(1 + RESTITUTION) * sep) / total;
           a.vx -= imp * mc * nx; a.vy -= imp * mc * ny;
           c.vx += imp * ma * nx; c.vy += imp * ma * ny;
-          const spin = (rvx * -ny + rvy * nx) * 0.004;
+          const spin = (rvx * -ny + rvy * nx) * 0.0004;
           a.va -= spin; c.va += spin;
         }
       }
+    }
+
+    // Bleed off spin last: fruit resting in a pile are in permanent contact,
+    // so damping before the collision pass never wins against it.
+    for (const f of this.fruits) {
+      const resting = Math.hypot(f.vx, f.vy) < 70;
+      f.va = clamp(f.va * Math.exp(-(resting ? 9 : SPIN_DECAY) * h), -MAX_SPIN, MAX_SPIN);
     }
 
     if (this.fruits.some(f => f.dead)) this.fruits = this.fruits.filter(f => !f.dead);
@@ -212,7 +223,7 @@ export class FruitMergeGame extends GameBase {
       x, y,
       vx: (a.vx + c.vx) / 2, vy: (a.vy + c.vy) / 2 - 40,
       r: this._radius(tier), tier,
-      rot: 0, va: (Math.random() - 0.5) * 2,
+      rot: 0, va: (Math.random() - 0.5) * 0.55,
       settle: Math.min(a.settle, c.settle), pop: 0.26,
     });
     this.effects.push({ x, y, r: this._radius(tier), color: t.color, t: 0, life: 0.42 });

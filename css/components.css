@@ -576,3 +576,47 @@ body.immersive #toast-root { display: none; }
   box-shadow: 0 4px 14px #7c5cff4d;
   letter-spacing: .05em;
 }
+
+
+/* ==========================================================================
+   Meta-progression shop (Rift Siege, Iron Vanguard, Citadel Wars 3D)
+   ========================================================================== */
+.meta-balance {
+  display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap;
+  padding: 12px 16px; margin-bottom: 14px;
+  border-radius: var(--radius-md);
+  background: linear-gradient(140deg, #ffd76a1f, #7c5cff1a);
+  border: 1px solid #ffd76a3d;
+}
+.meta-balance .amount { font-family: var(--font-display); font-weight: 800; font-size: 1.5rem; }
+.meta-balance .label { color: var(--text-2); font-size: .82rem; }
+.meta-balance .runs { margin-left: auto; color: var(--text-3); font-size: .76rem; }
+
+.meta-list { display: flex; flex-direction: column; gap: 9px; }
+.meta-node {
+  display: grid; grid-template-columns: 42px 1fr auto; gap: 12px; align-items: center;
+  padding: 11px 13px; border-radius: var(--radius-md);
+  background: var(--surface-2); border: 1px solid var(--border);
+}
+.meta-node.maxed { border-color: #ffd76a4d; background: linear-gradient(140deg, #ffd76a14, var(--surface-2)); }
+.meta-node .ic {
+  width: 42px; height: 42px; display: grid; place-items: center; font-size: 1.3rem;
+  border-radius: var(--radius-sm); background: var(--surface-3);
+}
+.meta-node .body { min-width: 0; }
+.meta-node .row { display: flex; align-items: center; gap: 8px; }
+.meta-node .row + .row { margin-top: 6px; }
+.meta-node b { font-size: .92rem; }
+.meta-node .lv { font-size: .72rem; color: var(--text-3); }
+.meta-node p { margin: 3px 0 0; font-size: .78rem; color: var(--text-2); line-height: 1.35; }
+.meta-node .eff { font-size: .74rem; font-weight: 700; color: var(--accent-good); margin-left: auto; }
+.meta-node .pips { display: flex; gap: 3px; }
+.meta-node .pip { width: 12px; height: 5px; border-radius: 3px; background: var(--surface-3); }
+.meta-node .pip.on { background: var(--grad-gold); }
+.meta-node .btn { white-space: nowrap; }
+
+@media (max-width: 520px) {
+  .meta-node { grid-template-columns: 34px 1fr; grid-template-rows: auto auto; }
+  .meta-node .btn { grid-column: 1 / -1; width: 100%; }
+  .meta-node .ic { width: 34px; height: 34px; font-size: 1.05rem; }
+}
