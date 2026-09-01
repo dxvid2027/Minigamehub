@@ -129,7 +129,7 @@ export class BreakoutGame extends GameBase {
     }
   }
 
-  _updateHud() { this.setHud({ Score: this.score, Lives: "❤️".repeat(Math.max(0, this.lives)), Level: this.level }); }
+  _updateHud() { this.setHud({ Score: this.score, Lives: GameBase.hearts(this.lives), Level: this.level }); }
 
   onRender(ctx, dt) {
     this.gfx.backdrop(ctx, dt);

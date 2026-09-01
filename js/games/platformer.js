@@ -30,7 +30,7 @@ export class PlatformerGame extends GameBase {
       "Reach the checkered flag at the end of the level to win.",
     ];
   }
-  getTouchLayout() { return "dpad"; }
+  getTouchLayout() { return "stick"; }
   getTouchButtons() { return ["a"]; }
   getTouchHint() { return "D-pad to move, ● to jump."; }
   getKeyboardHint() { return "Arrow keys / A-D to move, Space, W or Up to jump."; }
@@ -115,7 +115,7 @@ export class PlatformerGame extends GameBase {
     this.setHud({
       Score: this.score,
       Gems: this.gemsCollected,
-      Lives: "❤️".repeat(Math.max(0, this.lives)) || "—",
+      Lives: GameBase.hearts(this.lives),
     });
   }
 
@@ -125,12 +125,12 @@ export class PlatformerGame extends GameBase {
     const p = this.player;
     const v = this.input.virtual;
 
-    const left = this.input.isDown("ArrowLeft", "KeyA") || v.left;
-    const right = this.input.isDown("ArrowRight", "KeyD") || v.right;
-    p.vx = 0;
-    if (left) { p.vx = -MOVE_SPEED; p.facing = -1; }
-    if (right) { p.vx = MOVE_SPEED; p.facing = 1; }
-    if (p.vx !== 0) p.run += dt * 12; else p.run = 0;
+    // Analog: a lightly held stick edges along a ledge, a full push runs.
+    const ax = this.input.axes().x;
+    p.vx = Math.abs(ax) > 0.12 ? ax * MOVE_SPEED : 0;
+    if (p.vx < 0) p.facing = -1;
+    else if (p.vx > 0) p.facing = 1;
+    if (p.vx !== 0) p.run += dt * 12 * Math.min(1, Math.abs(ax) + 0.35); else p.run = 0;
 
     // Jump with a coyote window and an input buffer — the difference between
     // a platformer that feels tight and one that feels broken.

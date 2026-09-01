@@ -44,6 +44,10 @@ function defaultSave() {
       particles: true,
       difficulty: "normal",
       keyboardNav: true,
+      // "auto" follows the device, but a player on a laptop with a
+      // touchscreen, or on a tablet with a keyboard, gets it wrong — so
+      // the choice is theirs to override and it sticks.
+      inputMode: "auto",   // "auto" | "keyboard" | "touch"
     },
     games: {}, // gameId -> { highScore, plays, wins, losses, timePlayed, lastPlayed, bestTimeMs, completed, custom:{} }
     achievements: { unlocked: {}, progress: {} },

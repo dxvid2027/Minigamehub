@@ -23,7 +23,7 @@ export class SkyRider3DGame extends Game3D {
       "Hold boost for extra speed and extra points per ring.",
     ];
   }
-  getTouchLayout() { return "dpad"; }
+  getTouchLayout() { return "stick"; }
   getTouchButtons() { return ["a"]; }
   getTouchHint() { return "Drag to fly; press the round ● button to boost."; }
   getKeyboardHint() { return "Arrow keys / WASD to fly, Space to boost."; }
@@ -105,10 +105,9 @@ export class SkyRider3DGame extends Game3D {
 
     // --- flight input -> velocity (with a little inertia so it feels like flying)
     let ax = 0, ay = 0;
-    if (this.input.isDown("ArrowLeft", "KeyA") || this.input.virtual.left) ax -= 1;
-    if (this.input.isDown("ArrowRight", "KeyD") || this.input.virtual.right) ax += 1;
-    if (this.input.isDown("ArrowUp", "KeyW") || this.input.virtual.up) ay += 1;
-    if (this.input.isDown("ArrowDown", "KeyS") || this.input.virtual.down) ay -= 1;
+    const a = this.input.axes();
+    ax = a.x;
+    ay = -a.y;                               // stick pushed up climbs
     if (this._drag) {
       ax = clamp((((this._drag.x / this.viewW) * 2 - 1) * BOUND_X - this.x) * 0.35, -1, 1);
       ay = clamp(((1 - (this._drag.y / this.viewH) * 2) * BOUND_Y - this.y) * 0.35, -1, 1);

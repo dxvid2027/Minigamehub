@@ -15,7 +15,7 @@ export class RacingGame extends GameBase {
       "You have 3 lives; colliding costs one and grants brief invincibility.",
     ];
   }
-  getTouchLayout() { return "dpad" ;}
+  getTouchLayout() { return "stick"; }
   getTouchButtons() { return []; }
   getTouchHint() { return "Use the D-pad (or drag) to steer left and right."; }
   getKeyboardHint() { return "Arrow keys or A/D to steer."; }
@@ -41,7 +41,7 @@ export class RacingGame extends GameBase {
     this._updateHud();
   }
 
-  _updateHud() { this.setHud({ Score: this.score, Lives: "❤️".repeat(Math.max(0, this.lives)), Speed: (this.speed / this.baseSpeed).toFixed(1) + "x" }); }
+  _updateHud() { this.setHud({ Score: this.score, Lives: GameBase.hearts(this.lives), Speed: (this.speed / this.baseSpeed).toFixed(1) + "x" }); }
 
   onUpdate(dt) {
     this.speed += dt * 6;
@@ -50,8 +50,8 @@ export class RacingGame extends GameBase {
 
     const steer = 380;
     if (this._dragX != null) this.player.x += clamp(this._dragX - this.player.x, -steer * dt, steer * dt);
-    if (this.input.isDown("ArrowLeft", "KeyA") || this.input.virtual.left) this.player.x -= steer * dt;
-    if (this.input.isDown("ArrowRight", "KeyD") || this.input.virtual.right) this.player.x += steer * dt;
+    // Analog steering: a half-pushed stick makes a gentle lane change.
+    this.player.x += this.input.axes().x * steer * dt;
     this.player.x = clamp(this.player.x, this.roadX + 20, this.roadX + this.roadW - 20);
 
     this.spawnTimer -= dt;

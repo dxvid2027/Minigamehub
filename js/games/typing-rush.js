@@ -56,7 +56,7 @@ export class TypingRushGame extends GameBase {
   _updateHud() {
     const mins = Math.max(0.01, (performance.now() - this.startedAt) / 60000);
     const wpm = Math.round((this.typedChars / 5) / mins);
-    this.setHud({ Score: this.score, Lives: "❤️".repeat(Math.max(0, this.lives)), WPM: isFinite(wpm) ? wpm : 0 });
+    this.setHud({ Score: this.score, Lives: GameBase.hearts(this.lives), WPM: isFinite(wpm) ? wpm : 0 });
   }
 
   _handleKey(e) {

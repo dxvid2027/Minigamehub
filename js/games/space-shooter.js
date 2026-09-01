@@ -28,7 +28,7 @@ export class SpaceShooterGame extends GameBase {
       "You have 3 lives; losing them all — or letting a wave reach your line — ends the run.",
     ];
   }
-  getTouchLayout() { return "dpad"; }
+  getTouchLayout() { return "stick"; }
   getTouchButtons() { return []; }
   getTouchHint() { return "Use the D-pad to move — your ship fires automatically."; }
   getKeyboardHint() { return "Arrow keys or A/D to move (W/S for depth). Auto-fire is always on."; }
@@ -53,7 +53,7 @@ export class SpaceShooterGame extends GameBase {
   _updateHud() {
     this.setHud({
       Score: this.score,
-      Lives: "♥".repeat(Math.max(0, this.player.hp)) || "—",
+      Lives: GameBase.hearts(this.player.hp),
       Wave: this.wave || "…",
     });
   }
@@ -144,10 +144,11 @@ export class SpaceShooterGame extends GameBase {
   _updatePlayer(dt) {
     const p = this.player;
     const speed = 330;
-    if (this.input.isDown("ArrowLeft", "KeyA") || this.input.virtual.left) p.x -= speed * dt;
-    if (this.input.isDown("ArrowRight", "KeyD") || this.input.virtual.right) p.x += speed * dt;
-    if (this.input.isDown("ArrowUp", "KeyW") || this.input.virtual.up) p.y -= speed * dt;
-    if (this.input.isDown("ArrowDown", "KeyS") || this.input.virtual.down) p.y += speed * dt;
+    const ax = this.input.axes();
+    const mag = Math.hypot(ax.x, ax.y);
+    const k = mag > 1 ? 1 / mag : 1;
+    p.x += ax.x * k * speed * dt;
+    p.y += ax.y * k * speed * dt;
     p.x = clamp(p.x, 18, this.viewW - 18);
     p.y = clamp(p.y, this.viewH * 0.5, this.viewH - 18);
 

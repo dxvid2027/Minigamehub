@@ -7,6 +7,7 @@
 // the car stays on it.
 // ==========================================================================
 import { Game3D, Geometry, Textures } from "./game3dBase.js";
+import { GameBase } from "./gameBase.js";
 import { audioManager } from "../systems/audioManager.js";
 import { clamp, randInt } from "../core/utils.js";
 
@@ -25,7 +26,7 @@ export class TurboCircuit3DGame extends Game3D {
       "Three crashes end the run. Clipping a barrier costs speed, not a life.",
     ];
   }
-  getTouchLayout() { return "dpad"; }
+  getTouchLayout() { return "stick"; }
   getTouchButtons() { return ["a"]; }
   getTouchHint() { return "D-pad or drag to steer; press the round ● button for a speed boost."; }
   getKeyboardHint() { return "Arrow keys / A-D to steer, Space for a boost."; }
@@ -87,7 +88,7 @@ export class TurboCircuit3DGame extends Game3D {
     this.setHud({
       Score: this.score,
       Speed: `${Math.round(this.speed * 3.1)} km/h`,
-      Lives: "♥".repeat(Math.max(0, this.lives)) || "—",
+      Lives: GameBase.hearts(this.lives),
     });
   }
 
@@ -115,8 +116,7 @@ export class TurboCircuit3DGame extends Game3D {
 
     const steer = 16 + this.speed * 0.08;
     let dx = 0;
-    if (this.input.isDown("ArrowLeft", "KeyA") || this.input.virtual.left) dx -= 1;
-    if (this.input.isDown("ArrowRight", "KeyD") || this.input.virtual.right) dx += 1;
+    dx = this.input.axes().x;
     if (this._dragX != null) {
       // Drag steering: map the pointer across the road width.
       const want = ((this._dragX / this.viewW) * 2 - 1) * ROAD_HALF;

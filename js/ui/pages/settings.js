@@ -97,6 +97,17 @@ export function renderSettings(container) {
     switchRow("Reduced Motion", "Minimize animations and transitions platform-wide.", s.reducedMotion, (v) => settingsManager.set("reducedMotion", v)),
     switchRow("Keyboard Navigation Highlight", "Show a clear focus ring while navigating with a keyboard.", s.keyboardNav, (v) => settingsManager.set("keyboardNav", v)),
     switchRow("Show Tutorials", "Display instructions and control hints before each game starts.", s.showTutorials, (v) => settingsManager.set("showTutorials", v)),
+    el("div", { class: "field" }, [
+      el("label", {}, "Controls"),
+      el("p", { class: "hint" }, "Automatic follows the device. Choose Keyboard to hide the on-screen buttons entirely, or Touch to keep them on a desktop."),
+      (() => {
+        const opts = [["auto", "Automatic"], ["keyboard", "Keyboard & mouse"], ["touch", "Touch controls"]];
+        const select = el("select", { class: "select" }, opts.map(([v, label]) =>
+          el("option", { value: v, selected: (s.inputMode || "auto") === v || undefined }, label)));
+        select.addEventListener("change", () => settingsManager.set("inputMode", select.value));
+        return select;
+      })(),
+    ]),
   ]);
 
   // --- Performance ---

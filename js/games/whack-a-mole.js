@@ -4,6 +4,7 @@
 import { GameBase } from "./gameBase.js";
 import { audioManager } from "../systems/audioManager.js";
 import { el, randInt, choice } from "../core/utils.js";
+import { spriteURL } from "./sprites.js";
 
 const HOLES = 9;
 
@@ -25,7 +26,10 @@ export class WhackAMoleGame extends GameBase {
     this.boardEl = el("div", { class: "board-grid whack-grid" });
     this.holes = [];
     for (let i = 0; i < HOLES; i++) {
-      const mole = el("div", { class: "mole" }, "🐹");
+      // A drawn character rather than the hamster emoji, which is neither a
+      // mole nor the same picture on two platforms.
+      const mole = el("div", { class: "mole" });
+      mole.style.backgroundImage = `url(${spriteURL("mole", 160)})`;
       const hole = el("div", { class: "whack-hole", onClick: () => this._whack(i) }, mole);
       this.holes.push({ el: hole, up: false, upTime: 0, hit: false });
       this.boardEl.appendChild(hole);

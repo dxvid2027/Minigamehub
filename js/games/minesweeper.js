@@ -4,6 +4,7 @@
 import { GameBase } from "./gameBase.js";
 import { audioManager } from "../systems/audioManager.js";
 import { el, formatTime } from "../core/utils.js";
+import { spriteURL } from "./sprites.js";
 
 const NUM_CLASS = ["", "mine-n1", "mine-n2", "mine-n3", "mine-n4", "mine-n5", "mine-n6", "mine-n7", "mine-n8"];
 
@@ -24,7 +25,7 @@ export class MinesweeperGame extends GameBase {
     this.stageEl.classList.add("dom-board");
     this.flagMode = false;
     this.toolbar = el("div", { class: "board-toolbar" }, [
-      this.flagBtn = el("button", { class: "chip", onClick: () => { this.flagMode = !this.flagMode; this.flagBtn.classList.toggle("active", this.flagMode); audioManager.play("toggle"); } }, "🚩 Flag Mode"),
+      this.flagBtn = el("button", { class: "chip", onClick: () => { this.flagMode = !this.flagMode; this.flagBtn.classList.toggle("active", this.flagMode); audioManager.play("toggle"); } }, "⚑ Flag Mode"),
     ]);
     this.boardEl = el("div", { class: "board-grid mine-board" });
     this.stageEl.classList.add("stacked");
@@ -87,9 +88,11 @@ export class MinesweeperGame extends GameBase {
         onClick: () => this._click(x, y),
         oncontextmenu: (e) => { e.preventDefault(); this._flag(x, y); },
       });
-      if (c.revealed && c.mine) cell.textContent = "💣";
+      // Drawn artwork instead of emoji glyphs: emoji rendered at a different
+      // size and weight in every browser and blurred at small cell sizes.
+      if (c.revealed && c.mine) { cell.classList.add("has-art"); cell.style.backgroundImage = `url(${spriteURL("bomb", 96)})`; }
       else if (c.revealed && c.adj > 0) { cell.textContent = c.adj; cell.classList.add(NUM_CLASS[c.adj]); }
-      else if (c.flagged) cell.textContent = "🚩";
+      else if (c.flagged) { cell.classList.add("has-art"); cell.style.backgroundImage = `url(${spriteURL("flag", 96)})`; }
       this.boardEl.appendChild(cell);
     }
   }

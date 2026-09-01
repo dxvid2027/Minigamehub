@@ -33,9 +33,9 @@ export class StormArena3DGame extends Game3D {
       "Shields absorb damage first and drop from every fourth drone. Score is kills, waves and time survived.",
     ];
   }
-  getTouchLayout() { return "dpad"; }
+  getTouchLayout() { return "stick"; }
   getTouchButtons() { return ["a", "b"]; }
-  getTouchHint() { return "D-pad to move, drag anywhere on the view to aim, ● fires and ■ builds a wall."; }
+  getTouchHint() { return "Left thumb stick moves. Drag anywhere on the view with your other thumb to aim. ● fires, ■ builds a wall."; }
   getKeyboardHint() { return "Click the view once to take aim. WASD moves, the mouse turns you, hold the button to fire, R reloads, E builds, Space jumps."; }
 
   onInit() {
@@ -103,19 +103,32 @@ export class StormArena3DGame extends Game3D {
     el.addEventListener("mousedown", this._onDown);
     window.addEventListener("mouseup", this._onUp);
 
-    // Touch: dragging aims, and never fires — that is what the ● button is for.
+    // Touch: one finger drags to aim and never fires — that is the ● button.
+    // The look finger is tracked by identifier, because the other thumb is
+    // almost always on the stick: reading touches[0] made every stick press
+    // yank the camera to wherever that thumb happened to be.
+    this._lookId = null;
     el.addEventListener("touchstart", this._onTouchStart = (ev) => {
-      const t = ev.touches[0];
+      if (this._lookId !== null) return;
+      const t = ev.changedTouches[0];
+      this._lookId = t.identifier;
       this._look = { x: t.clientX, y: t.clientY };
     }, { passive: true });
     el.addEventListener("touchmove", this._onTouchMove = (ev) => {
-      if (!this._look) return;
-      const t = ev.touches[0];
-      this.yaw -= (t.clientX - this._look.x) * 0.006;
-      this.pitch = clamp(this.pitch - (t.clientY - this._look.y) * 0.0045, -0.5, 0.62);
-      this._look = { x: t.clientX, y: t.clientY };
+      for (const t of ev.changedTouches) {
+        if (t.identifier !== this._lookId || !this._look) continue;
+        this.yaw -= (t.clientX - this._look.x) * 0.006;
+        this.pitch = clamp(this.pitch - (t.clientY - this._look.y) * 0.0045, -0.5, 0.62);
+        this._look = { x: t.clientX, y: t.clientY };
+      }
     }, { passive: true });
-    el.addEventListener("touchend", this._onTouchEnd = () => { this._look = null; }, { passive: true });
+    const dropLook = (ev) => {
+      for (const t of ev.changedTouches) {
+        if (t.identifier === this._lookId) { this._lookId = null; this._look = null; }
+      }
+    };
+    el.addEventListener("touchend", this._onTouchEnd = dropLook, { passive: true });
+    el.addEventListener("touchcancel", dropLook, { passive: true });
   }
 
   onPause() { if (this.pointerLocked) document.exitPointerLock?.(); }
@@ -387,17 +400,17 @@ export class StormArena3DGame extends Game3D {
   }
 
   _movePlayer(dt) {
-    const v = this.input.virtual;
-    let f = 0, s = 0;
-    if (this.input.isDown("KeyW", "ArrowUp") || v.up) f += 1;
-    if (this.input.isDown("KeyS", "ArrowDown") || v.down) f -= 1;
-    if (this.input.isDown("KeyA", "ArrowLeft") || v.left) s -= 1;
-    if (this.input.isDown("KeyD", "ArrowRight") || v.right) s += 1;
-    const len = Math.hypot(f, s) || 1;
+    // Analog when the thumb stick is driving, digital on a keyboard. The
+    // magnitude is clamped rather than normalised, so a half-deflected stick
+    // walks at half speed instead of sprinting like a held key.
+    const ax = this.input.axes();
+    const f = -ax.y, s = ax.x;
+    const mag = Math.hypot(f, s);
+    const k = mag > 1 ? 1 / mag : 1;
     const [fx, fz] = this._forward();
     const rx = fz, rz = -fx;                 // right vector
-    let nx = this.px + ((fx * f + rx * s) / len) * MOVE * dt;
-    let nz = this.pz + ((fz * f + rz * s) / len) * MOVE * dt;
+    let nx = this.px + (fx * f + rx * s) * k * MOVE * dt;
+    let nz = this.pz + (fz * f + rz * s) * k * MOVE * dt;
 
     // Slide along cover instead of walking through it.
     if (!this._blocked(nx, this.pz)) this.px = nx;

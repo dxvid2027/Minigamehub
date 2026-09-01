@@ -24,7 +24,7 @@ export class CubeRunner3DGame extends Game3D {
       "One hit ends the run — the score is how far you got.",
     ];
   }
-  getTouchLayout() { return "dpad"; }
+  getTouchLayout() { return "stick"; }
   getTouchButtons() { return []; }
   getTouchHint() { return "Swipe or use the D-pad: left/right to switch lane, up to jump, down to slide."; }
   getKeyboardHint() { return "Arrow keys or WASD — left/right lane, up jump, down slide."; }

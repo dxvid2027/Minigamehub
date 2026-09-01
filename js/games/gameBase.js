@@ -14,6 +14,8 @@ import { eventBus } from "../core/eventBus.js";
 import { el, formatNumber, formatTime } from "../core/utils.js";
 import { iconMarkup } from "../ui/icons.js";
 import { openModal, closeModal } from "../ui/modal.js";
+import { toast } from "../ui/toast.js";
+import { spriteURL } from "./sprites.js";
 
 export class GameBase {
   /**
@@ -70,6 +72,7 @@ export class GameBase {
       this.hudStatsEl = el("div", { class: "hud-stats" }),
       el("div", { class: "hud-actions" }, [
         iconButton("info", "How to play", () => this.showHowToPlay()),
+        this.inputBtn = iconButton("keyboard", "Controls", () => this.cycleInputMode()),
         this.fsBtn = iconButton("expand", "Fullscreen", () => this.toggleFullscreen()),
         this.pauseBtn = iconButton("pause", "Pause", () => this.togglePause()),
         iconButton("restart", "Restart", () => this.confirmRestart()),
@@ -90,6 +93,8 @@ export class GameBase {
 
     this._fitStage();
     this._onWindowResize = () => { this._layoutTouchControls(); this._fitStage(); };
+    // The controls button shows which mode is live, so it needs the first sync.
+    queueMicrotask(() => this._syncInputModeUI());
     window.addEventListener("resize", this._onWindowResize);
     window.addEventListener("orientationchange", this._onWindowResize);
   }
@@ -171,12 +176,27 @@ export class GameBase {
     Object.assign(this.hudFields, fields);
     this.hudStatsEl.innerHTML = "";
     for (const [label, value] of Object.entries(this.hudFields)) {
-      this.hudStatsEl.appendChild(el("div", { class: "hud-stat" }, [
-        el("b", {}, String(value)),
-        el("span", {}, label),
-      ]));
+      const b = el("b", {});
+      // A field may hand over pips instead of text — lives as drawn hearts,
+      // for instance — which text alone cannot express.
+      if (value && typeof value === "object" && value.pips !== undefined) {
+        b.className = "pip-row";
+        for (let i = 0; i < value.pips; i++) {
+          b.appendChild(el("i", {
+            class: "hud-pip",
+            style: `background-image:url(${spriteURL(value.sprite || "heart", 48)})`,
+          }));
+        }
+        if (!value.pips) b.textContent = "—";
+      } else {
+        b.textContent = String(value);
+      }
+      this.hudStatsEl.appendChild(el("div", { class: "hud-stat" }, [b, el("span", {}, label)]));
     }
   }
+
+  /** Lives as drawn hearts rather than a repeated emoji. */
+  static hearts(n) { return { pips: Math.max(0, Math.floor(n)), sprite: "heart" }; }
 
   setScore(n) { this.score = n; this.setHud({ Score: formatNumber(this.score) }); }
   addScore(n) { this.setScore(this.score + n); }
@@ -196,7 +216,7 @@ export class GameBase {
     const gameData = saveManager.ensureGame(this.id);
     const diffs = this.getDifficulties?.() || ["Normal"];
     const instructions = this.getInstructions?.() || ["Have fun!"];
-    const controlsLine = this.input.isTouch ? (this.getTouchHint?.() || "Use the on-screen controls.") : (this.getKeyboardHint?.() || "Use your keyboard / mouse to play.");
+    const controlsLine = this.useTouch ? (this.getTouchHint?.() || "Use the on-screen controls.") : (this.getKeyboardHint?.() || "Use your keyboard / mouse to play.");
     const upgrades = this.getUpgrades?.();
 
     this._setOverlay(true);
@@ -328,6 +348,68 @@ export class GameBase {
     requestAnimationFrame(loop);
   }
 
+  // ----------------------------------------------------------- INPUT MODE --
+  /**
+   * Whether to play this session with on-screen controls.
+   *
+   * Device sniffing alone gets this wrong in both directions — a laptop with a
+   * touchscreen reports touch and never needs a d-pad, a tablet in a keyboard
+   * case is the reverse — so the detected value is only the default and the
+   * player's explicit choice always wins.
+   */
+  get useTouch() {
+    const mode = saveManager.data.settings.inputMode || "auto";
+    if (mode === "keyboard") return false;
+    if (mode === "touch") return true;
+    return !!this.input?.isTouch;
+  }
+
+  /** Cycles auto -> keyboard -> touch and re-lays the controls out. */
+  cycleInputMode() {
+    const order = ["auto", "keyboard", "touch"];
+    const cur = saveManager.data.settings.inputMode || "auto";
+    const next = order[(order.indexOf(cur) + 1) % order.length];
+    saveManager.data.settings.inputMode = next;
+    saveManager.save();
+    audioManager.play("toggle");
+    this.applyInputMode();
+    eventBus.emit("settings:inputMode", { mode: next });
+    toast({
+      type: "info", title: "Controls",
+      message: next === "auto" ? `Automatic — this device is treated as ${this.useTouch ? "touch" : "keyboard"}.`
+        : next === "touch" ? "On-screen controls, always shown."
+        : "Keyboard and mouse. On-screen buttons are hidden.",
+      duration: 2600,
+    });
+    return next;
+  }
+
+  /** Rebuilds (or removes) the on-screen controls for the current mode. */
+  applyInputMode() {
+    this._syncInputModeUI();
+    this._setupTouchControls();
+    if (!this.useTouch) {
+      // Leaving touch mode must also undo the sideways surface: rotation only
+      // ever exists to make room for thumbs.
+      this._applyRotation(false);
+    }
+    this._layoutTouchControls();
+    this._fitStage();
+    this._resizeCanvas?.();
+    this._resize3D?.();
+  }
+
+  _syncInputModeUI() {
+    if (!this.inputBtn) return;
+    const mode = saveManager.data.settings.inputMode || "auto";
+    const label = mode === "auto" ? `Controls: automatic (${this.useTouch ? "touch" : "keyboard"})`
+      : mode === "touch" ? "Controls: touch" : "Controls: keyboard";
+    this.inputBtn.innerHTML = iconMarkup(this.useTouch ? "touch" : "keyboard");
+    this.inputBtn.title = label;
+    this.inputBtn.setAttribute("aria-label", label);
+    this.inputBtn.classList.toggle("mode-forced", mode !== "auto");
+  }
+
   // ----------------------------------------------------------- FULLSCREEN --
   /**
    * Native fullscreen where the browser allows it, with a CSS "immersive"
@@ -386,7 +468,7 @@ export class GameBase {
   /** Geometry only: would turning the surface sideways actually help here? */
   _rotationUseful() {
     // _fitStage runs from _buildShell, before the input controller exists.
-    if (!this.input?.isTouch) return false;
+    if (!this.useTouch) return false;
     const [rw, rh] = String(this.meta.ratio || "4/3").split("/").map(Number);
     const gameRatio = rw && rh ? rw / rh : 4 / 3;
     return gameRatio > 1.2 && window.innerHeight > window.innerWidth * 1.05;
@@ -432,6 +514,7 @@ export class GameBase {
       this._fitStage();
       this._resizeCanvas?.();
       this._resize3D?.();
+      if (this.touchEl.classList.contains("overlay")) this._pinOverlayToStage();
     }, 260);
   }
 
@@ -446,12 +529,11 @@ export class GameBase {
     saveManager.recordPlay(this.id);
     eventBus.emit("game:played", { gameId: this.id });
     audioManager.play("start");
-    // On a phone the windowed stage is a small letterbox in a tall page, so
-    // starting a game goes straight to fullscreen. The Start button click is
-    // the user gesture browsers require, and the HUD button toggles back.
-    if (this.input.isTouch && window.matchMedia("(max-width: 780px)").matches && !this.isFullscreen()) {
-      try { this.enterFullscreen(); } catch { /* not fatal — play windowed */ }
-    }
+    // Deliberately NOT auto-fullscreen. Forcing a phone into the sideways
+    // immersive surface the moment Start is pressed turned two games into
+    // something players read as broken: the picture goes sideways unasked and
+    // the controls end up over the playfield. Fullscreen is the button next
+    // to pause, pressed when the player wants it.
     this._setupTouchControls();
     this.onStart?.(this.difficulty);
     this._lastT = performance.now();
@@ -549,30 +631,78 @@ export class GameBase {
   // -------------------------------------------------------- TOUCH CONTROL --
   _setupTouchControls() {
     this.touchEl.innerHTML = "";
-    this.touchEl.classList.remove("active", "band");
+    this.touchEl.classList.remove("active", "band", "overlay");
+    this.touchEl.style.cssText = "";
     const layout = this.getTouchLayout?.() || "none";
-    if (!this.input.isTouch && layout !== "swipe-only-hint") return;
-    if (layout === "dpad") this.input.buildDPad(this.touchEl, { buttons: this.getTouchButtons?.() || ["a"] });
-    else if (layout === "single") this.input.buildSingleButton(this.touchEl, this.getTouchIcon?.() || "▲");
-    else return;  // "swipe" and "none" layouts need no injected DOM controls.
+    if (!this.useTouch && layout !== "swipe-only-hint") return;
+    if (layout === "stick") {
+      this.input.buildStick(this.touchEl, {
+        buttons: this.getTouchButtons?.() || ["a"],
+        labels: this.getTouchButtonLabels?.() || {},
+      });
+    } else if (layout === "dpad") {
+      this.input.buildDPad(this.touchEl, { buttons: this.getTouchButtons?.() || ["a"] });
+    } else if (layout === "single") {
+      this.input.buildSingleButton(this.touchEl, this.getTouchIcon?.() || "▲");
+    } else {
+      return;  // "swipe" and "none" layouts need no injected DOM controls.
+    }
 
     this._layoutTouchControls();
   }
 
   /**
-   * On a portrait screen the controls get their own band under the stage
-   * instead of sitting on top of the playfield; in landscape there is no
-   * room for that, so they overlay the stage as before.
+   * Controls get their own band under the stage rather than sitting on top of
+   * the playfield. Overlaying them was the single worst thing about the phone
+   * build: on a small stage a d-pad covers a third of the picture, and in the
+   * sideways surface it landed squarely over the player.
+   *
+   * The one exception is the analog stick used by the 3D games, where a
+   * translucent stick in the bottom corners is the expected idiom and the
+   * game is built to keep its action away from them.
    */
   _layoutTouchControls() {
     if (!this.touchEl.firstChild) return;
-    // Resolve rotation first: a sideways surface is landscape, whatever the
-    // physical device is doing, and landscape has no room for a control band.
-    const rotated = this._applyRotation();
-    const portrait = !rotated && window.innerHeight >= window.innerWidth * 1.12;
-    this.touchEl.classList.toggle("band", portrait);
+    // Resolve rotation first: it changes which way round the surface is.
+    this._applyRotation();
+    // A stick belongs on the stage only when the stage actually fills the
+    // screen. In a windowed portrait phone the game is a letterbox with dead
+    // space under it, and putting the controls in that dead space covers
+    // nothing at all — strictly better than floating them over the picture.
+    // Decided from the surface, not from a measured stage: the stage is sized
+    // by _fitStage against whatever band we ask for, so measuring it here to
+    // choose the band would be circular.
+    const stickLayout = (this.getTouchLayout?.() || "none") === "stick";
+    // The viewport, not the wrapper: the wrapper is only as tall as its
+    // content, so it reads as "wide" even on an upright phone.
+    const wide = window.innerWidth > window.innerHeight;
+    const overlay = stickLayout && (wide || this.isFullscreen());
+    this.touchEl.classList.toggle("band", !overlay);
+    this.touchEl.classList.toggle("overlay", overlay);
     this.touchEl.classList.add("active");
     this._fitStage();
+    if (overlay) this._pinOverlayToStage();
+  }
+
+  /**
+   * Pins the overlay controls onto the stage's own box.
+   *
+   * They used to be positioned against the whole play surface, which put the
+   * stick over the middle of the picture as soon as the surface was taller
+   * than the stage — and in the sideways fullscreen it landed on the player.
+   * Measured in layout space (offset*, not getBoundingClientRect) so it stays
+   * right when the surface is rotated.
+   */
+  _pinOverlayToStage() {
+    const st = this.stageEl;
+    if (!st?.offsetWidth) return;
+    let left = 0, top = 0, node = st;
+    while (node && node !== this.root) { left += node.offsetLeft; top += node.offsetTop; node = node.offsetParent; }
+    Object.assign(this.touchEl.style, {
+      left: `${left}px`, top: `${top}px`,
+      width: `${st.offsetWidth}px`, height: `${st.offsetHeight}px`,
+      right: "auto", bottom: "auto",
+    });
   }
 
   // --------------------------------------------------------------- UTILS ---
@@ -591,6 +721,11 @@ export class GameBase {
     this._flushPlaytime();
     document.removeEventListener("visibilitychange", this._onVisibility);
     document.removeEventListener("fullscreenchange", this._onFsChange);
+    // Leaving a game leaves fullscreen — both kinds. Dropping only the CSS
+    // immersive class left a natively fullscreened browser stuck on the
+    // library page with no way back except the Esc key.
+    if (document.fullscreenElement) document.exitFullscreen?.().catch(() => {});
+    screen.orientation?.unlock?.();
     this._immersive(false);
     window.removeEventListener("resize", this._onWindowResize);
     window.removeEventListener("orientationchange", this._onWindowResize);

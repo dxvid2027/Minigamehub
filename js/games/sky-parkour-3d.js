@@ -9,6 +9,7 @@
 // course removes all of it at once.
 // ==========================================================================
 import { Game3D, Geometry, Textures } from "./game3dBase.js";
+import { GameBase } from "./gameBase.js";
 import { audioManager } from "../systems/audioManager.js";
 import { clamp, randInt, randFloat, choice } from "../core/utils.js";
 
@@ -30,9 +31,9 @@ export class SkyParkour3DGame extends Game3D {
       "Falling off ends the run instantly. Score is the distance you cover plus the rings you grab.",
     ];
   }
-  getTouchLayout() { return "dpad"; }
-  getTouchButtons() { return []; }
-  getTouchHint() { return "Hold left/right on the D-pad to steer, tap up to jump (twice for a double jump)."; }
+  getTouchLayout() { return "stick"; }
+  getTouchButtons() { return ["a"]; }
+  getTouchHint() { return "Push the thumb stick left/right to steer, tap ● to jump — tap it again in mid-air for a double jump."; }
   getKeyboardHint() { return "A/D or ←/→ to steer, Space / W / ↑ to jump — press it again in mid-air to double jump."; }
 
   onInit() {
@@ -101,7 +102,7 @@ export class SkyParkour3DGame extends Game3D {
       Score: this.score,
       Distance: `${Math.round(this.distance)} m`,
       Rings: this.coinsGot,
-      Lives: "♥".repeat(Math.max(0, this.lives)) || "—",
+      Lives: GameBase.hearts(this.lives),
     });
   }
 
@@ -221,13 +222,13 @@ export class SkyParkour3DGame extends Game3D {
     if (this.falling > 0) { this._updateFall(dt); return; }
 
     if (this.input.consumePressed("Space") || this.input.consumePressed("KeyW") || this.input.consumePressed("ArrowUp")) this._jump();
+    // Jump is its own button. It used to be "stick pushed up", which meant
+    // steering diagonally fired a jump you never asked for.
     const v = this.input.virtual;
-    if (v.up && !this._vu) this._jump();
-    this._vu = v.up;
+    if (v.a && !this._va) this._jump();
+    this._va = v.a;
 
-    let dir = 0;
-    if (this.input.isDown("ArrowLeft", "KeyA") || v.left) dir -= 1;
-    if (this.input.isDown("ArrowRight", "KeyD") || v.right) dir += 1;
+    const dir = this.input.axes().x;
     this.x = clamp(this.x + dir * STRAFE * dt, -18, 18);
     this.tilt += (dir * -0.22 - this.tilt) * Math.min(1, dt * 9);
 

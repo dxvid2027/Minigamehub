@@ -127,6 +127,26 @@ export class InputController {
   }
 
   onPointer(type, fn) { this._pointerHandlers.push({ type, fn }); }
+
+  /**
+   * One movement vector from whatever the player is actually using — arrows,
+   * WASD, the analog stick or the d-pad. Screen convention: +x right, +y down.
+   * Keys read as full deflection; the stick reads however far it is pushed.
+   */
+  axes() {
+    let x = 0, y = 0;
+    if (this.isDown("ArrowLeft", "KeyA")) x -= 1;
+    if (this.isDown("ArrowRight", "KeyD")) x += 1;
+    if (this.isDown("ArrowUp", "KeyW")) y -= 1;
+    if (this.isDown("ArrowDown", "KeyS")) y += 1;
+    const vx = this.virtual.axisX || 0, vy = this.virtual.axisY || 0;
+    if (Math.abs(vx) > Math.abs(x)) x = vx;
+    if (Math.abs(vy) > Math.abs(y)) y = vy;
+    // D-pad layouts have no axes, so fall back to their booleans.
+    if (!x) x = this.virtual.left ? -1 : this.virtual.right ? 1 : 0;
+    if (!y) y = this.virtual.up ? -1 : this.virtual.down ? 1 : 0;
+    return { x, y };
+  }
   onSwipe(fn) { this._swipeCb = fn; }
   onTap(fn) { this._tapCb = fn; }
 
@@ -160,6 +180,110 @@ export class InputController {
     }
   }
 
+  /**
+   * Analog thumb stick plus action buttons — what a 3D game actually needs.
+   *
+   * A four-way d-pad cannot express "forward and slightly left", which is
+   * most of moving in a 3D space, and it forces the thumb to hunt for a small
+   * key. The stick reports a real vector in `virtual.axisX/axisY` and also
+   * sets the four booleans, so games written against the d-pad keep working
+   * unchanged. The base follows the first touch down inside its zone, so the
+   * thumb never has to find it.
+   */
+  buildStick(container, { buttons = ["a"], labels: btnLabels = {} } = {}) {
+    container.innerHTML = "";
+    container.classList.add("active");
+    this.virtual.axisX = 0;
+    this.virtual.axisY = 0;
+
+    const zone = document.createElement("div");
+    zone.className = "zone stick-zone";
+    const base = document.createElement("div");
+    base.className = "stick-base";
+    const knob = document.createElement("div");
+    knob.className = "stick-knob";
+    base.appendChild(knob);
+    zone.appendChild(base);
+
+    const RADIUS = 52;          // px of travel for a full-deflection reading
+    let touchId = null, cx = 0, cy = 0;
+
+    const setAxis = (x, y) => {
+      this.virtual.axisX = x;
+      this.virtual.axisY = y;
+      // Mirror onto the booleans with a dead zone, so a resting thumb does
+      // not creep the character forward.
+      this.virtual.left = x < -0.28;
+      this.virtual.right = x > 0.28;
+      this.virtual.up = y < -0.28;
+      this.virtual.down = y > 0.28;
+      knob.style.transform = `translate(calc(-50% + ${x * RADIUS}px), calc(-50% + ${y * RADIUS}px))`;
+    };
+
+    const begin = (px, py) => {
+      // Re-centre the stick under the thumb that grabbed it.
+      const r = zone.getBoundingClientRect();
+      cx = Math.min(Math.max(px, r.left + RADIUS + 8), r.right - RADIUS - 8);
+      cy = Math.min(Math.max(py, r.top + RADIUS + 8), r.bottom - RADIUS - 8);
+      base.style.left = `${cx - r.left}px`;
+      base.style.top = `${cy - r.top}px`;
+      base.classList.add("held");
+      setAxis(0, 0);
+    };
+    const move = (px, py) => {
+      const dx = px - cx, dy = py - cy;
+      const d = Math.hypot(dx, dy) || 1;
+      const k = Math.min(1, d / RADIUS);
+      setAxis((dx / d) * k, (dy / d) * k);
+    };
+    const end = () => {
+      touchId = null;
+      base.classList.remove("held");
+      base.style.left = ""; base.style.top = "";
+      setAxis(0, 0);
+    };
+
+    zone.addEventListener("touchstart", (e) => {
+      if (touchId !== null) return;
+      const t = e.changedTouches[0];
+      touchId = t.identifier;
+      begin(t.clientX, t.clientY);
+      e.preventDefault();
+    }, { passive: false });
+    zone.addEventListener("touchmove", (e) => {
+      for (const t of e.changedTouches) {
+        if (t.identifier !== touchId) continue;
+        move(t.clientX, t.clientY);
+        e.preventDefault();
+      }
+    }, { passive: false });
+    const drop = (e) => {
+      for (const t of e.changedTouches) if (t.identifier === touchId) end();
+    };
+    zone.addEventListener("touchend", drop);
+    zone.addEventListener("touchcancel", drop);
+    // Mouse, so the stick is testable and usable on a touch-mode desktop.
+    zone.addEventListener("mousedown", (e) => { touchId = -1; begin(e.clientX, e.clientY); e.preventDefault(); });
+    window.addEventListener("mousemove", this._stickMove = (e) => { if (touchId === -1) move(e.clientX, e.clientY); });
+    window.addEventListener("mouseup", this._stickUp = () => { if (touchId === -1) end(); });
+
+    container.appendChild(zone);
+
+    if (buttons.length) {
+      const wrap = document.createElement("div");
+      wrap.className = "zone action-btns";
+      const labels = { a: "●", b: "■", ...btnLabels };
+      buttons.forEach(key => {
+        const b = document.createElement("button");
+        b.className = key; b.textContent = labels[key] || key.toUpperCase(); b.type = "button";
+        b.setAttribute("aria-label", labels[key] ? String(labels[key]) : key);
+        this._bindHold(b, () => this.virtual[key] = true, () => this.virtual[key] = false);
+        wrap.appendChild(b);
+      });
+      container.appendChild(wrap);
+    }
+  }
+
   buildSingleButton(container, icon = "▲") {
     container.innerHTML = "";
     container.classList.add("active");
@@ -183,6 +307,8 @@ export class InputController {
   destroy() {
     window.removeEventListener("keydown", this._onKeyDown);
     window.removeEventListener("keyup", this._onKeyUp);
+    if (this._stickMove) window.removeEventListener("mousemove", this._stickMove);
+    if (this._stickUp) window.removeEventListener("mouseup", this._stickUp);
     this._cleanupPointer?.();
     this.keys.clear();
   }

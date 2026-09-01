@@ -228,6 +228,8 @@
 .touch-controls.band .action-btns { gap: 14px; }
 .touch-controls.band .action-btns button { width: 68px; height: 68px; }
 .touch-controls.band .single-btn { position: static; transform: none; margin: 0 auto; }
+.touch-controls.band .stick-zone { position: relative; width: 160px; height: 160px; flex: 0 0 auto; }
+.touch-controls.band .stick-base { left: 80px; bottom: 80px; }
 /* With no action buttons the d-pad centres itself rather than hugging a corner. */
 .touch-controls.band:not(:has(.action-btns)) { justify-content: center; }
 .dpad { bottom: 18px; left: 18px; width: 132px; height: 132px; display: grid; grid-template-columns: repeat(3, 1fr); grid-template-rows: repeat(3, 1fr); gap: 4px; }
@@ -239,6 +241,41 @@
 .action-btns button { width: 62px; height: 62px; border-radius: 50%; background: #ffffff1c; border: 1px solid #ffffff30; color: #fff; font-size: 1.4rem; backdrop-filter: blur(4px); }
 .action-btns button:active { background: #ffffff38; transform: scale(.94); }
 .swipe-hint-zone { inset: 0; }
+/* Analog thumb stick for the 3D games. The zone is the whole left half of
+   the bottom strip so the thumb never has to aim; the base moves to wherever
+   it lands and only then becomes visible. */
+/* Geometry comes from _pinOverlayToStage(); this only sets the mode. */
+.touch-controls.overlay { position: absolute; inset: auto; pointer-events: none; }
+.touch-controls.overlay .stick-zone {
+  pointer-events: auto;
+  left: 0; bottom: 0; width: 46%; height: 62%;
+  touch-action: none;
+}
+.stick-base {
+  position: absolute; left: 96px; bottom: 96px;
+  width: 128px; height: 128px; margin: -64px 0 0 -64px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 50% 45%, #ffffff1f, #ffffff08 70%, transparent);
+  border: 1.5px solid #ffffff2e;
+  opacity: .55; transition: opacity .14s ease;
+  display: grid; place-items: center;
+}
+.stick-base.held { opacity: 1; border-color: #ffffff4d; }
+.stick-knob {
+  position: absolute; left: 50%; top: 50%;
+  width: 56px; height: 56px; border-radius: 50%;
+  transform: translate(-50%, -50%);
+  background: radial-gradient(circle at 38% 32%, #ffffff, #c6cdf2 45%, #7a83b8);
+  box-shadow: 0 4px 14px #0009, inset 0 -3px 8px #0000004d;
+}
+.touch-controls.overlay .action-btns {
+  pointer-events: auto; right: 16px; bottom: 18px;
+}
+.touch-controls.overlay .action-btns button {
+  width: 74px; height: 74px; font-size: 1.5rem;
+  background: #ffffff26; border-color: #ffffff40;
+}
+
 .touch-controls .single-btn { bottom: 24px; left: 50%; transform: translateX(-50%); width: 84px; height: 84px; border-radius: 50%; background: #ffffff1c; border: 1px solid #ffffff30; color: #fff; font-size: 1.6rem; pointer-events: auto; display: grid; place-items: center; }
 
 .game-tip { font-size: .78rem; color: var(--text-3); max-width: var(--game-max-w, 900px); text-align: center; }
@@ -400,3 +437,12 @@ body.immersive .page { padding: 0; max-width: none; }
 }
 .gl-fallback .ic { font-size: 2.6rem; }
 .gl-fallback p { max-width: 42ch; font-size: .88rem; }
+
+/* Drawn HUD pips (lives). One element per pip so a lost life can animate out
+   later without re-rendering the row. */
+.hud-stat b.pip-row { display: flex; align-items: center; gap: 3px; line-height: 1; }
+.hud-pip {
+  display: block; width: 1.05em; height: 1.05em;
+  background-repeat: no-repeat; background-position: center; background-size: contain;
+  filter: drop-shadow(0 1px 2px #0006);
+}

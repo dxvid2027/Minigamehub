@@ -4,11 +4,17 @@
 import { GameBase } from "./gameBase.js";
 import { audioManager } from "../systems/audioManager.js";
 import { randInt, choice } from "../core/utils.js";
+import { drawSpriteCentered } from "./sprites.js";
 
 const GRAVITY = 900;
+// Drawn fruit, not emoji: the colour is the juice-splash colour, matched to
+// the artwork so a slice throws the right coloured spray.
 const FRUITS = [
-  { emoji: "🍉", color: "#2ee6a6" }, { emoji: "🍊", color: "#ff9f43" }, { emoji: "🍇", color: "#c86bff" },
-  { emoji: "🍓", color: "#ff5470" }, { emoji: "🍍", color: "#ffd76a" }, { emoji: "🥝", color: "#8fe36b" },
+  { sprite: "watermelon", color: "#e01f3c" }, { sprite: "orange", color: "#ff9f43" },
+  { sprite: "grapes",     color: "#a86bff" }, { sprite: "strawberry", color: "#ee2f4c" },
+  { sprite: "pineapple",  color: "#f0b32c" }, { sprite: "kiwi",   color: "#8fce4a" },
+  { sprite: "apple",      color: "#e8253f" }, { sprite: "lemon",  color: "#ffd93b" },
+  { sprite: "peach",      color: "#ff9c76" }, { sprite: "banana", color: "#ffcf3a" },
 ];
 
 export class FruitSliceGame extends GameBase {
@@ -49,7 +55,7 @@ export class FruitSliceGame extends GameBase {
     this._updateHud();
   }
 
-  _updateHud() { this.setHud({ Score: this.score, Lives: "❤️".repeat(Math.max(0, this.lives)) }); }
+  _updateHud() { this.setHud({ Score: this.score, Lives: GameBase.hearts(this.lives) }); }
 
   onUpdate(dt) {
     this.trail.forEach(t => t.t -= dt);
@@ -63,8 +69,8 @@ export class FruitSliceGame extends GameBase {
       const vy = -(680 + Math.random() * 220);
       const vx = (Math.random() - 0.5) * 160;
       this.items.push(isBomb
-        ? { x, y: this.viewH + 20, vx, vy, r: 20, bomb: true, rot: 0, spin: (Math.random()-0.5)*4 }
-        : { x, y: this.viewH + 20, vx, vy, r: 22, bomb: false, ...choice(FRUITS), rot: 0, spin: (Math.random() - 0.5) * 4, sliced: false });
+        ? { x, y: this.viewH + 20, vx, vy, r: 26, bomb: true, rot: 0, spin: (Math.random()-0.5)*4 }
+        : { x, y: this.viewH + 20, vx, vy, r: 30, bomb: false, ...choice(FRUITS), rot: 0, spin: (Math.random() - 0.5) * 4, sliced: false });
     }
 
     for (const it of this.items) {
@@ -133,10 +139,9 @@ export class FruitSliceGame extends GameBase {
     }
 
     for (const it of this.items) {
-      ctx.save(); ctx.translate(it.x, it.y); ctx.rotate(it.rot);
-      ctx.font = `${it.r * 2}px sans-serif`; ctx.textAlign = "center"; ctx.textBaseline = "middle";
-      ctx.fillText(it.bomb ? "💣" : it.emoji, 0, 0);
-      ctx.restore();
+      // The painters fill roughly 70% of their box, so the box is oversized to
+      // make the fruit read at the size the hit radius implies.
+      drawSpriteCentered(ctx, it.bomb ? "bomb" : it.sprite, it.x, it.y, it.r * 3.4, it.rot);
     }
     ctx.restore();
   }

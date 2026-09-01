@@ -56,6 +56,8 @@ export const ICONS = {
   users: svg(`<circle cx="9.4" cy="8.6" r="3.2"/><path d="M3.6 19.2c.6-3 2.8-4.8 5.8-4.8s5.2 1.8 5.8 4.8"/><path d="M16.2 5.9a3.2 3.2 0 0 1 0 5.9M17.2 14.8c2 .6 3.3 2.2 3.7 4.4"/>`),
   expand: svg(`<path d="M9 4.6H4.6V9M15 4.6h4.4V9M9 19.4H4.6V15M15 19.4h4.4V15"/>`),
   collapse: svg(`<path d="M4.6 9H9V4.6M19.4 9H15V4.6M4.6 15H9v4.4M19.4 15H15v4.4"/>`),
+  keyboard: svg(`<rect x="2.4" y="6" width="19.2" height="12" rx="2.2"/><path d="M6 9.6h.01M9.4 9.6h.01M12.8 9.6h.01M16.2 9.6h.01M6 12.8h.01M9.4 12.8h.01M12.8 12.8h.01M16.2 12.8h.01M18.6 9.6h.01M18.6 12.8h.01M8 15.8h8"/>`),
+  touch: svg(`<path d="M10 11.4V6.2a1.8 1.8 0 1 1 3.6 0v7.4"/><path d="M13.6 10.6a1.7 1.7 0 0 1 3.4 0v1.1"/><path d="M17 11.6a1.7 1.7 0 0 1 3.4 0v3.6a6.4 6.4 0 0 1-6.4 6.4h-1.4a5.8 5.8 0 0 1-4.3-1.9l-3.5-3.9a1.8 1.8 0 0 1 2.5-2.5l1.7 1.5"/>`),
 };
 
 /** Returns an <span> containing the requested icon, sized by CSS. */

@@ -4,8 +4,11 @@
 import { GameBase } from "./gameBase.js";
 import { audioManager } from "../systems/audioManager.js";
 import { el, shuffle, formatTime } from "../core/utils.js";
+import { FRUIT_NAMES, spriteURL } from "./sprites.js";
 
-const SYMBOLS = ["🍎", "🍋", "🍇", "🍓", "🍒", "🥝", "🍉", "🍑", "🥥", "🍍", "🍌", "🥑"];
+// Drawn fruit rather than emoji: emoji render as a different picture on every
+// platform and are a blurry font glyph at card size.
+const SYMBOLS = FRUIT_NAMES;
 
 export class MemoryMatchGame extends GameBase {
   getDifficulties() { return ["Easy", "Normal", "Hard"]; }
@@ -54,8 +57,11 @@ export class MemoryMatchGame extends GameBase {
     this.cards.forEach(card => {
       const node = el("div", { class: `memory-card${card.flipped || card.matched ? " flipped" : ""}${card.matched ? " matched" : ""}`, onClick: () => this._flip(card.id) }, [
         el("div", { class: "inner" }, [
-          el("div", { class: "face front" }, "❔"),
-          el("div", { class: "face back" }, card.symbol),
+          el("div", { class: "face front" }, [el("span", { class: "card-mark" }, "?")]),
+          el("div", {
+            class: "face back",
+            style: `background-image:url(${spriteURL(card.symbol, 128)})`,
+          }),
         ]),
       ]);
       this.boardEl.appendChild(node);
