@@ -112,7 +112,11 @@ adaptive icons — see [`assets/icons/README.md`](assets/icons/README.md).
 
 **Required classics (20)**
 
-Snake · Tetris Blocks · Pong Duel · Flappy Wings · Breakout Arena · Nova Strike
+Snake · Tetris Blocks · Pong Duel ·
+Flappy Wings (eight painted zones — meadow, canyon, reef, storm, ember, glacier,
+neon skyline, orbit — that change the obstacle, the weather and the hazard every
+twelve gates, plus twelve unlockable bird skins) ·
+Breakout Arena · Nova Strike
 (space shooter) · Neon Runner · Bastion TD (tower defense) · Memory Match ·
 Whack-a-Mole · Tic Tac Toe · Connect Four · Minesweeper · Sudoku Master · Chess ·
 Checkers · Pixel Quest (platformer) · Turbo Rush (racing) · Hoop Shot

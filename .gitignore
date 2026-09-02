@@ -5,3 +5,6 @@ dist/
 *.log
 .env
 .dev.vars
+
+# Playwright/regression screenshots written into the repo root by test runs.
+shot_*.png

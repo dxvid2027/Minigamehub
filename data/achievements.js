@@ -17,7 +17,7 @@ const unlockedCount = (save) => Object.keys(save.achievements.unlocked || {}).le
 const WIN_BASED = new Set(["pong", "tic-tac-toe", "connect-four", "chess", "checkers", "air-hockey"]);
 // Sensible high-score goals for the "Legend" tier of score-based games.
 const SCORE_GOALS = {
-  snake: 300, tetris: 8000, "flappy-bird": 40, breakout: 4000, "space-shooter": 5000,
+  snake: 300, tetris: 8000, "flappy-bird": 60, breakout: 4000, "space-shooter": 5000,
   "endless-runner": 2000, "tower-defense": 25000, "whack-a-mole": 400, platformer: 3000,
   racing: 5000, basketball: 18, "fruit-slice": 150, "2048": 2048, "simon-says": 14,
   "color-match": 25, "bubble-shooter": 2500, "typing-rush": 18, "stack-tower": 18,
