@@ -64,7 +64,9 @@ export class MetaProgress {
     const store = this._store;
     store.cur -= this.cost(id);
     store.lv[id] = this.level(id) + 1;
-    saveManager.save();
+    // Write through rather than debounce: losing a purchase because the tab
+    // closed a moment later would cost the player currency for nothing.
+    saveManager.saveNow();
     audioManager.play("levelup");
     return true;
   }
@@ -77,7 +79,7 @@ export class MetaProgress {
     store.cur += n;
     store.earned = (store.earned || 0) + n;
     store.runs = (store.runs || 0) + 1;
-    saveManager.save();
+    saveManager.saveNow();
     return n;
   }
 
@@ -86,7 +88,7 @@ export class MetaProgress {
     const store = this._store;
     store.cur = this.lifetimeEarned;
     store.lv = {};
-    saveManager.save();
+    saveManager.saveNow();
   }
 
   // ------------------------------------------------------------------ UI --

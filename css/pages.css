@@ -294,19 +294,25 @@
   /* One compact HUD row: the title shrinks to its emoji, the stats scroll
      sideways and the action buttons never wrap onto a second line. */
   .play-wrap { gap: 8px; }
-  .play-hud { gap: 6px; flex-wrap: nowrap; align-items: stretch; }
-  .play-hud .hud-left { flex: none; }
+  /* Seven action buttons plus four stat chips do not fit one phone line, and
+     squeezing them made the stats scroll behind the buttons. The stats get
+     their own row instead: title and buttons on top, numbers underneath. */
+  .play-hud { gap: 6px; flex-wrap: wrap; align-items: center; }
+  .play-hud .hud-left { flex: none; order: 1; }
+  .play-hud .hud-actions { order: 2; margin-left: auto; }
+  .play-hud .hud-stats { order: 3; flex-basis: 100%; }
   .play-hud .hud-title { font-size: 0; gap: 0; }
   .play-hud .hud-title::first-letter { font-size: 1.35rem; }
   .play-hud .hud-stats {
-    flex: 1; min-width: 0; gap: 6px; flex-wrap: nowrap;
+    min-width: 0; gap: 6px; flex-wrap: nowrap; justify-content: space-between;
     overflow-x: auto; scrollbar-width: none; -webkit-overflow-scrolling: touch;
   }
   .play-hud .hud-stats::-webkit-scrollbar { display: none; }
-  .play-hud .hud-stat { padding: 3px 8px; min-width: 46px; flex: none; }
+  .play-hud .hud-stat { padding: 3px 9px; min-width: 46px; flex: 1 1 auto; }
   .play-hud .hud-stat b { font-size: .88rem; }
   .play-hud .hud-stat span { font-size: .54rem; letter-spacing: .02em; }
   .play-hud .hud-actions { flex: none; gap: 5px; }
+  .play-hud .hud-stat b { white-space: nowrap; }
   .play-hud .icon-btn { width: 32px; height: 32px; font-size: .9rem; }
   .play-hud .icon-btn svg { width: 17px; height: 17px; }
   .game-tip { display: none; }

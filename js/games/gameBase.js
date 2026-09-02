@@ -13,7 +13,7 @@ import { GameGfx } from "./gfx.js";
 import { eventBus } from "../core/eventBus.js";
 import { el, formatNumber, formatTime } from "../core/utils.js";
 import { iconMarkup } from "../ui/icons.js";
-import { openModal, closeModal } from "../ui/modal.js";
+import { openModal, closeModal, confirmModal } from "../ui/modal.js";
 import { toast } from "../ui/toast.js";
 import { spriteURL } from "./sprites.js";
 
@@ -73,6 +73,9 @@ export class GameBase {
       el("div", { class: "hud-actions" }, [
         iconButton("info", "How to play", () => this.showHowToPlay()),
         this.inputBtn = iconButton("keyboard", "Controls", () => this.cycleInputMode()),
+        // Games that keep long-run progress let you stop and bank it rather
+        // than having to lose on purpose or throw the run away.
+        this.bankBtn = iconButton("save", "Save & quit", () => this.confirmBankAndQuit()),
         this.fsBtn = iconButton("expand", "Fullscreen", () => this.toggleFullscreen()),
         this.pauseBtn = iconButton("pause", "Pause", () => this.togglePause()),
         iconButton("restart", "Restart", () => this.confirmRestart()),
@@ -94,7 +97,7 @@ export class GameBase {
     this._fitStage();
     this._onWindowResize = () => { this._layoutTouchControls(); this._fitStage(); };
     // The controls button shows which mode is live, so it needs the first sync.
-    queueMicrotask(() => this._syncInputModeUI());
+    queueMicrotask(() => { this._syncInputModeUI(); this._syncBankButton(); });
     window.addEventListener("resize", this._onWindowResize);
     window.addEventListener("orientationchange", this._onWindowResize);
   }
@@ -230,6 +233,9 @@ export class GameBase {
         statBlock("Plays", formatNumber(gameData.plays)),
         statBlock("Wins", formatNumber(gameData.wins)),
       ]),
+      // A game may add its own block here — Bastion TD puts its level picker
+      // in it, which needs to sit above the difficulty chips.
+      this.getStartExtras?.() || null,
       diffs.length > 1 ? el("div", { class: "diff-row" }, diffs.map(d => el("button", {
         class: `chip${d === this.difficulty ? " active" : ""}`,
         onClick: (e) => { this.difficulty = d; [...e.target.parentNode.children].forEach(c => c.classList.remove("active")); e.target.classList.add("active"); audioManager.play("select"); },
@@ -262,6 +268,7 @@ export class GameBase {
 
   showEndOverlay({ result = "score", isHighScore = false, title, message, extraStats = [] } = {}) {
     this.state = "ended";
+    this._syncBankButton();
     this.pauseBtn.disabled = true;
     const icon = result === "win" ? "🎉" : result === "loss" ? "💀" : "🏁";
     this._setOverlay(true);
@@ -518,6 +525,37 @@ export class GameBase {
     }, 260);
   }
 
+  /**
+   * Ends the run now and keeps everything it earned.
+   *
+   * `bankAndQuit()` is what a game implements: it should settle its own
+   * currency and call endGame, exactly as it would on a loss. Games that do
+   * not implement it never show the button.
+   */
+  async confirmBankAndQuit() {
+    if (this.state !== "playing" && this.state !== "paused") return;
+    if (!this.bankAndQuit) return;
+    const wasPlaying = this.state === "playing";
+    if (wasPlaying) this.pause();
+    audioManager.play("click");
+    const ok = await confirmModal({
+      title: "Save & quit",
+      message: "This ends the run here. Your score counts and everything you earned is banked, exactly as if the run had ended on its own.",
+      confirmLabel: "Save & quit",
+    });
+    if (!ok) { if (wasPlaying) this.resume(); return; }
+    // bankAndQuit finishes through endGame, which needs a live run to settle.
+    this.state = "playing";
+    this.bankAndQuit();
+  }
+
+  _syncBankButton() {
+    if (!this.bankBtn) return;
+    const usable = !!this.bankAndQuit;
+    this.bankBtn.hidden = !usable;
+    this.bankBtn.disabled = !usable || (this.state !== "playing" && this.state !== "paused");
+  }
+
   // ------------------------------------------------------------ LIFECYCLE --
   start() {
     this.state = "playing";
@@ -535,6 +573,7 @@ export class GameBase {
     // the controls end up over the playfield. Fullscreen is the button next
     // to pause, pressed when the player wants it.
     this._setupTouchControls();
+    this._syncBankButton();
     this.onStart?.(this.difficulty);
     this._lastT = performance.now();
     this._loop();

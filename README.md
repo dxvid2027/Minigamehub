@@ -176,19 +176,32 @@ a 24px minesweeper flag and a 220px memory card at full sharpness. Emoji were
 placeholders that rendered as a different picture on every platform and could
 not be shaded to match the game around them.
 
-**Bastion TD** deserves its own line: seven tower classes — single-target
-Cannon, area-slowing Frost, chaining Arc, anti-air Flak that triples its damage
-against flyers and cannot touch the ground, a Mortar that lobs a wide shell at
-ground targets only, Venom whose poison ignores armour entirely, and a Railgun
-that pierces every enemy on its line — ten upgrade levels each, and eleven
-enemy families. Marchers, sprinters and armoured brutes open; then swarmlings
-that leave two behind when they fall, drones that fly over the road, burrowers
-that dive underground where nothing can target them, menders that heal their
-escort, bulwarks behind a regenerating shield, hexers that shut one of your
-towers down for three seconds, and juggernauts that are both fast and plated.
-A Titan arrives every fifth wave and bursts into brutes; every tenth wave sends
-a Leviathan instead, which is immune to slowing, so a frost wall is not an
-answer on its own. Runs bank Bastion Cores toward permanent upgrades.
+**Bastion TD** deserves its own line: a five-map campaign of twenty waves
+each, saved as you go.
+
+Seven tower classes — single-target Cannon, area-slowing Frost, chaining Arc,
+anti-air Flak that triples its damage against flyers and cannot touch the
+ground, a Mortar that lobs a wide shell at ground targets only, Venom whose
+poison ignores armour entirely, and a Railgun that pierces every enemy on its
+line — ten upgrade levels each.
+
+Thirteen enemy families, introduced map by map: marchers, sprinters and
+armoured brutes open; then swarmlings that leave two behind when they fall,
+drones that fly over the road, burrowers that dive underground where nothing
+can target them, menders that heal their escort, bulwarks behind a
+regenerating shield, blinkers that skip a stretch of road, hexers that shut
+one of your towers down for three seconds, juggernauts that are both fast and
+plated, and warlords whose aura cuts incoming damage for everything near them.
+A Titan arrives every fifth wave and bursts into brutes; the last map closes
+with a Leviathan, which is immune to slowing.
+
+The road is two tiles wide and units hold their own line across it, so a wave
+walks two abreast rather than nose to tail. Each map has its own route,
+palette, scenery and keep — farmland, an ash ravine, a frozen shelf, a flooded
+foundry, and the void at the end of the line. Hold all twenty waves and the
+next map opens; every run banks Bastion Cores toward permanent upgrades, and
+the save-and-quit button in the top bar stops a run while keeping everything
+it earned.
 
 Highlights worth calling out: **Chess** implements full legal-move generation
 including castling, en passant, promotion, check/checkmate/stalemate plus an

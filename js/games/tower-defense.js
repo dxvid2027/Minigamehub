@@ -22,10 +22,14 @@
 import { GameBase } from "./gameBase.js";
 import { audioManager } from "../systems/audioManager.js";
 import { MetaProgress, runReward } from "../systems/metaProgress.js";
-import { clamp, randFloat } from "../core/utils.js";
+import { saveManager } from "../systems/saveManager.js";
+import { clamp, randFloat, el } from "../core/utils.js";
 
-const COLS = 12, ROWS = 7;
+// The grid grew with the road: the track is two tiles wide now, so a 12x7
+// board would have been almost entirely road.
+const COLS = 16, ROWS = 10;
 const MAX_LEVEL = 10;
+const WAVES_PER_LEVEL = 20;
 
 // ------------------------------------------------------------- towers -----
 // `air` says what a tower may shoot at: "both" by default, "air" for a
@@ -33,42 +37,42 @@ const MAX_LEVEL = 10;
 const TOWERS = {
   cannon: {
     name: "Cannon", cost: 45, color: "#ffd76a", accent: "#ff9f43",
-    dmg: 9, range: 2.15, rate: 0.55,
+    dmg: 9, range: 2.85, rate: 0.55,
     desc: "Reliable single-target fire.",
   },
   frost: {
     name: "Frost", cost: 60, color: "#7ce8ff", accent: "#3aa8ff",
-    dmg: 4, range: 2.0, rate: 0.85, slow: 0.5, slowTime: 1.5, splash: 0.85,
+    dmg: 4, range: 2.65, rate: 0.85, slow: 0.5, slowTime: 1.5, splash: 0.85,
     desc: "Chills a small area and slows what it hits.",
   },
   arc: {
     name: "Arc", cost: 80, color: "#c86bff", accent: "#7c5cff",
-    dmg: 7, range: 2.35, rate: 0.8, chains: 2,
+    dmg: 7, range: 3.1, rate: 0.8, chains: 2,
     desc: "Lightning that jumps between enemies.",
   },
   flak: {
     // The answer to a sky full of drones: triple damage in the air, and
     // barely worth building if nothing is flying.
     name: "Flak", cost: 70, color: "#8fe36b", accent: "#3f8f2c",
-    dmg: 8, range: 2.6, rate: 0.7, air: "air", airBonus: 3, splash: 0.7,
+    dmg: 8, range: 3.45, rate: 0.7, air: "air", airBonus: 3, splash: 0.7,
     desc: "Anti-air battery. Triple damage to flyers, useless on the ground.",
   },
   mortar: {
     // Lobs a shell, so it cannot track a flyer, but it lands hard and wide.
     name: "Mortar", cost: 110, color: "#ff8f4a", accent: "#a83610",
-    dmg: 26, range: 3.4, rate: 2.0, air: "ground", splash: 1.35, arcShot: true,
+    dmg: 26, range: 4.5, rate: 2.0, air: "ground", splash: 1.35, arcShot: true,
     desc: "Lobbed shell with a wide blast. Ground targets only.",
   },
   venom: {
     // Poison ignores armour, which is what makes brutes and juggernauts
     // solvable without stacking raw damage.
     name: "Venom", cost: 95, color: "#a8e02c", accent: "#4f7a10",
-    dmg: 3, range: 2.2, rate: 1.0, poison: 7, poisonTime: 4,
+    dmg: 3, range: 2.9, rate: 1.0, poison: 7, poisonTime: 4,
     desc: "Poison that ignores armour and stacks over time.",
   },
   railgun: {
     name: "Railgun", cost: 165, color: "#ff4fd8", accent: "#7c1a68",
-    dmg: 34, range: 4.6, rate: 1.9, pierce: true, locked: true,
+    dmg: 34, range: 6.1, rate: 1.9, pierce: true, locked: true,
     desc: "Pierces every enemy on the line. Unlocked with Cores.",
   },
 };
@@ -107,7 +111,7 @@ const ENEMIES = {
   },
   mender: {
     name: "Mender", color: "#2ee6a6", dark: "#0d5c44",
-    hp: 34, speed: 46, armour: 1, gold: 18, score: 34, r: 0.26, heal: 9, healRange: 2.2,
+    hp: 34, speed: 46, armour: 1, gold: 18, score: 34, r: 0.26, heal: 9, healRange: 2.9,
   },
   bulwark: {
     name: "Bulwark", color: "#c86bff", dark: "#43206b",
@@ -132,11 +136,25 @@ const ENEMIES = {
     // silenced tower matters far less when two others overlap it.
     name: "Hexer", color: "#d24bff", dark: "#4b1268",
     hp: 40, speed: 50, armour: 1, gold: 24, score: 44, r: 0.26,
-    hexEvery: 5.5, hexTime: 3.2, hexRange: 3.0,
+    hexEvery: 5.5, hexTime: 3.2, hexRange: 4.0,
   },
   juggernaut: {
     name: "Juggernaut", color: "#ff5470", dark: "#5e0f22",
     hp: 130, speed: 62, armour: 7, gold: 30, score: 62, r: 0.34,
+  },
+  blinker: {
+    // Jumps a chunk of road every few seconds, so a single choke point can be
+    // skipped entirely and the defence has to be spread along the route.
+    name: "Blinker", color: "#4be0ff", dark: "#0d4a63",
+    hp: 44, speed: 48, armour: 1, gold: 22, score: 42, r: 0.24,
+    blinkEvery: 4.2, blinkDist: 2.4,
+  },
+  warlord: {
+    // Hands out damage reduction to everything around it. Kill it first or
+    // watch the whole escort shrug off your towers.
+    name: "Warlord", color: "#ffb347", dark: "#7a4a05",
+    hp: 96, speed: 40, armour: 3, gold: 34, score: 70, r: 0.32,
+    auraRange: 3.4, auraCut: 0.4,
   },
   titan: {
     name: "Titan", color: "#ff9f43", dark: "#7a3a05",
@@ -151,22 +169,40 @@ const ENEMIES = {
   },
 };
 
-/** Which families a wave may draw from, and how many of each. */
-function waveComposition(wave) {
+/**
+ * Which families a wave may draw from, and how many of each.
+ *
+ * A level only ever fields what its roster allows, and inside a level the mix
+ * opens up as the twenty waves go by — so wave 1 of a late level is still a
+ * readable fight rather than everything at once.
+ * @param {number} wave 1..20 within the level
+ * @param {Object} level the LEVELS entry being played
+ */
+function waveComposition(wave, level) {
   const pool = [];
-  const add = (type, n) => { for (let i = 0; i < n; i++) pool.push(type); };
+  const has = (t) => level.roster.includes(t);
+  const add = (type, n) => { if (has(type)) for (let i = 0; i < Math.max(0, n); i++) pool.push(type); };
+
   add("marcher", 4 + Math.floor(wave * 1.05));
-  if (wave >= 3) add("sprinter", 2 + Math.floor(wave * 0.6));
-  if (wave >= 4) add("swarm", 3 + Math.floor((wave - 3) * 0.8));
-  if (wave >= 5) add("brute", 1 + Math.floor((wave - 4) * 0.5));
-  if (wave >= 7) add("drone", 1 + Math.floor((wave - 6) * 0.45));
-  if (wave >= 8) add("burrower", 1 + Math.floor((wave - 7) * 0.3));
-  if (wave >= 9) add("mender", 1 + Math.floor((wave - 8) * 0.26));
-  if (wave >= 11) add("bulwark", 1 + Math.floor((wave - 10) * 0.32));
-  if (wave >= 12) add("hexer", 1 + Math.floor((wave - 11) * 0.24));
-  if (wave >= 14) add("juggernaut", 1 + Math.floor((wave - 13) * 0.3));
-  if (wave % 10 === 0) add("leviathan", Math.max(1, Math.floor(wave / 20)));
-  else if (wave % 5 === 0) add("titan", Math.max(1, Math.floor(wave / 8)));
+  if (wave >= 2) add("sprinter", 2 + Math.floor(wave * 0.6));
+  if (wave >= 3) add("swarm", 3 + Math.floor((wave - 2) * 0.8));
+  if (wave >= 4) add("brute", 1 + Math.floor((wave - 3) * 0.5));
+  if (wave >= 5) add("drone", 1 + Math.floor((wave - 4) * 0.45));
+  if (wave >= 6) add("burrower", 1 + Math.floor((wave - 5) * 0.3));
+  if (wave >= 7) add("mender", 1 + Math.floor((wave - 6) * 0.26));
+  if (wave >= 8) add("bulwark", 1 + Math.floor((wave - 7) * 0.32));
+  if (wave >= 9) add("blinker", 1 + Math.floor((wave - 8) * 0.28));
+  if (wave >= 10) add("hexer", 1 + Math.floor((wave - 9) * 0.24));
+  if (wave >= 11) add("juggernaut", 1 + Math.floor((wave - 10) * 0.3));
+  if (wave >= 13) add("warlord", 1 + Math.floor((wave - 12) * 0.2));
+
+  // Bosses on the fives, and the level's own boss closes it out on wave 20.
+  if (wave === WAVES_PER_LEVEL) {
+    for (let i = 0; i < 1 + Math.floor(wave / 14); i++) pool.push(level.boss);
+  } else if (wave % 5 === 0) {
+    pool.push("titan");
+    if (wave >= 15) pool.push("titan");
+  }
   return pool;
 }
 
@@ -193,38 +229,200 @@ const META = new MetaProgress("tower-defense", {
   ],
 });
 
-function buildPath() {
-  const path = [];
-  for (let x = 0; x <= 10; x++) path.push({ x, y: 1 });
-  for (let y = 2; y <= 3; y++) path.push({ x: 10, y });
-  for (let x = 10; x >= 1; x--) path.push({ x, y: 3 });
-  for (let y = 4; y <= 5; y++) path.push({ x: 1, y });
-  for (let x = 1; x <= 11; x++) path.push({ x, y: 5 });
-  return path;
+// ------------------------------------------------------------- levels -----
+// Each level is its own map: a different route, a different palette, its own
+// decor and its own keep at the end of the road. The roster is cumulative —
+// every level keeps what came before and adds something new to deal with.
+//
+// A route is drawn as single tiles; buildRoad() widens it to two so that two
+// enemies walk abreast, which is why route coordinates stop one short of the
+// board edge on both axes.
+const LEVELS = [
+  {
+    name: "Greenfield Pass",
+    blurb: "Open farmland. A long lane, a single hairpin, and room to build.",
+    theme: {
+      tileA: "#1e3b2c", tileB: "#23452f", edge: "#2f5a3c",
+      road: "#4b4033", roadEdge: "#6d5c44", decor: "tree", decorColor: "#2f6b3f",
+      keep: "#6fbf87", banner: "#2ee6a6", scene: "aurora",
+    },
+    roster: ["marcher", "sprinter", "swarm", "brute"],
+    boss: "titan",
+    route: [
+      [0, 1], [1, 1], [2, 1], [3, 1], [4, 1], [5, 1], [6, 1], [7, 1], [8, 1],
+      [9, 1], [10, 1], [11, 1], [12, 1],
+      [12, 2], [12, 3], [12, 4],
+      [11, 4], [10, 4], [9, 4], [8, 4], [7, 4], [6, 4], [5, 4], [4, 4], [3, 4], [2, 4],
+      [2, 5], [2, 6], [2, 7],
+      [3, 7], [4, 7], [5, 7], [6, 7], [7, 7], [8, 7], [9, 7], [10, 7], [11, 7], [12, 7], [13, 7], [14, 7],
+    ],
+  },
+  {
+    name: "Ashen Ravine",
+    blurb: "Scorched rock. The road doubles back twice through a narrow gorge.",
+    theme: {
+      tileA: "#291c16", tileB: "#30221a", edge: "#553529",
+      road: "#6d5546", roadEdge: "#d09164", decor: "rock", decorColor: "#5a3c30",
+      keep: "#ff9f43", banner: "#ffd76a", scene: "grid",
+    },
+    roster: ["marcher", "sprinter", "swarm", "brute", "drone", "burrower"],
+    boss: "titan",
+    route: [
+      [0, 7], [1, 7], [2, 7], [3, 7], [4, 7],
+      [4, 6], [4, 5], [4, 4], [4, 3], [4, 2], [4, 1],
+      [5, 1], [6, 1], [7, 1], [8, 1],
+      [8, 2], [8, 3], [8, 4], [8, 5], [8, 6], [8, 7],
+      [9, 7], [10, 7], [11, 7],
+      [11, 6], [11, 5], [11, 4], [11, 3], [11, 2], [11, 1],
+      [12, 1], [13, 1], [14, 1],
+    ],
+  },
+  {
+    name: "Frostmere Shelf",
+    blurb: "A frozen shelf. Wide sweeping curves and very little cover.",
+    theme: {
+      tileA: "#152337", tileB: "#1a2b42", edge: "#2c4a6b",
+      road: "#5d7794", roadEdge: "#bfe2fb", decor: "crystal", decorColor: "#6fd3f2",
+      keep: "#7ce8ff", banner: "#22d3ee", scene: "stars",
+    },
+    roster: ["marcher", "sprinter", "swarm", "brute", "drone", "burrower", "mender", "bulwark"],
+    boss: "titan",
+    route: [
+      [0, 4], [1, 4], [2, 4],
+      [2, 3], [2, 2], [2, 1],
+      [3, 1], [4, 1], [5, 1], [6, 1],
+      [6, 2], [6, 3], [6, 4], [6, 5], [6, 6], [6, 7],
+      [7, 7], [8, 7], [9, 7], [10, 7],
+      [10, 6], [10, 5], [10, 4], [10, 3], [10, 2], [10, 1],
+      [11, 1], [12, 1], [13, 1], [14, 1],
+      [14, 2], [14, 3], [14, 4],
+    ],
+  },
+  {
+    name: "Sunken Works",
+    blurb: "A flooded foundry. Short zigzags, tight corners, constant pressure.",
+    theme: {
+      tileA: "#161b33", tileB: "#1c223e", edge: "#38406b",
+      road: "#4e5478", roadEdge: "#9b86ff", decor: "pipe", decorColor: "#4a3f6e",
+      keep: "#c86bff", banner: "#7c5cff", scene: "grid",
+    },
+    roster: ["marcher", "sprinter", "swarm", "brute", "drone", "burrower", "mender", "bulwark", "hexer", "juggernaut"],
+    boss: "titan",
+    route: [
+      [0, 1], [1, 1], [2, 1], [3, 1],
+      [3, 2], [3, 3], [3, 4],
+      [4, 4], [5, 4], [6, 4],
+      [6, 5], [6, 6], [6, 7],
+      [7, 7], [8, 7], [9, 7],
+      [9, 6], [9, 5], [9, 4],
+      [10, 4], [11, 4], [12, 4],
+      [12, 3], [12, 2], [12, 1],
+      [13, 1], [14, 1],
+    ],
+  },
+  {
+    name: "Void Terminus",
+    blurb: "The end of the line. The longest road, and everything walks it.",
+    theme: {
+      tileA: "#1c1428", tileB: "#221831", edge: "#472f63",
+      road: "#523a6b", roadEdge: "#ff7ce4", decor: "shard", decorColor: "#a8329e",
+      keep: "#ff4fd8", banner: "#ff2f6d", scene: "stars",
+    },
+    roster: ["marcher", "sprinter", "swarm", "brute", "drone", "burrower", "mender",
+             "bulwark", "hexer", "juggernaut", "blinker", "warlord"],
+    boss: "leviathan",
+    route: [
+      [0, 1], [1, 1], [2, 1], [3, 1], [4, 1], [5, 1], [6, 1],
+      [6, 2], [6, 3], [6, 4],
+      [5, 4], [4, 4], [3, 4], [2, 4],
+      [2, 5], [2, 6], [2, 7],
+      [3, 7], [4, 7], [5, 7], [6, 7], [7, 7], [8, 7], [9, 7],
+      [9, 6], [9, 5], [9, 4],
+      [10, 4], [11, 4], [12, 4],
+      [12, 3], [12, 2], [12, 1],
+      [13, 1], [14, 1],
+    ],
+  },
+];
+
+/**
+ * Widens a one-tile route into a two-tile road.
+ *
+ * Every route tile contributes a 2x2 block, which makes the track two wide on
+ * straights and keeps the corners square instead of pinching to a single tile.
+ * Movement then runs down the join between the four tiles, so the centreline
+ * of a route point (x, y) is the grid corner at (x + 1, y + 1).
+ */
+function buildRoad(route) {
+  const set = new Set();
+  for (const [x, y] of route) {
+    set.add(`${x},${y}`);
+    set.add(`${x + 1},${y}`);
+    set.add(`${x},${y + 1}`);
+    set.add(`${x + 1},${y + 1}`);
+  }
+  return set;
 }
 
 export class TowerDefenseGame extends GameBase {
   getDifficulties() { return ["Easy", "Normal", "Hard"]; }
   getUpgrades() { return META; }
+
+  /** Level picker on the start screen: cleared maps stay replayable. */
+  getStartExtras() {
+    const c = this._campaign();
+    const open = this._unlockedLevels();
+    const row = el("div", { class: "level-row" });
+    LEVELS.forEach((lv, i) => {
+      const unlocked = i < open;
+      const best = c.best[String(i)] || 0;
+      const btn = el("button", {
+        class: `level-chip${i === this.levelIdx ? " active" : ""}${unlocked ? "" : " locked"}`,
+        disabled: !unlocked,
+        title: unlocked ? lv.blurb : "Clear the level before this one to open it.",
+        onClick: () => {
+          if (!unlocked) return;
+          this._loadLevel(i);
+          this._saveCampaign({ level: i });
+          audioManager.play("select");
+          [...row.children].forEach(n => n.classList.remove("active"));
+          btn.classList.add("active");
+          note.textContent = `${this.level.name} \u2014 ${this.level.blurb}`;
+        },
+      }, [
+        el("b", {}, `${i + 1}`),
+        el("span", {}, unlocked ? lv.name : "Locked"),
+        el("i", {}, unlocked ? (best >= WAVES_PER_LEVEL ? "cleared" : best ? `best wave ${best}` : "new") : ""),
+      ]);
+      row.appendChild(btn);
+    });
+    const note = el("p", { class: "level-note" }, `${this.level.name} \u2014 ${this.level.blurb}`);
+    return el("div", { class: "level-picker" }, [
+      el("h4", {}, `Campaign \u00b7 ${WAVES_PER_LEVEL} waves per map`),
+      row,
+      note,
+    ]);
+  }
   getInstructions() {
     return [
       "Pick a tower from the bar at the bottom, then tap an empty tile to build it. Tap a tower you own to upgrade it — every tower goes up to level 10.",
       "Seven classes: Cannon is reliable single-target, Frost slows an area, Arc chains lightning, Flak triples its damage against flyers but cannot hit the ground, Mortar lobs a wide shell at ground targets only, Venom poisons through armour, and the Railgun pierces everything on its line.",
-      "Eleven enemy families march the road. Swarmlings split when they die, burrowers dive underground where nothing can target them, hexers shut one of your towers down for a few seconds, and juggernauts are fast and heavily plated.",
-      "A Titan comes every fifth wave and splits into brutes. Every tenth wave brings a Leviathan instead — it is immune to slowing, so frost alone will not stop it.",
-      "A run banks Bastion Cores based on how deep you got. Spend them on permanent upgrades from the start screen before the next attempt.",
+      "Thirteen enemy families, and each map brings more of them. Swarmlings split when they die, burrowers dive underground where nothing can target them, blinkers skip a stretch of road, hexers shut one of your towers down for a few seconds, juggernauts are fast and heavily plated, and a warlord's aura cuts the damage everything near it takes.",
+      "The road is two tiles wide, so a wave walks two abreast. A Titan comes every fifth wave and splits into brutes; the last map closes with a Leviathan, which is immune to slowing — frost alone will not stop it.",
+      "Every map is twenty waves. Hold all twenty and the next map opens — five in all, each with its own road, its own look and more enemy families than the last.",
+      "A run banks Bastion Cores based on how deep you got. Spend them on permanent upgrades from the start screen. The 💾 button in the top bar stops a run and keeps everything it earned.",
     ];
   }
   getTouchLayout() { return "none"; }
   getTouchHint() { return "Tap a tower type in the bar, then tap a tile. Tap an existing tower to upgrade it."; }
   getKeyboardHint() { return "Click a tower type, then click a tile. Click a tower to upgrade it. Keys 1-7 switch type."; }
 
-  getScene() { return "grid"; }
+  getScene() { return this.level?.theme.scene || "grid"; }
 
   onInit() {
     this.createCanvas();
-    this.path = buildPath();
-    this.pathSet = new Set(this.path.map(p => `${p.x},${p.y}`));
+    this.levelIdx = clamp(this._campaign().level, 0, LEVELS.length - 1);
+    this._loadLevel(this.levelIdx);
     this.selected = "cannon";
     this.input.onPointer("down", (p) => this._onClick(p.x, p.y));
     this.input.onPointer("move", (p) => { this.hover = this._gridFromPx(p.x, p.y); });
@@ -235,6 +433,56 @@ export class TowerDefenseGame extends GameBase {
 
   _unlocked(key) { return !TOWERS[key].locked || META.level("rail") > 0; }
 
+  // ---------------------------------------------------------- CAMPAIGN ----
+  /** Persisted campaign progress: which level is current, and how far each got. */
+  _campaign() {
+    const custom = saveManager.ensureGame(this.id).custom;
+    if (!custom.campaign) custom.campaign = { level: 0, cleared: 0, best: {} };
+    const c = custom.campaign;
+    if (typeof c.level !== "number") c.level = 0;
+    if (typeof c.cleared !== "number") c.cleared = 0;   // levels fully finished
+    if (!c.best) c.best = {};                            // levelIdx -> best wave
+    return c;
+  }
+
+  _saveCampaign(patch) {
+    Object.assign(this._campaign(), patch);
+    // saveNow, not save: the debounced write loses campaign progress if the
+    // tab closes in the quarter second after a level is cleared.
+    saveManager.saveNow();
+  }
+
+  /** A level is playable once the one before it has been cleared. */
+  _unlockedLevels() { return Math.min(LEVELS.length, this._campaign().cleared + 1); }
+
+  _loadLevel(idx) {
+    this.levelIdx = clamp(idx, 0, LEVELS.length - 1);
+    this.level = LEVELS[this.levelIdx];
+    this.route = this.level.route;
+    this.roadSet = buildRoad(this.route);
+    // The old code called this pathSet; keep the name so the build check and
+    // the bots that poke at it keep working.
+    this.pathSet = this.roadSet;
+    // Movement runs down the join between the four tiles a route point covers.
+    this.path = this.route.map(([x, y]) => ({ x, y }));
+    this._decor = this._makeDecor();
+  }
+
+  /** Scatter of level-flavoured props on the empty tiles, seeded per level. */
+  _makeDecor() {
+    const props = [];
+    let seed = 1337 + this.levelIdx * 7919;
+    const rnd = () => { seed = (seed * 1103515245 + 12345) & 0x7fffffff; return seed / 0x7fffffff; };
+    for (let y = 0; y < ROWS; y++) {
+      for (let x = 0; x < COLS; x++) {
+        if (this.roadSet.has(`${x},${y}`)) continue;
+        if (rnd() > 0.14) continue;
+        props.push({ x, y, ox: rnd() * 0.5 - 0.25, oy: rnd() * 0.5 - 0.25, s: 0.7 + rnd() * 0.6, r: rnd() * 6.3 });
+      }
+    }
+    return props;
+  }
+
   /** Build price after the Field Engineers discount. */
   _cost(key) { return Math.round(TOWERS[key].cost * this.costMul); }
 
@@ -243,8 +491,10 @@ export class TowerDefenseGame extends GameBase {
   /** Grid on top, tower palette in a strip along the bottom. */
   _layout() {
     // Two rows of tower buttons need roughly double the strip.
-    const twoRows = (this.viewW - 30) / TOWER_KEYS.length - 8 < 96;
-    this.barH = twoRows ? clamp(this.viewH * 0.24, 92, 140) : clamp(this.viewH * 0.14, 54, 86);
+    const twoRows = (this.viewW - 24) / TOWER_KEYS.length - 10 < 104;
+    // The floor has to stay small: on a phone a 104px minimum ate half the
+    // stage and squeezed the board down to 11px cells.
+    this.barH = twoRows ? clamp(this.viewH * 0.26, 72, 152) : clamp(this.viewH * 0.15, 52, 88);
     const gridH = this.viewH - this.barH;
     this.cell = Math.floor(Math.min(this.viewW / COLS, gridH / ROWS));
     this.offX = Math.round((this.viewW - this.cell * COLS) / 2);
@@ -254,9 +504,12 @@ export class TowerDefenseGame extends GameBase {
   onStart(difficulty) {
     this._layout();
     const cfg = {
-      Easy:   { hpMul: 0.85, speedMul: 0.92, gold: 190, lives: 16, reward: 1.15, core: 0.85 },
-      Normal: { hpMul: 1.12, speedMul: 1.02, gold: 150, lives: 12, reward: 0.98, core: 1.0 },
-      Hard:   { hpMul: 1.55, speedMul: 1.16, gold: 115, lives: 8,  reward: 0.86, core: 1.4 },
+      // The campaign ramp does the escalating now — level 5 arrives at 3.2x
+      // enemy HP before the per-wave curve — so the opening map is an
+      // opening, not a wall.
+      Easy:   { hpMul: 0.80, speedMul: 0.92, gold: 210, lives: 18, reward: 1.15, core: 0.85 },
+      Normal: { hpMul: 1.00, speedMul: 1.02, gold: 170, lives: 14, reward: 0.98, core: 1.0 },
+      Hard:   { hpMul: 1.28, speedMul: 1.14, gold: 140, lives: 10, reward: 0.88, core: 1.4 },
     }[difficulty] || {};
     this.cfg = cfg;
 
@@ -274,6 +527,7 @@ export class TowerDefenseGame extends GameBase {
     this.bullets = [];
     this.arcs = [];
     this.hexes = [];
+    this.blinks = [];
     this.floaters = [];
     this.kills = 0;
     this.waveTimer = 4;
@@ -288,7 +542,9 @@ export class TowerDefenseGame extends GameBase {
     this.setHud({
       Gold: Math.floor(this.gold),
       Lives: this.baseHP,
-      Wave: this.betweenWaves ? `${this.wave + 1} in ${Math.max(0, Math.ceil(this.waveTimer))}s` : this.wave,
+      Wave: this.betweenWaves
+        ? `L${this.levelIdx + 1} \u00b7 ${Math.min(WAVES_PER_LEVEL, this.wave + 1)}/${WAVES_PER_LEVEL} in ${Math.max(0, Math.ceil(this.waveTimer))}s`
+        : `L${this.levelIdx + 1} \u00b7 ${this.wave}/${WAVES_PER_LEVEL}`,
       Score: this.score,
     });
   }
@@ -300,6 +556,16 @@ export class TowerDefenseGame extends GameBase {
 
   _toPx(gx, gy) {
     return { x: this.offX + gx * this.cell + this.cell / 2, y: this.offY + gy * this.cell + this.cell / 2 };
+  }
+
+  /**
+   * Centre of the two-wide road at route point i — the grid corner shared by
+   * the four tiles that point contributes, which is why it is offset a whole
+   * cell rather than half of one.
+   */
+  _routePx(i) {
+    const p = this.path[clamp(i, 0, this.path.length - 1)];
+    return { x: this.offX + (p.x + 1) * this.cell, y: this.offY + (p.y + 1) * this.cell };
   }
 
   _onClick(px, py) {
@@ -356,19 +622,25 @@ export class TowerDefenseGame extends GameBase {
   }
 
   /**
-   * Seven classes will not fit across a phone in one strip — at 360px each
-   * slot would be 35px wide — so the bar wraps to two rows whenever a single
-   * row would squeeze a slot below a readable width.
+   * Layout for seven tower buttons that does not look crushed.
+   *
+   * A single strip of seven only works on a genuinely wide stage. Below that
+   * the bar wraps to two rows of four and three, and the slots are laid out
+   * from a comfortable target width rather than by dividing whatever space is
+   * left — so they stay the same readable size and the row is centred with
+   * real margins instead of seven slivers edge to edge.
    */
   _paletteMetrics() {
     const n = TOWER_KEYS.length;
-    const gap = 8;
-    const oneRowW = (this.viewW - 30) / n - gap;
-    const rows = oneRowW < 96 ? 2 : 1;
+    const gap = 10;
+    const avail = this.viewW - 24;
+    const IDEAL = 132, MIN = 104;             // comfortable / smallest useful
+    const rows = avail / n - gap >= MIN ? 1 : 2;
     const perRow = Math.ceil(n / rows);
-    const h = (this.barH - 10 - (rows - 1) * 6) / rows;
-    const w = Math.min(150, (this.viewW - 30) / perRow - gap);
-    return { w, gap, y0: this.viewH - this.barH + 5, h, rows, perRow, rowGap: 6 };
+    const rowGap = 8;
+    const h = (this.barH - 12 - (rows - 1) * rowGap) / rows;
+    const w = clamp(avail / perRow - gap, 62, IDEAL);
+    return { w, gap, y0: this.viewH - this.barH + 6, h, rows, perRow, rowGap };
   }
 
   /** Top-left corner of palette slot i. */
@@ -389,11 +661,14 @@ export class TowerDefenseGame extends GameBase {
   // ------------------------------------------------------------- WAVES ----
   _spawnWave() {
     this.wave += 1;
-    const pool = waveComposition(this.wave);
+    const pool = waveComposition(this.wave, this.level);
     // Steeper than before: the meta upgrades are what keep this beatable, so
     // a run without them should stall well before wave 15.
-    const hpMul = this.cfg.hpMul * (1 + this.wave * 0.28);
-    const speedMul = this.cfg.speedMul * (1 + Math.min(0.55, this.wave * 0.015));
+    // Each level starts harder than the last one did, on top of the ramp
+    // inside the level's own twenty waves.
+    const levelMul = 1 + this.levelIdx * 0.55;
+    const hpMul = this.cfg.hpMul * levelMul * (1 + this.wave * 0.28);
+    const speedMul = this.cfg.speedMul * (1 + this.levelIdx * 0.03) * (1 + Math.min(0.55, this.wave * 0.015));
     let delay = 0;
     for (const type of pool) {
       const spec = ENEMIES[type];
@@ -429,14 +704,21 @@ export class TowerDefenseGame extends GameBase {
       burrowed: 0,
       hexCd: randFloat(1.5, spec.hexEvery || 5),
       poison: 0, poisonT: 0,
+      // -1 .. 1 across the width of the road. Units alternate between the two
+      // lanes rather than picking at random, which is what actually produces
+      // pairs walking abreast instead of a loose smear down the middle.
+      // Bosses take the centre because they are wider than one lane.
+      lane: 0,
+      laneTarget: spec.boss ? 0 : (this._laneFlip = !this._laneFlip) ? randFloat(0.5, 0.9) : randFloat(-0.9, -0.5),
+      blinkCd: randFloat(1.5, spec.blinkEvery || 4),
       sterile,
       x: -200, y: -200,
     };
     if (at) { e.pathIdx = at.pathIdx; e.t = at.t; e.x = at.x; e.y = at.y; }
     if (spec.flying) {
       // Drones cut the corner: they fly from the road's start to the base.
-      const a = this._toPx(this.path[0].x, this.path[0].y);
-      const b = this._toPx(this.path[this.path.length - 1].x, this.path[this.path.length - 1].y);
+      const a = this._routePx(0);
+      const b = this._routePx(this.path.length - 1);
       e.from = a; e.to = b; e.fly = 0;
       e.x = a.x; e.y = a.y;
     }
@@ -465,6 +747,10 @@ export class TowerDefenseGame extends GameBase {
       this.hexes[i].t += dt;
       if (this.hexes[i].t > 0.45) this.hexes.splice(i, 1);
     }
+    for (let i = this.blinks.length - 1; i >= 0; i--) {
+      this.blinks[i].t += dt;
+      if (this.blinks[i].t > 0.3) this.blinks.splice(i, 1);
+    }
     for (let i = this.floaters.length - 1; i >= 0; i--) {
       this.floaters[i].t += dt;
       if (this.floaters[i].t >= this.floaters[i].life) this.floaters.splice(i, 1);
@@ -478,6 +764,8 @@ export class TowerDefenseGame extends GameBase {
 
     if (this.baseHP <= 0) return this._gameOver();
     if (!this.betweenWaves && this.enemies.length === 0) {
+      // Twenty waves is the level. Surviving them is a win, not a stalemate.
+      if (this.wave >= WAVES_PER_LEVEL) return this._levelCleared();
       this.betweenWaves = true;
       // Waves come faster the deeper you get, but never without a breather.
       this.waveTimer = Math.max(1.8, 5.5 - this.wave * 0.17);
@@ -506,15 +794,21 @@ export class TowerDefenseGame extends GameBase {
         continue;
       }
 
-      const cur = this.path[e.pathIdx];
       const nextIdx = Math.min(e.pathIdx + 1, this.path.length - 1);
-      const next = this.path[nextIdx];
-      const a = this._toPx(cur.x, cur.y), b = this._toPx(next.x, next.y);
+      const a = this._routePx(e.pathIdx), b = this._routePx(nextIdx);
       e.t += (speed * dt) / this.cell;
       if (e.t >= 1) { e.t -= 1; e.pathIdx = nextIdx; }
-      e.x = a.x + (b.x - a.x) * e.t;
-      e.y = a.y + (b.y - a.y) * e.t;
+      const cx = a.x + (b.x - a.x) * e.t;
+      const cy = a.y + (b.y - a.y) * e.t;
       e.facing = Math.atan2(b.y - a.y, b.x - a.x);
+      // The road is two tiles wide, so each unit holds its own line across it
+      // and two of them walk abreast instead of nose to tail. The offset is
+      // eased toward its target so a corner does not snap them sideways.
+      const nx = -Math.sin(e.facing), ny = Math.cos(e.facing);
+      e.lane += (e.laneTarget - e.lane) * Math.min(1, dt * 5);
+      const off = e.lane * this.cell * 0.42;
+      e.x = cx + nx * off;
+      e.y = cy + ny * off;
       if (e.pathIdx >= this.path.length - 1 && e.t > 0.85) e.reached = true;
     }
 
@@ -564,6 +858,22 @@ export class TowerDefenseGame extends GameBase {
         }
       }
 
+      // Blinkers skip a stretch of road, which is why one choke point is not
+      // a defence on its own.
+      if (e.spec.blinkEvery) {
+        e.blinkCd -= dt;
+        if (e.blinkCd <= 0) {
+          e.blinkCd = e.spec.blinkEvery;
+          const before = { x: e.x, y: e.y };
+          e.pathIdx = Math.min(this.path.length - 1, e.pathIdx + Math.floor(e.spec.blinkDist));
+          e.t = Math.min(0.99, e.t + (e.spec.blinkDist % 1));
+          const p = this._routePx(e.pathIdx);
+          e.x = p.x; e.y = p.y;
+          this.blinks.push({ x1: before.x, y1: before.y, x2: e.x, y2: e.y, t: 0 });
+          this.particles.burst(before.x, before.y, { count: 8, colors: [e.spec.color, "#ffffff"], speed: 130, life: 0.35, size: 2.5 });
+        }
+      }
+
       // Hexers silence a tower for a few seconds. They pick the highest-level
       // tower in range, so the answer is coverage rather than one big gun.
       if (e.spec.hexEvery) {
@@ -606,6 +916,19 @@ export class TowerDefenseGame extends GameBase {
       }
     }
     for (const e of this.enemies) if (e.pulse > 0) e.pulse -= dt;
+
+    // Warlord aura, resolved once per frame: everything near a living warlord
+    // takes reduced damage until the warlord itself is dealt with.
+    for (const e of this.enemies) e.guarded = 0;
+    for (const w of this.enemies) {
+      if (!w.spec.auraRange || w.spawnDelay > 0 || w.dead) continue;
+      const r = w.spec.auraRange * this.cell;
+      for (const e of this.enemies) {
+        if (e.spawnDelay > 0) continue;
+        if (Math.hypot(e.x - w.x, e.y - w.y) > r) continue;
+        e.guarded = Math.max(e.guarded, w.spec.auraCut);
+      }
+    }
   }
 
   /** Can this tower shoot this enemy at all? */
@@ -780,6 +1103,7 @@ export class TowerDefenseGame extends GameBase {
   _damage(e, amount, { pierceArmour = false } = {}) {
     if (e.dead) return;
     e.hitFlash = 0.12;
+    if (e.guarded) amount *= 1 - e.guarded;
     if (e.shield > 0) {
       const absorbed = Math.min(e.shield, amount);
       e.shield -= absorbed;
@@ -821,15 +1145,74 @@ export class TowerDefenseGame extends GameBase {
     }
   }
 
+  /** Cores earned so far, which every ending pays out. */
+  _coresEarned() {
+    // Depth counts across the campaign: a wave on level 4 is worth far more
+    // than the same wave number on level 1.
+    const depth = this.levelIdx * WAVES_PER_LEVEL + this.wave;
+    return Math.round(runReward({ wave: depth, kills: this.kills }) * this.cfg.core * (1 + META.value("yield")));
+  }
+
+  _recordBest() {
+    const c = this._campaign();
+    const key = String(this.levelIdx);
+    if ((c.best[key] || 0) < this.wave) c.best[key] = this.wave;
+    saveManager.saveNow();
+  }
+
+  /** All twenty waves held: bank, unlock the next map, and offer it. */
+  _levelCleared() {
+    audioManager.play("win");
+    const cores = this._coresEarned();
+    META.award(cores);
+    this._recordBest();
+    const c = this._campaign();
+    const wasLast = this.levelIdx >= LEVELS.length - 1;
+    if (c.cleared < this.levelIdx + 1) c.cleared = this.levelIdx + 1;
+    // Move the campaign pointer on, so the next Start lands on the new map.
+    c.level = Math.min(LEVELS.length - 1, this.levelIdx + (wasLast ? 0 : 1));
+    saveManager.saveNow();
+
+    this.endGame({
+      result: "win", score: this.score,
+      message: wasLast
+        ? `${this.level.name} held to the last wave. That is the whole campaign — every map cleared. Banked ${cores} Bastion Cores.`
+        : `${this.level.name} held for all ${WAVES_PER_LEVEL} waves. ${LEVELS[this.levelIdx + 1].name} is open. Banked ${cores} Bastion Cores.`,
+      extraStats: [
+        { label: "Level", value: `${this.levelIdx + 1}/${LEVELS.length}` },
+        { label: "Kills", value: this.kills },
+        { label: "Cores", value: `\u{1F537} ${cores}` },
+      ],
+    });
+  }
+
+  /** The HUD's save & quit: identical settlement, just chosen rather than forced. */
+  bankAndQuit() {
+    const cores = this._coresEarned();
+    META.award(cores);
+    this._recordBest();
+    audioManager.play("coin");
+    this.endGame({
+      result: "score", score: this.score,
+      message: `Stopped on wave ${this.wave} of ${this.level.name}. Banked ${cores} Bastion Cores \u2014 the run counts exactly as if it had ended on its own.`,
+      extraStats: [
+        { label: "Level", value: `${this.levelIdx + 1}/${LEVELS.length}` },
+        { label: "Wave", value: `${this.wave}/${WAVES_PER_LEVEL}` },
+        { label: "Cores", value: `\u{1F537} ${cores}` },
+      ],
+    });
+  }
+
   _gameOver() {
     audioManager.play("gameover");
-    const cores = Math.round(runReward({ wave: this.wave, kills: this.kills }) * this.cfg.core * (1 + META.value("yield")));
+    const cores = this._coresEarned();
     META.award(cores);
+    this._recordBest();
     this.endGame({
       result: "loss", score: this.score,
-      message: `The base fell on wave ${this.wave} after ${this.kills} kills. Banked ${cores} Bastion Cores \u2014 spend them before the next defence.`,
+      message: `The base fell on wave ${this.wave} of ${this.level.name} after ${this.kills} kills. Banked ${cores} Bastion Cores \u2014 spend them before the next attempt.`,
       extraStats: [
-        { label: "Wave", value: this.wave },
+        { label: "Wave", value: `${this.wave}/${WAVES_PER_LEVEL}` },
         { label: "Kills", value: this.kills },
         { label: "Cores", value: `\u{1F537} ${cores}` },
       ],
@@ -850,6 +1233,7 @@ export class TowerDefenseGame extends GameBase {
     for (const e of this.enemies) this._drawEnemy(ctx, e);
     for (const a of this.arcs) this._drawArc(ctx, a);
     for (const hx of this.hexes) this._drawHex(ctx, hx);
+    for (const bl of this.blinks) this._drawBlink(ctx, bl);
     for (const b of this.bullets) this._drawBullet(ctx, b);
     this.particles.render(ctx);
     for (const f of this.floaters) this._drawFloater(ctx, f);
@@ -864,10 +1248,11 @@ export class TowerDefenseGame extends GameBase {
 
   _drawGround(ctx) {
     const c = this.cell;
+    const th = this.level.theme;
     for (let y = 0; y < ROWS; y++) for (let x = 0; x < COLS; x++) {
-      if (this.pathSet.has(`${x},${y}`)) continue;
+      if (this.roadSet.has(`${x},${y}`)) continue;
       const px = this.offX + x * c, py = this.offY + y * c;
-      const shade = (x + y) % 2 === 0 ? "#1b2440" : "#182036";
+      const shade = (x + y) % 2 === 0 ? th.tileA : th.tileB;
       ctx.fillStyle = shade;
       ctx.fillRect(px, py, c - 1, c - 1);
       // Bevel: lit top-left, shadowed bottom-right — reads as cut stone.
@@ -878,47 +1263,136 @@ export class TowerDefenseGame extends GameBase {
       ctx.fillRect(px, py + c - 3, c - 1, 2);
       ctx.fillRect(px + c - 3, py, 2, c - 1);
     }
+    this._drawDecor(ctx);
+  }
+
+  /** Level flavour scattered on the buildable ground: trees, rocks, crystals. */
+  _drawDecor(ctx) {
+    const c = this.cell;
+    const th = this.level.theme;
+    for (const d of this._decor) {
+      // Never sit on a tower — the prop would fight the turret for the tile.
+      if (this.towers.some(t => t.x === d.x && t.y === d.y)) continue;
+      const cx = this.offX + (d.x + 0.5 + d.ox) * c;
+      const cy = this.offY + (d.y + 0.5 + d.oy) * c;
+      const r = c * 0.2 * d.s;
+      ctx.save();
+      ctx.translate(cx, cy);
+      ctx.fillStyle = "rgba(0,0,0,0.3)";
+      ctx.beginPath(); ctx.ellipse(0, r * 0.7, r * 0.9, r * 0.32, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = th.decorColor;
+      if (th.decor === "tree") {
+        ctx.fillStyle = "#3d2b18";
+        ctx.fillRect(-r * 0.14, -r * 0.1, r * 0.28, r * 0.9);
+        ctx.fillStyle = th.decorColor;
+        for (let i = 0; i < 3; i++) {
+          ctx.beginPath();
+          ctx.moveTo(0, -r * (1.5 - i * 0.42));
+          ctx.lineTo(r * (0.6 + i * 0.2), -r * (0.5 - i * 0.42));
+          ctx.lineTo(-r * (0.6 + i * 0.2), -r * (0.5 - i * 0.42));
+          ctx.closePath(); ctx.fill();
+        }
+      } else if (th.decor === "crystal") {
+        ctx.rotate(d.r * 0.1);
+        ctx.beginPath();
+        ctx.moveTo(0, -r * 1.5); ctx.lineTo(r * 0.5, 0);
+        ctx.lineTo(0, r * 0.7); ctx.lineTo(-r * 0.5, 0);
+        ctx.closePath(); ctx.fill();
+        ctx.fillStyle = "rgba(255,255,255,0.35)";
+        ctx.beginPath();
+        ctx.moveTo(0, -r * 1.5); ctx.lineTo(r * 0.2, -r * 0.2); ctx.lineTo(0, r * 0.7);
+        ctx.closePath(); ctx.fill();
+      } else if (th.decor === "pipe") {
+        ctx.rotate(d.r);
+        ctx.fillRect(-r * 1.1, -r * 0.26, r * 2.2, r * 0.52);
+        ctx.fillStyle = "rgba(255,255,255,0.2)";
+        ctx.fillRect(-r * 1.1, -r * 0.26, r * 2.2, r * 0.14);
+        ctx.fillStyle = th.decorColor;
+        for (const dx of [-1, 1]) { ctx.beginPath(); ctx.arc(dx * r * 1.1, 0, r * 0.34, 0, Math.PI * 2); ctx.fill(); }
+      } else if (th.decor === "shard") {
+        ctx.rotate(d.r);
+        for (let i = 0; i < 3; i++) {
+          ctx.rotate(2.1);
+          ctx.beginPath();
+          ctx.moveTo(0, 0); ctx.lineTo(r * 0.34, -r * 1.2); ctx.lineTo(-r * 0.2, -r * 0.5);
+          ctx.closePath(); ctx.fill();
+        }
+      } else {
+        // rock
+        ctx.beginPath();
+        ctx.moveTo(-r, r * 0.5);
+        ctx.lineTo(-r * 0.6, -r * 0.7); ctx.lineTo(r * 0.2, -r);
+        ctx.lineTo(r * 0.95, -r * 0.2); ctx.lineTo(r * 0.6, r * 0.6);
+        ctx.closePath(); ctx.fill();
+        ctx.fillStyle = "rgba(255,255,255,0.14)";
+        ctx.beginPath();
+        ctx.moveTo(-r * 0.6, -r * 0.7); ctx.lineTo(r * 0.2, -r); ctx.lineTo(r * 0.1, -r * 0.4);
+        ctx.closePath(); ctx.fill();
+      }
+      ctx.restore();
+    }
   }
 
   _drawRoad(ctx) {
     const c = this.cell;
-    for (const p of this.path) {
-      const px = this.offX + p.x * c, py = this.offY + p.y * c;
+    const th = this.level.theme;
+    // The road is a tile set now, not the route list — a two-wide track has
+    // twice the tiles the route names.
+    for (const key of this.roadSet) {
+      const [x, y] = key.split(",").map(Number);
+      const px = this.offX + x * c, py = this.offY + y * c;
       const g = ctx.createLinearGradient(px, py, px, py + c);
-      g.addColorStop(0, "#3a2f4e");
-      g.addColorStop(1, "#241d33");
+      g.addColorStop(0, th.road);
+      g.addColorStop(1, shadeHex(th.road, -0.3));
       ctx.fillStyle = g;
       ctx.fillRect(px, py, c, c);
     }
-    // Kerb highlight along the road, then animated chevrons showing direction.
-    ctx.strokeStyle = "rgba(200,107,255,0.18)";
+    // Kerb along the outer rim only, which is what makes a two-wide road read
+    // as one track rather than two lanes of tiles.
+    ctx.strokeStyle = th.roadEdge;
+    ctx.globalAlpha = 0.5;
     ctx.lineWidth = 2;
-    for (const p of this.path) {
-      const px = this.offX + p.x * c, py = this.offY + p.y * c;
-      if (!this.pathSet.has(`${p.x},${p.y - 1}`)) { ctx.beginPath(); ctx.moveTo(px, py + 1); ctx.lineTo(px + c, py + 1); ctx.stroke(); }
-      if (!this.pathSet.has(`${p.x},${p.y + 1}`)) { ctx.beginPath(); ctx.moveTo(px, py + c - 1); ctx.lineTo(px + c, py + c - 1); ctx.stroke(); }
-      if (!this.pathSet.has(`${p.x - 1},${p.y}`)) { ctx.beginPath(); ctx.moveTo(px + 1, py); ctx.lineTo(px + 1, py + c); ctx.stroke(); }
-      if (!this.pathSet.has(`${p.x + 1},${p.y}`)) { ctx.beginPath(); ctx.moveTo(px + c - 1, py); ctx.lineTo(px + c - 1, py + c); ctx.stroke(); }
+    for (const key of this.roadSet) {
+      const [x, y] = key.split(",").map(Number);
+      const px = this.offX + x * c, py = this.offY + y * c;
+      if (!this.roadSet.has(`${x},${y - 1}`)) { ctx.beginPath(); ctx.moveTo(px, py + 1); ctx.lineTo(px + c, py + 1); ctx.stroke(); }
+      if (!this.roadSet.has(`${x},${y + 1}`)) { ctx.beginPath(); ctx.moveTo(px, py + c - 1); ctx.lineTo(px + c, py + c - 1); ctx.stroke(); }
+      if (!this.roadSet.has(`${x - 1},${y}`)) { ctx.beginPath(); ctx.moveTo(px + 1, py); ctx.lineTo(px + 1, py + c); ctx.stroke(); }
+      if (!this.roadSet.has(`${x + 1},${y}`)) { ctx.beginPath(); ctx.moveTo(px + c - 1, py); ctx.lineTo(px + c - 1, py + c); ctx.stroke(); }
     }
+    ctx.globalAlpha = 1;
 
+    // Centre line down the middle of the track, so the two lanes are obvious.
+    ctx.save();
+    ctx.strokeStyle = th.roadEdge;
+    ctx.globalAlpha = 0.22;
+    ctx.lineWidth = Math.max(2, c * 0.05);
+    ctx.setLineDash([c * 0.3, c * 0.3]);
+    ctx.beginPath();
+    for (let i = 0; i < this.path.length; i++) {
+      const p = this._routePx(i);
+      if (i) ctx.lineTo(p.x, p.y); else ctx.moveTo(p.x, p.y);
+    }
+    ctx.stroke();
+    ctx.restore();
+
+    // Animated chevrons showing which way the road runs.
     const flow = (this.elapsed * 0.6) % 1;
     ctx.save();
-    ctx.globalAlpha = 0.4;
+    ctx.globalAlpha = 0.45;
     for (let i = 0; i < this.path.length - 1; i += 3) {
-      const a = this._toPx(this.path[i].x, this.path[i].y);
-      const b = this._toPx(this.path[i + 1].x, this.path[i + 1].y);
-      const t = flow;
-      const x = a.x + (b.x - a.x) * t, y = a.y + (b.y - a.y) * t;
+      const a = this._routePx(i), b = this._routePx(i + 1);
+      const x = a.x + (b.x - a.x) * flow, y = a.y + (b.y - a.y) * flow;
       const ang = Math.atan2(b.y - a.y, b.x - a.x);
       ctx.save();
       ctx.translate(x, y);
       ctx.rotate(ang);
-      ctx.strokeStyle = "#c86bff";
+      ctx.strokeStyle = th.roadEdge;
       ctx.lineWidth = 2;
       ctx.beginPath();
-      ctx.moveTo(-c * 0.1, -c * 0.11);
-      ctx.lineTo(c * 0.08, 0);
-      ctx.lineTo(-c * 0.1, c * 0.11);
+      ctx.moveTo(-c * 0.12, -c * 0.13);
+      ctx.lineTo(c * 0.1, 0);
+      ctx.lineTo(-c * 0.12, c * 0.13);
       ctx.stroke();
       ctx.restore();
     }
@@ -927,19 +1401,20 @@ export class TowerDefenseGame extends GameBase {
 
   _drawBase(ctx) {
     const c = this.cell;
-    const p = this.path[this.path.length - 1];
-    const cx = this.offX + p.x * c + c / 2, cy = this.offY + p.y * c + c / 2;
-    const r = c * 0.42;
+    const th = this.level.theme;
+    const end = this._routePx(this.path.length - 1);
+    const cx = end.x, cy = end.y;
+    const r = c * 0.52;
 
-    this.gfx.glow(ctx, cx, cy, r * 2.2, "#7c5cff", 0.55);
+    this.gfx.glow(ctx, cx, cy, r * 2.2, th.keep, 0.55);
     // Keep: a squat tower with battlements and a health ring.
-    ctx.fillStyle = "#5b4ba8";
+    ctx.fillStyle = shadeHex(th.keep, -0.35);
     ctx.beginPath();
     ctx.moveTo(cx - r, cy + r); ctx.lineTo(cx - r * 0.78, cy - r * 0.5);
     ctx.lineTo(cx + r * 0.78, cy - r * 0.5); ctx.lineTo(cx + r, cy + r);
     ctx.closePath();
     ctx.fill();
-    ctx.fillStyle = "#8a7ae0";
+    ctx.fillStyle = th.keep;
     for (let i = -1; i <= 1; i++) ctx.fillRect(cx + i * r * 0.55 - r * 0.16, cy - r * 0.78, r * 0.32, r * 0.34);
     ctx.fillStyle = "#1a1436";
     ctx.fillRect(cx - r * 0.22, cy + r * 0.18, r * 0.44, r * 0.82);
@@ -1255,6 +1730,47 @@ export class TowerDefenseGame extends GameBase {
       ctx.moveTo(0, -r * 0.6); ctx.lineTo(r * 0.42, -r * 0.2);
       ctx.lineTo(0, r * 0.62); ctx.lineTo(-r * 0.42, -r * 0.2);
       ctx.closePath(); ctx.fill();
+    } else if (spec.blinkEvery) {
+      // Blinker: a floating shard split into two halves that never quite meet,
+      // so it reads as something that is only half here.
+      const gap = r * 0.16 + Math.sin(this.elapsed * 4 + e.wobble) * r * 0.06;
+      ctx.fillStyle = bodyColor;
+      for (const sgn of [-1, 1]) {
+        ctx.beginPath();
+        ctx.moveTo(sgn * gap, -r * 1.2);
+        ctx.lineTo(sgn * (gap + r * 0.85), 0);
+        ctx.lineTo(sgn * gap, r * 1.2);
+        ctx.closePath(); ctx.fill();
+      }
+      this.gfx.glow(ctx, 0, 0, r * 1.2, spec.color, 0.7);
+      ctx.fillStyle = "#eaffff";
+      ctx.beginPath(); ctx.arc(0, 0, r * 0.26, 0, Math.PI * 2); ctx.fill();
+    } else if (spec.auraRange) {
+      // Warlord: a broad standard-bearer, with its aura drawn as a ring so it
+      // is obvious which units are being protected.
+      ctx.save();
+      ctx.globalAlpha = 0.16 + Math.sin(this.elapsed * 2.4) * 0.05;
+      ctx.strokeStyle = spec.color;
+      ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.arc(0, 0, spec.auraRange * c, 0, Math.PI * 2); ctx.stroke();
+      ctx.globalAlpha = 0.07;
+      ctx.fillStyle = spec.color;
+      ctx.fill();
+      ctx.restore();
+      ctx.fillStyle = spec.dark;
+      ctx.fillRect(-r * 0.1, -r * 2.1, r * 0.2, r * 2.2);
+      ctx.fillStyle = spec.color;
+      ctx.beginPath();
+      ctx.moveTo(r * 0.1, -r * 2.05);
+      ctx.lineTo(r * 1.2, -r * 1.72);
+      ctx.lineTo(r * 0.1, -r * 1.28);
+      ctx.closePath(); ctx.fill();
+      roundedBody(ctx, 0, 0, r * 1.7, r * 1.5, bodyColor, spec.dark);
+      ctx.fillStyle = "rgba(255,255,255,0.3)";
+      ctx.fillRect(-r * 0.75, -r * 0.62, r * 1.5, r * 0.2);
+      ctx.fillStyle = "#2a1a05";
+      ctx.beginPath(); ctx.arc(-r * 0.3, -r * 0.12, r * 0.15, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.arc(r * 0.3, -r * 0.12, r * 0.15, 0, Math.PI * 2); ctx.fill();
     } else if (spec.hexEvery) {
       // Hexer: a hooded caster with an orbiting rune.
       roundedBody(ctx, 0, r * 0.1, r * 1.2, r * 1.4, bodyColor, spec.dark);
@@ -1384,6 +1900,23 @@ export class TowerDefenseGame extends GameBase {
     this.gfx.orb(ctx, b.x, b.y, this.cell * (b.type === "frost" ? 0.1 : 0.07), b.color, { glow: 0.7 });
   }
 
+  /** The streak a Blinker leaves behind when it jumps up the road. */
+  _drawBlink(ctx, bl) {
+    const p = 1 - bl.t / 0.3;
+    ctx.save();
+    ctx.globalAlpha = p * 0.8;
+    ctx.strokeStyle = ENEMIES.blinker.color;
+    ctx.lineWidth = 2 + p * 5;
+    ctx.lineCap = "round";
+    ctx.shadowColor = ENEMIES.blinker.color;
+    ctx.shadowBlur = 14 * p;
+    ctx.beginPath();
+    ctx.moveTo(bl.x1, bl.y1);
+    ctx.lineTo(bl.x2, bl.y2);
+    ctx.stroke();
+    ctx.restore();
+  }
+
   /** The bolt a Hexer throws at a tower — a wobbling violet tendril. */
   _drawHex(ctx, hx) {
     const p = 1 - hx.t / 0.45;
@@ -1467,8 +2000,11 @@ export class TowerDefenseGame extends GameBase {
       ctx.lineWidth = active ? 2 : 1;
       ctx.stroke();
 
-      // Mini turret icon
-      const ix = bx + h * 0.5, iy = by + h * 0.5, ir = h * 0.26;
+      // Icon on the left with its own padding, text column to the right of
+      // it. Both are laid out from the slot's own box so nothing collides.
+      const pad = Math.min(10, w * 0.09);
+      const ir = Math.min(h * 0.3, w * 0.15);
+      const ix = bx + pad + ir, iy = by + h * 0.5;
       const g = ctx.createRadialGradient(ix - ir * 0.3, iy - ir * 0.3, ir * 0.1, ix, iy, ir);
       g.addColorStop(0, "#ffffff");
       g.addColorStop(0.3, spec.color);
@@ -1476,19 +2012,25 @@ export class TowerDefenseGame extends GameBase {
       ctx.globalAlpha = unlocked ? 1 : 0.3;
       ctx.fillStyle = g;
       ctx.beginPath(); ctx.arc(ix, iy, ir, 0, Math.PI * 2); ctx.fill();
+      // Hotkey number rides on the icon rather than stealing a text line.
+      ctx.globalAlpha = unlocked ? 0.85 : 0.3;
+      ctx.fillStyle = "#0a0d18";
+      ctx.font = `800 ${Math.round(ir * 0.95)}px 'Sora', system-ui, sans-serif`;
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText(String(i + 1), ix, iy + ir * 0.04);
 
-      // Names are clipped to the slot rather than allowed to run into the
-      // next button, which is what a seven-slot bar would otherwise do.
-      const tw = Math.max(18, w - h * 0.9 - 6);
-      ctx.globalAlpha = unlocked ? (afford ? 1 : 0.5) : 0.4;
-      ctx.fillStyle = "#eef1ff";
-      ctx.font = `700 ${Math.round(h * 0.26)}px 'Sora', system-ui, sans-serif`;
+      const tx = ix + ir + pad * 0.9;
+      const tw = Math.max(14, bx + w - pad - tx);
+      ctx.globalAlpha = unlocked ? (afford ? 1 : 0.55) : 0.45;
       ctx.textAlign = "left";
       ctx.textBaseline = "alphabetic";
-      ctx.fillText(spec.name, bx + h * 0.9, by + h * 0.45, tw);
+      ctx.fillStyle = "#eef1ff";
+      ctx.font = `700 ${Math.round(h * 0.27)}px 'Sora', system-ui, sans-serif`;
+      ctx.fillText(spec.name, tx, by + h * 0.44, tw);
       ctx.fillStyle = !unlocked ? "#8b90ac" : afford ? "#ffd76a" : "#ff8fa4";
-      ctx.font = `700 ${Math.round(h * 0.23)}px 'Sora', system-ui, sans-serif`;
-      ctx.fillText(unlocked ? `${cost}g  \u00b7  ${i + 1}` : "locked", bx + h * 0.9, by + h * 0.78, tw);
+      ctx.font = `700 ${Math.round(h * 0.24)}px 'Sora', system-ui, sans-serif`;
+      ctx.fillText(unlocked ? `${cost}g` : "locked", tx, by + h * 0.78, tw);
       ctx.globalAlpha = 1;
     });
   }
@@ -1516,6 +2058,13 @@ function roundedBody(ctx, x, y, w, h, color, dark) {
   ctx.fillStyle = "rgba(255,255,255,0.28)";
   roundRect(ctx, x - w * 0.32, y - h * 0.42, w * 0.64, h * 0.22, h * 0.11);
   ctx.fill();
+}
+
+/** Lightens (positive) or darkens (negative) a hex colour. */
+function shadeHex(h, amount) {
+  const [r, g, b] = hex(h);
+  const f = (v) => Math.round(amount >= 0 ? v + (255 - v) * amount : v * (1 + amount));
+  return `rgb(${f(r)},${f(g)},${f(b)})`;
 }
 
 function mix(a, b, t) {
