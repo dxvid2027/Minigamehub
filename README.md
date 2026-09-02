@@ -180,8 +180,8 @@ not be shaded to match the game around them.
 each, saved as you go.
 
 Seven tower classes — single-target Cannon, area-slowing Frost, chaining Arc,
-anti-air Flak that triples its damage against flyers and cannot touch the
-ground, a Mortar that lobs a wide shell at ground targets only, Venom whose
+anti-air Flak that triples its damage against flyers and manages only a third
+of it against the ground, a Mortar that lobs a wide shell at ground targets only, Venom whose
 poison ignores armour entirely, and a Railgun that pierces every enemy on its
 line — ten upgrade levels each.
 

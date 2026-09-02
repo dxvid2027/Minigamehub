@@ -51,11 +51,13 @@ const TOWERS = {
     desc: "Lightning that jumps between enemies.",
   },
   flak: {
-    // The answer to a sky full of drones: triple damage in the air, and
-    // barely worth building if nothing is flying.
+    // The answer to a sky full of drones. It was air-only, which made it a
+    // tower that literally could not fire on the opening map — that map sends
+    // nothing that flies. A real flak battery can depress its barrels, so it
+    // now hits the ground too, just badly: triple damage up, a third down.
     name: "Flak", cost: 70, color: "#8fe36b", accent: "#3f8f2c",
-    dmg: 8, range: 3.45, rate: 0.7, air: "air", airBonus: 3, splash: 0.7,
-    desc: "Anti-air battery. Triple damage to flyers, useless on the ground.",
+    dmg: 8, range: 3.45, rate: 0.7, airBonus: 3, groundPenalty: 0.35, splash: 0.7,
+    desc: "Anti-air battery. Triple damage to flyers, a third of it to ground.",
   },
   mortar: {
     // Lobs a shell, so it cannot track a flyer, but it lands hard and wide.
@@ -246,7 +248,9 @@ const LEVELS = [
       road: "#4b4033", roadEdge: "#6d5c44", decor: "tree", decorColor: "#2f6b3f",
       keep: "#6fbf87", banner: "#2ee6a6", scene: "aurora",
     },
-    roster: ["marcher", "sprinter", "swarm", "brute"],
+    // Drones are in from the first map: selling an anti-air tower on a map
+    // that never sends a flyer is a trap, not a difficulty curve.
+    roster: ["marcher", "sprinter", "swarm", "brute", "drone"],
     boss: "titan",
     route: [
       [0, 1], [1, 1], [2, 1], [3, 1], [4, 1], [5, 1], [6, 1], [7, 1], [8, 1],
@@ -406,7 +410,7 @@ export class TowerDefenseGame extends GameBase {
   getInstructions() {
     return [
       "Pick a tower from the bar at the bottom, then tap an empty tile to build it. Tap a tower you own to upgrade it — every tower goes up to level 10.",
-      "Seven classes: Cannon is reliable single-target, Frost slows an area, Arc chains lightning, Flak triples its damage against flyers but cannot hit the ground, Mortar lobs a wide shell at ground targets only, Venom poisons through armour, and the Railgun pierces everything on its line.",
+      "Seven classes: Cannon is reliable single-target, Frost slows an area, Arc chains lightning, Flak does triple damage to flyers and only a third to ground, Mortar lobs a wide shell at ground targets only, Venom poisons through armour, and the Railgun pierces everything on its line.",
       "Thirteen enemy families, and each map brings more of them. Swarmlings split when they die, burrowers dive underground where nothing can target them, blinkers skip a stretch of road, hexers shut one of your towers down for a few seconds, juggernauts are fast and heavily plated, and a warlord's aura cuts the damage everything near it takes.",
       "The road is two tiles wide, so a wave walks two abreast. A Titan comes every fifth wave and splits into brutes; the last map closes with a Leviathan, which is immune to slowing — frost alone will not stop it.",
       "Every map is twenty waves. Hold all twenty and the next map opens — five in all, each with its own road, its own look and more enemy families than the last.",
@@ -949,13 +953,25 @@ export class TowerDefenseGame extends GameBase {
       t.cooldown -= dt;
       const pos = this._toPx(t.x, t.y);
       const range = towerStat(t, "range") * this.rangeMul * this.cell;
+      const spec = TOWERS[t.type];
 
       // Menders first, then whatever is furthest along the road.
       let target = null, bestKey = -Infinity;
       for (const e of this.enemies) {
         if (!this._canTarget(t, e)) continue;
         if (Math.hypot(e.x - pos.x, e.y - pos.y) > range) continue;
-        const key = (e.spec.heal ? 1e6 : 0) + (e.spec.flying ? e.fly * 1000 : e.pathIdx + e.t);
+        // Menders first; then, for a tower with an air bonus, anything
+        // flying, so a Flak never wastes shots on the road while a drone
+        // slips past overhead; then whoever is closest to the base.
+        //
+        // That last term is normalised to 0..1 for both kinds. It used to be
+        // `fly * 1000` against `pathIdx + t`, and since a route is only ~40
+        // points long that made *every* tower drop a marcher at the gates to
+        // shoot a drone that had barely set off.
+        const progress = e.spec.flying ? e.fly : (e.pathIdx + e.t) / this.path.length;
+        const key = (e.spec.heal ? 1e6 : 0)
+          + (spec.airBonus && e.spec.flying ? 5e5 : 0)
+          + progress;
         if (key > bestKey) { bestKey = key; target = e; }
       }
       if (target) t.angle = Math.atan2(target.y - pos.y, target.x - pos.x);
@@ -964,7 +980,6 @@ export class TowerDefenseGame extends GameBase {
       t.cooldown = towerStat(t, "rate");
       t.flash = 0.09;
       const dmg = towerStat(t, "dmg") * this.dmgMul;
-      const spec = TOWERS[t.type];
 
       if (t.type === "arc") {
         this._arcStrike(t, pos, target, dmg);
@@ -1079,8 +1094,9 @@ export class TowerDefenseGame extends GameBase {
     for (const e of [...this.enemies]) {
       if (!this._canTarget(tower, e)) continue;
       if (Math.hypot(e.x - b.x, e.y - b.y) > r + e.spec.r * this.cell) continue;
-      // Flak is built for the sky and says so in its numbers.
-      const mult = spec.airBonus && e.spec.flying ? spec.airBonus : 1;
+      // Flak is built for the sky and says so in its numbers, in both
+      // directions: a bonus against flyers, a penalty against the ground.
+      const mult = e.spec.flying ? (spec.airBonus || 1) : (spec.groundPenalty ?? 1);
       this._damage(e, dmg * mult);
       if (spec.slow && !e.spec.slowImmune) {
         e.slow = Math.max(e.slow, spec.slow);
