@@ -2,7 +2,7 @@
 // Bastion TD — grid tower defense with a serpentine road, seven tower
 // classes and ten upgrade levels.
 //
-// Eleven enemy families keep the waves from turning into one long healthbar:
+// Fourteen enemy families keep the waves from turning into one long healthbar:
 // marchers, sprinters, armoured brutes, flying drones that ignore the road,
 // menders that heal their neighbours, bulwarks behind a regenerating shield,
 // swarms that split when they fall, burrowers that dive underground where
@@ -23,6 +23,7 @@ import { GameBase } from "./gameBase.js";
 import { audioManager } from "../systems/audioManager.js";
 import { MetaProgress, runReward } from "../systems/metaProgress.js";
 import { saveManager } from "../systems/saveManager.js";
+import { openModal, closeModal } from "../ui/modal.js";
 import { clamp, randFloat, el } from "../core/utils.js";
 
 // The grid grew with the road: the track is two tiles wide now, so a 12x7
@@ -232,131 +233,193 @@ const META = new MetaProgress("tower-defense", {
 });
 
 // ------------------------------------------------------------- levels -----
-// Each level is its own map: a different route, a different palette, its own
-// decor and its own keep at the end of the road. The roster is cumulative —
-// every level keeps what came before and adds something new to deal with.
+// Thirty maps, composed rather than hand-listed thirty times: ten routes and
+// six biomes. Every level gets a different road from the one before it, and
+// the look changes every five levels, so no two consecutive maps look or play
+// the same while the whole campaign stays one readable table.
 //
 // A route is drawn as single tiles; buildRoad() widens it to two so that two
 // enemies walk abreast, which is why route coordinates stop one short of the
 // board edge on both axes.
-const LEVELS = [
+const ROUTES = [
+  // 0 — long lane, one hairpin
+  [[0,1],[1,1],[2,1],[3,1],[4,1],[5,1],[6,1],[7,1],[8,1],[9,1],[10,1],[11,1],[12,1],
+   [12,2],[12,3],[12,4],
+   [11,4],[10,4],[9,4],[8,4],[7,4],[6,4],[5,4],[4,4],[3,4],[2,4],
+   [2,5],[2,6],[2,7],
+   [3,7],[4,7],[5,7],[6,7],[7,7],[8,7],[9,7],[10,7],[11,7],[12,7],[13,7],[14,7]],
+  // 1 — gorge, two switchbacks
+  [[0,7],[1,7],[2,7],[3,7],[4,7],
+   [4,6],[4,5],[4,4],[4,3],[4,2],[4,1],
+   [5,1],[6,1],[7,1],[8,1],
+   [8,2],[8,3],[8,4],[8,5],[8,6],[8,7],
+   [9,7],[10,7],[11,7],
+   [11,6],[11,5],[11,4],[11,3],[11,2],[11,1],
+   [12,1],[13,1],[14,1]],
+  // 2 — wide sweeps
+  [[0,4],[1,4],[2,4],
+   [2,3],[2,2],[2,1],
+   [3,1],[4,1],[5,1],[6,1],
+   [6,2],[6,3],[6,4],[6,5],[6,6],[6,7],
+   [7,7],[8,7],[9,7],[10,7],
+   [10,6],[10,5],[10,4],[10,3],[10,2],[10,1],
+   [11,1],[12,1],[13,1],[14,1],
+   [14,2],[14,3],[14,4]],
+  // 3 — tight zigzag
+  [[0,1],[1,1],[2,1],[3,1],
+   [3,2],[3,3],[3,4],
+   [4,4],[5,4],[6,4],
+   [6,5],[6,6],[6,7],
+   [7,7],[8,7],[9,7],
+   [9,6],[9,5],[9,4],
+   [10,4],[11,4],[12,4],
+   [12,3],[12,2],[12,1],
+   [13,1],[14,1]],
+  // 4 — the long serpentine
+  [[0,1],[1,1],[2,1],[3,1],[4,1],[5,1],[6,1],
+   [6,2],[6,3],[6,4],
+   [5,4],[4,4],[3,4],[2,4],
+   [2,5],[2,6],[2,7],
+   [3,7],[4,7],[5,7],[6,7],[7,7],[8,7],[9,7],
+   [9,6],[9,5],[9,4],
+   [10,4],[11,4],[12,4],
+   [12,3],[12,2],[12,1],
+   [13,1],[14,1]],
+  // 5 — down the middle and back
+  [[0,4],[1,4],[2,4],[3,4],[4,4],[5,4],
+   [5,3],[5,2],[5,1],
+   [6,1],[7,1],[8,1],[9,1],[10,1],
+   [10,2],[10,3],[10,4],[10,5],[10,6],[10,7],
+   [9,7],[8,7],[7,7],[6,7],[5,7],[4,7],
+   [4,6],[4,5],
+   [3,5],[2,5],
+   [2,6],[2,7],[2,8],
+   [3,8],[4,8],[5,8],[6,8],[7,8],[8,8],[9,8],[10,8],[11,8],[12,8],[13,8],[14,8]],
+  // 6 — the comb
+  [[0,8],[1,8],[2,8],
+   [2,7],[2,6],[2,5],[2,4],[2,3],[2,2],[2,1],
+   [3,1],[4,1],[5,1],
+   [5,2],[5,3],[5,4],[5,5],[5,6],[5,7],[5,8],
+   [6,8],[7,8],[8,8],
+   [8,7],[8,6],[8,5],[8,4],[8,3],[8,2],[8,1],
+   [9,1],[10,1],[11,1],
+   [11,2],[11,3],[11,4],[11,5],[11,6],[11,7],[11,8],
+   [12,8],[13,8],[14,8]],
+  // 7 — the spiral
+  [[0,1],[1,1],[2,1],[3,1],[4,1],[5,1],[6,1],[7,1],[8,1],[9,1],[10,1],[11,1],[12,1],
+   [12,2],[12,3],[12,4],[12,5],[12,6],[12,7],[12,8],
+   [11,8],[10,8],[9,8],[8,8],[7,8],[6,8],[5,8],[4,8],[3,8],[2,8],
+   [2,7],[2,6],[2,5],[2,4],
+   [3,4],[4,4],[5,4],[6,4],[7,4],[8,4],[9,4],
+   [9,5],[9,6],
+   [10,6],[11,6],[12,6],[13,6],[14,6]],
+  // 8 — the ladder
+  [[0,1],[1,1],[2,1],[3,1],[4,1],
+   [4,2],[4,3],
+   [3,3],[2,3],
+   [2,4],[2,5],
+   [3,5],[4,5],[5,5],[6,5],[7,5],
+   [7,6],[7,7],
+   [8,7],[9,7],[10,7],
+   [10,6],[10,5],[10,4],[10,3],[10,2],[10,1],
+   [11,1],[12,1],[13,1],[14,1]],
+  // 9 — the long haul
+  [[0,8],[1,8],[2,8],[3,8],[4,8],[5,8],[6,8],[7,8],
+   [7,7],[7,6],[7,5],
+   [6,5],[5,5],[4,5],[3,5],[2,5],
+   [2,4],[2,3],[2,2],[2,1],
+   [3,1],[4,1],[5,1],[6,1],[7,1],[8,1],[9,1],[10,1],[11,1],[12,1],
+   [12,2],[12,3],[12,4],[12,5],
+   [13,5],[14,5]],
+];
+
+// Six biomes. The road always carries a clear value gap against the ground it
+// cuts through, or it stops reading as a road at all.
+const BIOMES = [
   {
-    name: "Greenfield Pass",
-    blurb: "Open farmland. A long lane, a single hairpin, and room to build.",
-    theme: {
-      tileA: "#1e3b2c", tileB: "#23452f", edge: "#2f5a3c",
-      road: "#4b4033", roadEdge: "#6d5c44", decor: "tree", decorColor: "#2f6b3f",
-      keep: "#6fbf87", banner: "#2ee6a6", scene: "aurora",
-    },
-    // Drones are in from the first map: selling an anti-air tower on a map
-    // that never sends a flyer is a trap, not a difficulty curve.
-    roster: ["marcher", "sprinter", "swarm", "brute", "drone"],
-    boss: "titan",
-    route: [
-      [0, 1], [1, 1], [2, 1], [3, 1], [4, 1], [5, 1], [6, 1], [7, 1], [8, 1],
-      [9, 1], [10, 1], [11, 1], [12, 1],
-      [12, 2], [12, 3], [12, 4],
-      [11, 4], [10, 4], [9, 4], [8, 4], [7, 4], [6, 4], [5, 4], [4, 4], [3, 4], [2, 4],
-      [2, 5], [2, 6], [2, 7],
-      [3, 7], [4, 7], [5, 7], [6, 7], [7, 7], [8, 7], [9, 7], [10, 7], [11, 7], [12, 7], [13, 7], [14, 7],
-    ],
+    land: "Greenfield", tileA: "#1e3b2c", tileB: "#23452f", edge: "#2f5a3c",
+    road: "#4b4033", roadEdge: "#6d5c44", decor: "tree", decorColor: "#2f6b3f",
+    keep: "#6fbf87", banner: "#2ee6a6", scene: "aurora",
   },
   {
-    name: "Ashen Ravine",
-    blurb: "Scorched rock. The road doubles back twice through a narrow gorge.",
-    theme: {
-      tileA: "#291c16", tileB: "#30221a", edge: "#553529",
-      road: "#6d5546", roadEdge: "#d09164", decor: "rock", decorColor: "#5a3c30",
-      keep: "#ff9f43", banner: "#ffd76a", scene: "grid",
-    },
-    roster: ["marcher", "sprinter", "swarm", "brute", "drone", "burrower"],
-    boss: "titan",
-    route: [
-      [0, 7], [1, 7], [2, 7], [3, 7], [4, 7],
-      [4, 6], [4, 5], [4, 4], [4, 3], [4, 2], [4, 1],
-      [5, 1], [6, 1], [7, 1], [8, 1],
-      [8, 2], [8, 3], [8, 4], [8, 5], [8, 6], [8, 7],
-      [9, 7], [10, 7], [11, 7],
-      [11, 6], [11, 5], [11, 4], [11, 3], [11, 2], [11, 1],
-      [12, 1], [13, 1], [14, 1],
-    ],
+    land: "Ashen", tileA: "#291c16", tileB: "#30221a", edge: "#553529",
+    road: "#6d5546", roadEdge: "#d09164", decor: "rock", decorColor: "#5a3c30",
+    keep: "#ff9f43", banner: "#ffd76a", scene: "grid",
   },
   {
-    name: "Frostmere Shelf",
-    blurb: "A frozen shelf. Wide sweeping curves and very little cover.",
-    theme: {
-      tileA: "#152337", tileB: "#1a2b42", edge: "#2c4a6b",
-      road: "#5d7794", roadEdge: "#bfe2fb", decor: "crystal", decorColor: "#6fd3f2",
-      keep: "#7ce8ff", banner: "#22d3ee", scene: "stars",
-    },
-    roster: ["marcher", "sprinter", "swarm", "brute", "drone", "burrower", "mender", "bulwark"],
-    boss: "titan",
-    route: [
-      [0, 4], [1, 4], [2, 4],
-      [2, 3], [2, 2], [2, 1],
-      [3, 1], [4, 1], [5, 1], [6, 1],
-      [6, 2], [6, 3], [6, 4], [6, 5], [6, 6], [6, 7],
-      [7, 7], [8, 7], [9, 7], [10, 7],
-      [10, 6], [10, 5], [10, 4], [10, 3], [10, 2], [10, 1],
-      [11, 1], [12, 1], [13, 1], [14, 1],
-      [14, 2], [14, 3], [14, 4],
-    ],
+    land: "Frostmere", tileA: "#152337", tileB: "#1a2b42", edge: "#2c4a6b",
+    road: "#5d7794", roadEdge: "#bfe2fb", decor: "crystal", decorColor: "#6fd3f2",
+    keep: "#7ce8ff", banner: "#22d3ee", scene: "stars",
   },
   {
-    name: "Sunken Works",
-    blurb: "A flooded foundry. Short zigzags, tight corners, constant pressure.",
-    theme: {
-      tileA: "#161b33", tileB: "#1c223e", edge: "#38406b",
-      road: "#4e5478", roadEdge: "#9b86ff", decor: "pipe", decorColor: "#4a3f6e",
-      keep: "#c86bff", banner: "#7c5cff", scene: "grid",
-    },
-    roster: ["marcher", "sprinter", "swarm", "brute", "drone", "burrower", "mender", "bulwark", "hexer", "juggernaut"],
-    boss: "titan",
-    route: [
-      [0, 1], [1, 1], [2, 1], [3, 1],
-      [3, 2], [3, 3], [3, 4],
-      [4, 4], [5, 4], [6, 4],
-      [6, 5], [6, 6], [6, 7],
-      [7, 7], [8, 7], [9, 7],
-      [9, 6], [9, 5], [9, 4],
-      [10, 4], [11, 4], [12, 4],
-      [12, 3], [12, 2], [12, 1],
-      [13, 1], [14, 1],
-    ],
+    land: "Sunken", tileA: "#161b33", tileB: "#1c223e", edge: "#38406b",
+    road: "#4e5478", roadEdge: "#9b86ff", decor: "pipe", decorColor: "#4a3f6e",
+    keep: "#c86bff", banner: "#7c5cff", scene: "grid",
   },
   {
-    name: "Void Terminus",
-    blurb: "The end of the line. The longest road, and everything walks it.",
-    theme: {
-      tileA: "#1c1428", tileB: "#221831", edge: "#472f63",
-      road: "#523a6b", roadEdge: "#ff7ce4", decor: "shard", decorColor: "#a8329e",
-      keep: "#ff4fd8", banner: "#ff2f6d", scene: "stars",
-    },
-    roster: ["marcher", "sprinter", "swarm", "brute", "drone", "burrower", "mender",
-             "bulwark", "hexer", "juggernaut", "blinker", "warlord"],
-    boss: "leviathan",
-    route: [
-      [0, 1], [1, 1], [2, 1], [3, 1], [4, 1], [5, 1], [6, 1],
-      [6, 2], [6, 3], [6, 4],
-      [5, 4], [4, 4], [3, 4], [2, 4],
-      [2, 5], [2, 6], [2, 7],
-      [3, 7], [4, 7], [5, 7], [6, 7], [7, 7], [8, 7], [9, 7],
-      [9, 6], [9, 5], [9, 4],
-      [10, 4], [11, 4], [12, 4],
-      [12, 3], [12, 2], [12, 1],
-      [13, 1], [14, 1],
-    ],
+    land: "Emberwaste", tileA: "#2e1414", tileB: "#361a18", edge: "#5c2622",
+    road: "#7a4038", roadEdge: "#ff8f6a", decor: "rock", decorColor: "#7d2f22",
+    keep: "#ff5470", banner: "#ff8f4a", scene: "aurora",
+  },
+  {
+    land: "Void", tileA: "#1c1428", tileB: "#221831", edge: "#472f63",
+    road: "#523a6b", roadEdge: "#ff7ce4", decor: "shard", decorColor: "#a8329e",
+    keep: "#ff4fd8", banner: "#ff2f6d", scene: "stars",
   },
 ];
 
-/**
- * Widens a one-tile route into a two-tile road.
- *
- * Every route tile contributes a 2x2 block, which makes the track two wide on
- * straights and keeps the corners square instead of pinching to a single tile.
- * Movement then runs down the join between the four tiles, so the centreline
- * of a route point (x, y) is the grid corner at (x + 1, y + 1).
- */
+// What the map at each index is called, and how it reads on the picker.
+const ROUTE_NAMES = [
+  "Pass", "Ravine", "Shelf", "Works", "Terminus",
+  "Crossing", "Comb", "Spiral", "Ladder", "Long Haul",
+];
+const ROUTE_BLURBS = [
+  "A long lane and one hairpin, with room to build.",
+  "Two switchbacks through a narrow gorge.",
+  "Wide sweeping curves and very little cover.",
+  "Short zigzags, tight corners, constant pressure.",
+  "The road doubles back on itself three times.",
+  "Straight through the middle, then all the way back.",
+  "Three long teeth — everything walks all of them.",
+  "A spiral that ends in the centre of the board.",
+  "Stepped rungs with almost no straight run.",
+  "The longest road on the campaign.",
+];
+
+/** The order enemy families join the campaign, one every couple of maps. */
+const ROSTER_ORDER = [
+  ["marcher", "sprinter", "swarm", "drone"],   // level 1 opens with these
+  ["brute"], [], ["burrower"], [], ["mender"], [],
+  ["bulwark"], [], ["blinker"], [], ["hexer"], [],
+  ["juggernaut"], [], ["warlord"], [], [], [], [],
+];
+
+function rosterFor(idx) {
+  const out = [];
+  for (let i = 0; i <= idx && i < ROSTER_ORDER.length; i++) out.push(...ROSTER_ORDER[i]);
+  // Past the table every family is already in play.
+  if (idx >= ROSTER_ORDER.length) {
+    for (const group of ROSTER_ORDER) out.push(...group);
+  }
+  return [...new Set(out)];
+}
+
+/** Thirty maps: route rotates every level, biome every five. */
+const LEVELS = [...Array(30)].map((_, i) => {
+  const biome = BIOMES[Math.floor(i / 5) % BIOMES.length];
+  const routeIdx = i % ROUTES.length;
+  return {
+    name: `${biome.land} ${ROUTE_NAMES[routeIdx]}`,
+    blurb: ROUTE_BLURBS[routeIdx],
+    theme: biome,
+    route: ROUTES[routeIdx],
+    roster: rosterFor(i),
+    // A Leviathan closes every fifth map from the tenth onward; the rest end
+    // on a Titan.
+    boss: i >= 9 && (i + 1) % 5 === 0 ? "leviathan" : "titan",
+  };
+});
+
 function buildRoad(route) {
   const set = new Set();
   for (const [x, y] of route) {
@@ -369,51 +432,71 @@ function buildRoad(route) {
 }
 
 export class TowerDefenseGame extends GameBase {
-  getDifficulties() { return ["Easy", "Normal", "Hard"]; }
+  // One setting. Thirty maps already carry the difficulty curve, and a
+  // three-way chip row on top of a level picker only asked the player to
+  // decide something the campaign decides for them.
+  getDifficulties() { return ["Campaign"]; }
   getUpgrades() { return META; }
 
   /** Level picker on the start screen: cleared maps stay replayable. */
-  getStartExtras() {
+  getPlayLabel() { return "Play"; }
+
+  /**
+   * Play opens the map picker rather than starting a run.
+   *
+   * With thirty maps an inline chip row on the start screen was a wall of
+   * buttons; a grid in its own window has room to show each map's number,
+   * name and how far you got, and choosing one starts it immediately.
+   */
+  onPlayPressed() {
+    audioManager.play("click");
     const c = this._campaign();
     const open = this._unlockedLevels();
-    const row = el("div", { class: "level-row" });
+    const cleared = c.cleared;
+
+    const grid = el("div", { class: "map-grid" });
     LEVELS.forEach((lv, i) => {
       const unlocked = i < open;
       const best = c.best[String(i)] || 0;
-      const btn = el("button", {
-        class: `level-chip${i === this.levelIdx ? " active" : ""}${unlocked ? "" : " locked"}`,
+      const done = best >= WAVES_PER_LEVEL;
+      grid.appendChild(el("button", {
+        class: `map-card${unlocked ? "" : " locked"}${done ? " done" : ""}${i === this.levelIdx ? " current" : ""}`,
         disabled: !unlocked,
-        title: unlocked ? lv.blurb : "Clear the level before this one to open it.",
+        title: unlocked ? `${lv.name} — ${lv.blurb}` : "Clear the map before this one to open it.",
         onClick: () => {
           if (!unlocked) return;
+          closeModal();
           this._loadLevel(i);
           this._saveCampaign({ level: i });
-          audioManager.play("select");
-          [...row.children].forEach(n => n.classList.remove("active"));
-          btn.classList.add("active");
-          note.textContent = `${this.level.name} \u2014 ${this.level.blurb}`;
+          this.start();
         },
       }, [
-        el("b", {}, `${i + 1}`),
-        el("span", {}, unlocked ? lv.name : "Locked"),
-        el("i", {}, unlocked ? (best >= WAVES_PER_LEVEL ? "cleared" : best ? `best wave ${best}` : "new") : ""),
-      ]);
-      row.appendChild(btn);
+        el("span", { class: "n" }, String(i + 1)),
+        el("span", { class: "nm" }, unlocked ? lv.name : "Locked"),
+        el("span", { class: "st" },
+          !unlocked ? "\u{1F512}" : done ? "\u2713 cleared" : best ? `best ${best}/${WAVES_PER_LEVEL}` : "new"),
+      ]));
     });
-    const note = el("p", { class: "level-note" }, `${this.level.name} \u2014 ${this.level.blurb}`);
-    return el("div", { class: "level-picker" }, [
-      el("h4", {}, `Campaign \u00b7 ${WAVES_PER_LEVEL} waves per map`),
-      row,
-      note,
+
+    const body = el("div", { class: "map-picker" }, [
+      el("p", { class: "map-intro" },
+        `${cleared} of ${LEVELS.length} maps cleared \u00b7 ${WAVES_PER_LEVEL} waves each. Hold every wave on a map to open the next one.`),
+      grid,
     ]);
+    openModal({
+      title: "Choose a map",
+      bodyNode: body,
+      footerNode: el("button", { class: "btn btn-ghost", onClick: () => closeModal() }, "Back"),
+    });
   }
+
   getInstructions() {
     return [
       "Pick a tower from the bar at the bottom, then tap an empty tile to build it. Tap a tower you own to upgrade it — every tower goes up to level 10.",
       "Seven classes: Cannon is reliable single-target, Frost slows an area, Arc chains lightning, Flak does triple damage to flyers and only a third to ground, Mortar lobs a wide shell at ground targets only, Venom poisons through armour, and the Railgun pierces everything on its line.",
-      "Thirteen enemy families, and each map brings more of them. Swarmlings split when they die, burrowers dive underground where nothing can target them, blinkers skip a stretch of road, hexers shut one of your towers down for a few seconds, juggernauts are fast and heavily plated, and a warlord's aura cuts the damage everything near it takes.",
-      "The road is two tiles wide, so a wave walks two abreast. A Titan comes every fifth wave and splits into brutes; the last map closes with a Leviathan, which is immune to slowing — frost alone will not stop it.",
-      "Every map is twenty waves. Hold all twenty and the next map opens — five in all, each with its own road, its own look and more enemy families than the last.",
+      "Fourteen enemy families, and each map brings more of them. Swarmlings split when they die, burrowers dive underground where nothing can target them, blinkers skip a stretch of road, hexers shut one of your towers down for a few seconds, juggernauts are fast and heavily plated, and a warlord's aura cuts the damage everything near it takes.",
+      "The road is two tiles wide, so a wave walks two abreast. A Titan comes every fifth wave and splits into brutes; from map 10 on, every fifth map ends on a Leviathan instead, which is immune to slowing — frost alone will not stop it.",
+      "Thirty maps, twenty waves each. Hold all twenty and the next map opens. The road changes every map and the whole landscape every five, and new enemy families keep joining until every one of the fourteen is in play.",
       "A run banks Bastion Cores based on how deep you got. Spend them on permanent upgrades from the start screen. The 💾 button in the top bar stops a run and keeps everything it earned.",
     ];
   }
@@ -507,19 +590,17 @@ export class TowerDefenseGame extends GameBase {
 
   onStart(difficulty) {
     this._layout();
-    const cfg = {
-      // The campaign ramp does the escalating now — level 5 arrives at 3.2x
-      // enemy HP before the per-wave curve — so the opening map is an
-      // opening, not a wall.
-      Easy:   { hpMul: 0.80, speedMul: 0.92, gold: 210, lives: 18, reward: 1.15, core: 0.85 },
-      Normal: { hpMul: 1.00, speedMul: 1.02, gold: 170, lives: 14, reward: 0.98, core: 1.0 },
-      Hard:   { hpMul: 1.28, speedMul: 1.14, gold: 140, lives: 10, reward: 0.88, core: 1.4 },
-    }[difficulty] || {};
+    // A single baseline. The thirty-map ramp does all the escalating, so this
+    // is only the shape of map one: firm, but not a wall for a first attempt.
+    const cfg = { hpMul: 1.06, speedMul: 1.02, gold: 165, lives: 14, reward: 0.98, core: 1.0 };
     this.cfg = cfg;
 
     this.dmgMul = 1 + META.value("dmg");
     this.rangeMul = 1 + META.value("range");
-    this.goldMul = cfg.reward * (1 + META.value("income"));
+    // Bounties climb with the map. Without this, late maps paid map-one money
+    // for enemies with twenty times the health and simply could not be built
+    // against, however well the player had ground.
+    this.goldMul = cfg.reward * (1 + META.value("income")) * (1 + this.levelIdx * 0.34);
     this.costMul = 1 - META.value("build");
 
     this.gold = cfg.gold + META.value("gold");
@@ -668,11 +749,15 @@ export class TowerDefenseGame extends GameBase {
     const pool = waveComposition(this.wave, this.level);
     // Steeper than before: the meta upgrades are what keep this beatable, so
     // a run without them should stall well before wave 15.
-    // Each level starts harder than the last one did, on top of the ramp
-    // inside the level's own twenty waves.
-    const levelMul = 1 + this.levelIdx * 0.55;
-    const hpMul = this.cfg.hpMul * levelMul * (1 + this.wave * 0.28);
-    const speedMul = this.cfg.speedMul * (1 + this.levelIdx * 0.03) * (1 + Math.min(0.55, this.wave * 0.015));
+    // Thirty maps need a gentler per-map step than five did, but it has to
+    // keep climbing at the top end — so a linear term for the early maps and
+    // a quadratic one that only really bites past the halfway mark. Map 1 is
+    // 1.0x, map 10 about 5.4x, map 20 about 12x, map 30 about 22x, all before
+    // the twenty-wave ramp inside the map itself.
+    const li = this.levelIdx;
+    const levelMul = 1 + li * 0.42 + Math.pow(li / 10, 2) * 0.95;
+    const hpMul = this.cfg.hpMul * levelMul * (1 + this.wave * 0.30);
+    const speedMul = this.cfg.speedMul * (1 + Math.min(0.30, li * 0.012)) * (1 + Math.min(0.55, this.wave * 0.015));
     let delay = 0;
     for (const type of pool) {
       const spec = ENEMIES[type];

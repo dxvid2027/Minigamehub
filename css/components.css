@@ -388,6 +388,11 @@
 @keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
 .modal {
   width: min(520px, 100%); max-height: 88vh; overflow: auto;
+}
+/* A dialog whose content sets its own comfortable width, like the thirty-map
+   picker — the 520px default clipped its last column. */
+.modal:has(.map-picker) {
+  width: min(720px, 100%);
   background: var(--surface-solid); border: 1px solid var(--border-strong);
   border-radius: var(--radius-xl); box-shadow: var(--shadow-lg), var(--shadow-inset);
   animation: modal-in var(--dur-med) var(--ease-out);
@@ -621,28 +626,31 @@ body.immersive #toast-root { display: none; }
   .meta-node .ic { width: 34px; height: 34px; font-size: 1.05rem; }
 }
 
-/* Bastion TD campaign picker on the start screen. */
-.level-picker { width: 100%; margin: 4px 0 2px; }
-.level-picker h4 {
-  font-size: .74rem; letter-spacing: .08em; text-transform: uppercase;
-  color: var(--text-3); margin: 0 0 8px; text-align: center;
+/* Bastion TD map picker — its own window, because thirty maps is a grid. */
+.map-picker { width: 100%; }
+.map-intro { font-size: .8rem; color: var(--text-3); margin: 0 0 12px; }
+.map-grid {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(122px, 1fr));
+  gap: 8px; max-height: min(52vh, 440px); overflow-y: auto; padding-right: 4px;
 }
-.level-row { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; }
-.level-chip {
-  display: flex; flex-direction: column; align-items: center; gap: 1px;
-  min-width: 88px; padding: 8px 10px;
-  border-radius: 12px; border: 1px solid var(--border);
-  background: #ffffff0d; color: var(--text-2); cursor: pointer;
+.map-card {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 2px;
+  padding: 9px 11px; border-radius: 11px;
+  border: 1px solid var(--border); background: #ffffff0d;
+  color: var(--text-2); cursor: pointer; text-align: left;
   transition: transform .12s var(--ease-out), border-color .12s, background .12s;
 }
-.level-chip:hover:not(:disabled) { transform: translateY(-2px); background: #ffffff17; }
-.level-chip.active { border-color: var(--accent); background: #ffffff1f; color: var(--text-1); }
-.level-chip.locked { opacity: .4; cursor: not-allowed; }
-.level-chip b { font-size: 1.05rem; line-height: 1; }
-.level-chip span { font-size: .72rem; font-weight: 600; }
-.level-chip i { font-size: .64rem; font-style: normal; color: var(--text-3); }
-.level-note { font-size: .78rem; color: var(--text-3); text-align: center; margin: 8px 0 0; }
-@media (max-width: 520px) {
-  .level-chip { min-width: 0; flex: 1 1 28%; padding: 7px 6px; }
-  .level-chip span { font-size: .66rem; }
+.map-card:hover:not(:disabled) { transform: translateY(-2px); background: #ffffff1a; border-color: #ffffff33; }
+.map-card .n { font-family: var(--font-display); font-size: 1.05rem; font-weight: 800; color: var(--text-1); line-height: 1; }
+.map-card .nm { font-size: .74rem; font-weight: 600; line-height: 1.2; }
+.map-card .st { font-size: .64rem; color: var(--text-3); }
+.map-card.done { border-color: #2ee6a655; background: #2ee6a610; }
+.map-card.done .st { color: #2ee6a6; }
+.map-card.current { border-color: var(--accent); background: #ffffff1f; }
+.map-card.locked { opacity: .38; cursor: not-allowed; }
+@media (max-width: 560px) {
+  .map-picker { min-width: 0; }
+  .map-grid { grid-template-columns: repeat(auto-fill, minmax(98px, 1fr)); gap: 6px; }
+  .map-card { padding: 7px 8px; }
+  .map-card .nm { font-size: .68rem; }
 }

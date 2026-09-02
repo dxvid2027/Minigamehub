@@ -193,7 +193,13 @@
   display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px;
   background: #060812e6; backdrop-filter: blur(6px);
   text-align: center; padding: 24px; animation: fade-in var(--dur-fast) var(--ease-out);
+  /* Centred content on a stage shorter than the panel overflowed in *both*
+     directions, pushing the Start button up behind the HUD where it could not
+     be pressed at all. Scroll instead, and start from the top once it no
+     longer fits. */
+  overflow-y: auto; overscroll-behavior: contain;
 }
+.game-overlay > * { flex: 0 0 auto; }
 .game-overlay h2 { font-size: clamp(1.4rem, 4vw, 2rem); }
 .game-overlay .overlay-icon { font-size: 3rem; }
 .game-overlay .overlay-actions { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
@@ -317,7 +323,7 @@
   .play-hud .icon-btn svg { width: 17px; height: 17px; }
   .game-tip { display: none; }
   .game-overlay .instructions { font-size: .8rem; padding: 10px 14px; }
-  .game-overlay { padding: 14px; gap: 10px; }
+  .game-overlay { padding: 14px; gap: 10px; justify-content: flex-start; }
   .game-overlay h2 { font-size: 1.3rem; }
   .game-overlay .overlay-icon { font-size: 2.1rem; }
 

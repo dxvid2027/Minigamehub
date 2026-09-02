@@ -241,7 +241,11 @@ export class GameBase {
         onClick: (e) => { this.difficulty = d; [...e.target.parentNode.children].forEach(c => c.classList.remove("active")); e.target.classList.add("active"); audioManager.play("select"); },
       }, d))) : null,
       el("div", { class: "overlay-actions" }, [
-        labelledButton("play", "Start Game", "btn btn-primary btn-lg", () => this.start()),
+        // A game may take over the play button — Bastion TD opens its map
+        // picker rather than dropping you straight onto whichever map you
+        // happened to leave the campaign pointer on.
+        labelledButton("play", this.getPlayLabel?.() || "Start Game", "btn btn-primary btn-lg",
+          () => (this.onPlayPressed ? this.onPlayPressed() : this.start())),
         // Games with permanent between-run upgrades expose their shop here.
         upgrades
           ? labelledButton("sparkles", `Upgrades (${upgrades.cfg.icon} ${formatNumber(upgrades.currency)})`,
