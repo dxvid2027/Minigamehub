@@ -35,10 +35,16 @@ const GRAVITY = 2100;        // px/s^2 at a 1000px-wide box, scaled at runtime
 const SUBSTEPS = 3;
 const RESTITUTION = 0.12;
 const WALL_DAMP = 0.55;
-// Fruit should settle with a lazy turn, not spin like a top: angular speed is
-// capped and bleeds away every step.
-const MAX_SPIN = 0.55;
-const SPIN_DECAY = 2.4;
+// Spin used to be fed by collisions, which never settled: a pile is in
+// permanent contact, so every substep injected a little more and the damping
+// could not win against it — fruit kept turning at the cap minutes after they
+// had stopped moving. Rotation is now rolling instead: a fruit turns because
+// it is travelling, at a fraction of the true rolling rate for a lazy look,
+// and a fruit that has come to rest cannot turn at all.
+const MAX_SPIN = 0.5;
+const ROLL_FRACTION = 0.45;   // of vx / r, so the turn reads slower than a real roll
+const SPIN_EASE = 7;          // how quickly va follows the rolling rate
+const SPIN_SLEEP = 0.04;      // below this a resting fruit stops outright
 
 export class FruitMergeGame extends GameBase {
   getDifficulties() { return ["Easy", "Normal", "Hard"]; }
@@ -115,7 +121,7 @@ export class FruitMergeGame extends GameBase {
       x: clamp(this.dropX, this.box.x + r, this.box.x + this.box.w - r),
       y: this.box.y - r * 0.2,
       vx: 0, vy: 0, r, tier,
-      rot: Math.random() * Math.PI * 2, va: (Math.random() - 0.5) * 0.45,
+      rot: Math.random() * Math.PI * 2, va: 0,
       // A freshly dropped fruit is exempt from the overflow check until it
       // has been inside the box for a moment — otherwise dropping *is* losing.
       settle: 0,
@@ -159,9 +165,12 @@ export class FruitMergeGame extends GameBase {
       f.y += f.vy * h;
       f.vx *= 0.999;
 
-      // Walls and floor.
-      if (f.x - f.r < b.x) { f.x = b.x + f.r; f.vx = Math.abs(f.vx) * WALL_DAMP; f.va += 0.12; }
-      if (f.x + f.r > b.x + b.w) { f.x = b.x + b.w - f.r; f.vx = -Math.abs(f.vx) * WALL_DAMP; f.va -= 0.12; }
+      // Walls and floor. The walls used to add a fixed spin kick on every
+      // contact, which a fruit leaning against the side collected each substep
+      // — that alone spun it up to ~180 deg/s and never let go. The bounce
+      // flips vx, and the rolling pass below turns that into the right spin.
+      if (f.x - f.r < b.x) { f.x = b.x + f.r; f.vx = Math.abs(f.vx) * WALL_DAMP; }
+      if (f.x + f.r > b.x + b.w) { f.x = b.x + b.w - f.r; f.vx = -Math.abs(f.vx) * WALL_DAMP; }
       if (f.y + f.r > b.y + b.h) {
         f.y = b.y + b.h - f.r;
         f.vy = -Math.abs(f.vy) * RESTITUTION;
@@ -198,17 +207,17 @@ export class FruitMergeGame extends GameBase {
           const imp = (-(1 + RESTITUTION) * sep) / total;
           a.vx -= imp * mc * nx; a.vy -= imp * mc * ny;
           c.vx += imp * ma * nx; c.vy += imp * ma * ny;
-          const spin = (rvx * -ny + rvy * nx) * 0.0004;
-          a.va -= spin; c.va += spin;
         }
       }
     }
 
-    // Bleed off spin last: fruit resting in a pile are in permanent contact,
-    // so damping before the collision pass never wins against it.
+    // Roll last, once this step's velocities are final. Bigger fruit turn more
+    // slowly for the same travel, which is what makes a melon read as heavy.
+    const k = 1 - Math.exp(-SPIN_EASE * h);
     for (const f of this.fruits) {
-      const resting = Math.hypot(f.vx, f.vy) < 70;
-      f.va = clamp(f.va * Math.exp(-(resting ? 9 : SPIN_DECAY) * h), -MAX_SPIN, MAX_SPIN);
+      const roll = clamp((f.vx / f.r) * ROLL_FRACTION, -MAX_SPIN, MAX_SPIN);
+      f.va = clamp(f.va + (roll - f.va) * k, -MAX_SPIN, MAX_SPIN);
+      if (Math.hypot(f.vx, f.vy) < 40 && Math.abs(f.va) < SPIN_SLEEP) f.va = 0;
     }
 
     if (this.fruits.some(f => f.dead)) this.fruits = this.fruits.filter(f => !f.dead);
@@ -223,7 +232,7 @@ export class FruitMergeGame extends GameBase {
       x, y,
       vx: (a.vx + c.vx) / 2, vy: (a.vy + c.vy) / 2 - 40,
       r: this._radius(tier), tier,
-      rot: 0, va: (Math.random() - 0.5) * 0.55,
+      rot: 0, va: 0,
       settle: Math.min(a.settle, c.settle), pop: 0.26,
     });
     this.effects.push({ x, y, r: this._radius(tier), color: t.color, t: 0, life: 0.42 });
