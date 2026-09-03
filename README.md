@@ -1,7 +1,7 @@
 # 🎮 MegaPlay Hub
 
-A premium browser gaming platform — **41 polished games, eight of them real-time 3D
-(WebGL)** — with a full progression system, 174 achievements, daily challenges,
+A premium browser gaming platform — **56 polished games, eight of them real-time 3D
+(WebGL)** — with a full progression system, 258 achievements, daily challenges,
 profiles, statistics and unlockables.
 Written in **vanilla JavaScript (ES modules)** with **zero runtime dependencies**,
 no build step and no external services: everything runs locally and offline.
@@ -12,7 +12,7 @@ no build step and no external services: everything runs locally and offline.
 
 | Area | What you get |
 |---|---|
-| **Games** | 41 complete games — arcade, puzzle, board, action, sports, skill and eight 3D titles |
+| **Games** | 56 complete games — arcade, puzzle, board, action, sports, skill, strategy and eight 3D titles |
 | **3D** | A dependency-free WebGL renderer (`js/games/engine3d.js`): lit shading, fog, procedural textures, blob shadows, free CSS sky backdrops |
 | **Framework** | Every game inherits start/pause/win/lose screens, a HUD with an in-game **How to play** panel, difficulty levels, high scores, statistics, sound and touch controls from a shared `GameBase` class |
 | **Progression** | XP, levels, coins, achievement points, unlockable themes and avatars |
@@ -137,6 +137,35 @@ it off completely is rejected) ·
 Iron Vanguard (360° base defense on a polar grid: turrets have their own hit
 points, Lancers park at range and shell them, and an Overcharge doubles every
 turret's fire rate for five seconds)
+
+**The September fifteen**
+
+Deep Delve (a drill rig and a shaft: seven strata, fuel and hull that only
+the surface depot restores, and ore you lose if you do not carry it home) ·
+Abyss Angler (six depth zones, thirty species, a descent you steer and a
+reel-in that snaps the line if you pull through a fish's surge) ·
+Rift Deck (a deckbuilding roguelike: 27 cards, 7 relics, 11 enemies that
+telegraph their next move, three floors and three Wardens) ·
+Harbor Line (a transit network across a city that keeps growing — one
+choked station ends it) ·
+Orbital Command (thirty gravity-slingshot problems, each generated from a
+flight the game has proven it can produce) ·
+Cannon Coast (an artillery duel over destructible coastline: ten opponents,
+eight shells, and a wind redrawn every turn) ·
+Pulse Runner (four-lane rhythm with no audio files — the music is generated
+live and the chart comes out of the same pattern) ·
+Alchemy Table (four elements, 124 recipes, 128 things to find) ·
+Shadow Vault (turn-based grid stealth: nothing moves until you do) ·
+Forge Master (heat, hammer, quench and grind — four graded stages and a
+quality that decides what the blade is worth) ·
+Bloom Garden (a plot, four seasons, and sixteen flower species found by
+crossing blooms that sit next to each other) ·
+Colony Seven (a hex settlement against the winters: ten buildings, five
+resources, settlers who starve if you build one thing too many) ·
+Chain Reaction (a contraption builder — place ramps, fans and magnets, then
+run it and watch what the physics really does) ·
+Frost Solitaire (Spider on a frozen table, one to four suits) ·
+Duel Ring (fencing decided by reading a wind-up, twelve opponents deep)
 
 **3D games (8, WebGL)**
 

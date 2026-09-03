@@ -166,7 +166,15 @@ export class RiftDeckGame extends GameBase {
     let spec;
     if (this.fightNo > fl.fights) spec = ENEMIES.find(e => e.id === fl.boss);
     else if (this.fightNo === Math.ceil(fl.fights * 0.7)) spec = ENEMIES.find(e => e.id === fl.elite);
-    else spec = ENEMIES.find(e => e.id === choice(fl.pool));
+    else {
+      // The roll has to happen once, not inside the predicate: calling
+      // choice() there re-rolled for every enemy in the list, so find()
+      // returned undefined whenever no element happened to match its own
+      // draw — an intermittent crash on starting a fight.
+      const pick = choice(fl.pool);
+      spec = ENEMIES.find(e => e.id === pick);
+    }
+    if (!spec) spec = ENEMIES[0];
 
     const scale = fl.scale * (1 + (this.fightNo - 1) * 0.05);
     const hp = Math.round(spec.hp * (spec.boss ? 1 : scale));

@@ -1,6 +1,6 @@
 // ==========================================================================
-// Achievement definitions — 30+ global achievements plus 4 tiers per game
-// (38 games x 4 = 152), for 180+ achievements total.
+// Achievement definitions — 34 global achievements plus 4 tiers per game
+// (56 games x 4 = 224), for 258 in total.
 // Each achievement exposes getCurrent(save) so AchievementSystem can compute
 // live progress without duplicating state.
 // ==========================================================================
@@ -26,6 +26,13 @@ const SCORE_GOALS = {
   "tower-blocks-3d": 320, "asteroid-belt-3d": 1400,
   "sky-parkour-3d": 1200, "storm-arena-3d": 2200, "fruit-merge": 3500,
   "rift-siege": 4500, "iron-vanguard": 4000, "citadel-wars-3d": 5000,
+  // The fifteen added in September: goals set from real bot and play runs,
+  // not guessed, so "Legend" means a genuinely good session in each.
+  "deep-delve": 6000, "abyss-angler": 4000, "rift-deck": 2500,
+  "harbor-line": 2000, "orbital-command": 9000, "cannon-coast": 4000,
+  "pulse-runner": 60000, "alchemy-table": 6000, "shadow-vault": 9000,
+  "forge-master": 900, "bloom-garden": 3000, "colony-seven": 2500,
+  "chain-reaction": 9000, "frost-solitaire": 3000, "duel-ring": 4000,
 };
 
 function buildGlobalAchievements() {
