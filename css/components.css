@@ -805,3 +805,40 @@ body.immersive #toast-root { display: none; }
 .relic-card .nm { font-size: .86rem; font-weight: 700; color: var(--text-1); }
 .relic-card .ds { font-size: .7rem; color: var(--text-3); line-height: 1.32; }
 .modal:has(.reward-body) { width: min(720px, 100%); }
+
+/* --- Orbital Command: mission select ---------------------------------- */
+.orb-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(74px, 1fr)); gap: 8px; }
+.orb-card {
+  display: flex; flex-direction: column; align-items: center; gap: 2px;
+  padding: 10px 6px; border-radius: 12px;
+  border: 1px solid var(--border); background: #ffffff0d; color: var(--text-2);
+  cursor: pointer; transition: transform .12s var(--ease-out), border-color .12s, background .12s;
+}
+.orb-card:hover:not(:disabled) { transform: translateY(-2px); background: #ffffff1a; border-color: var(--accent); }
+.orb-card .n { font-size: 1.05rem; font-weight: 800; color: var(--text-1); }
+.orb-card .st { font-size: .62rem; letter-spacing: .06em; color: #ffd76a; }
+.orb-card.perfect { border-color: #ffd76a88; background: #ffd76a12; }
+.orb-card.locked { opacity: .4; cursor: not-allowed; }
+.orb-card.locked .st { color: var(--text-3); }
+.modal:has(.orb-picker) { width: min(640px, 100%); }
+
+/* --- Cannon Coast: the opponent ladder -------------------------------- */
+.foe-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 9px; }
+.foe-card {
+  position: relative; display: flex; flex-direction: column; align-items: flex-start; gap: 3px;
+  padding: 10px 11px 11px; border-radius: 12px; text-align: left;
+  border: 1px solid var(--border); background: #ffffff0d; color: var(--text-2);
+  cursor: pointer; transition: transform .12s var(--ease-out), border-color .12s, background .12s;
+}
+.foe-card:hover:not(:disabled) { transform: translateY(-2px); background: #ffffff1a; border-color: var(--fc); }
+.foe-card .sw { width: 100%; height: 5px; border-radius: 999px; background: var(--fc); }
+.foe-card .n { font-size: .6rem; letter-spacing: .1em; color: var(--text-3); }
+.foe-card .nm { font-size: .86rem; font-weight: 700; color: var(--text-1); }
+.foe-card .st { font-size: .66rem; color: var(--text-3); }
+.foe-card.beaten { border-color: #2ee6a655; }
+.foe-card.beaten::after {
+  content: "✓"; position: absolute; right: 9px; top: 12px;
+  color: #2ee6a6; font-weight: 800; font-size: .9rem;
+}
+.foe-card.locked { opacity: .42; cursor: not-allowed; }
+.modal:has(.foe-picker) { width: min(700px, 100%); }
