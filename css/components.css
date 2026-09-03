@@ -707,3 +707,101 @@ body.immersive #toast-root { display: none; }
   .zone-grid { grid-template-columns: 1fr; }
   .skin-grid { grid-template-columns: repeat(auto-fill, minmax(108px, 1fr)); gap: 7px; }
 }
+
+/* --- Deep Delve: the garage ------------------------------------------- */
+.delve-summary { display: flex; flex-wrap: wrap; gap: 14px; justify-content: center; font-size: .78rem; color: var(--text-3); }
+.delve-summary span { padding: 4px 10px; border-radius: 999px; background: #ffffff0d; border: 1px solid var(--border); }
+.rig-shop .rig-credits { display: block; text-align: center; font-size: 1.05rem; color: var(--accent-2); margin: 6px 0 12px; }
+.rig-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 10px; }
+.rig-card {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 5px;
+  padding: 11px 12px; border-radius: 12px; text-align: left;
+  border: 1px solid var(--border); background: #ffffff0d; color: var(--text-2);
+  cursor: pointer; transition: transform .12s var(--ease-out), border-color .12s, background .12s;
+}
+.rig-card:hover:not(:disabled) { transform: translateY(-2px); background: #ffffff1a; border-color: var(--accent); }
+.rig-card .nm { font-size: .86rem; font-weight: 700; color: var(--text-1); }
+.rig-card .ds { font-size: .68rem; color: var(--text-3); line-height: 1.3; }
+.rig-card .pips { display: flex; gap: 3px; margin: 2px 0; }
+.rig-card .pips i { width: 11px; height: 5px; border-radius: 2px; background: #ffffff1f; }
+.rig-card .pips i.on { background: linear-gradient(90deg, var(--accent), var(--accent-2)); }
+.rig-card .cost { font-size: .74rem; font-weight: 700; color: var(--accent-2); }
+.rig-card.maxed .cost { color: var(--text-3); }
+.rig-card.poor { opacity: .55; cursor: not-allowed; }
+.rig-card.poor .cost { color: var(--text-3); }
+.modal:has(.rig-shop) { width: min(720px, 100%); }
+
+/* --- Abyss Angler: dock, bait and the species log --------------------- */
+.dock-h { margin: 14px 0 7px; font-size: .74rem; letter-spacing: .08em; text-transform: uppercase; color: var(--text-3); }
+.bait-row { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 9px; }
+.bait-card {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 4px;
+  padding: 10px 11px; border-radius: 12px; text-align: left;
+  border: 1px solid var(--border); background: #ffffff0d; color: var(--text-2); cursor: pointer;
+  transition: transform .12s var(--ease-out), border-color .12s, background .12s;
+}
+.bait-card:hover:not(:disabled) { transform: translateY(-2px); background: #ffffff1a; }
+.bait-card .sw { width: 26px; height: 8px; border-radius: 999px; background: var(--bt); }
+.bait-card .nm { font-size: .84rem; font-weight: 700; color: var(--text-1); }
+.bait-card .ds { font-size: .66rem; color: var(--text-3); line-height: 1.3; }
+.bait-card .cost { font-size: .72rem; font-weight: 700; color: var(--accent-2); }
+.bait-card.active { border-color: var(--accent); background: #ffffff1f; }
+.bait-card.poor { opacity: .5; cursor: not-allowed; }
+.fish-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(128px, 1fr)); gap: 9px; }
+.fish-card {
+  display: flex; flex-direction: column; align-items: center; gap: 3px;
+  padding: 9px 8px; border-radius: 12px;
+  border: 1px solid var(--border); background: #ffffff0d; color: var(--text-2);
+}
+.fish-card .prev {
+  display: grid; place-items: center; height: 48px; width: 100%;
+  border-radius: 10px; background: radial-gradient(circle at 50% 50%, #0d2b3a, #061621 75%);
+}
+.fish-card .nm { font-size: .76rem; font-weight: 700; color: var(--text-1); }
+.fish-card .st { font-size: .62rem; color: var(--text-3); text-align: center; line-height: 1.25; }
+.fish-card.caught { border-color: #22d3ee55; }
+.fish-card.boss.caught { border-color: var(--accent-2); }
+.fish-card.boss .prev { background: radial-gradient(circle at 50% 50%, #2a1040, #0a0416 75%); }
+.modal:has(.fish-log) { width: min(760px, 100%); }
+
+/* --- Rift Deck: reward picks, deck view and relics -------------------- */
+.reward-body .card-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(132px, 1fr)); gap: 10px; }
+.reward-body .card-grid.small { grid-template-columns: repeat(auto-fill, minmax(112px, 1fr)); gap: 8px; }
+.rd-card { position: relative; padding: 0; border: 0; background: none; cursor: pointer; transition: transform .12s var(--ease-out); }
+.rd-card:hover { transform: translateY(-4px); }
+.rd-card.static { cursor: default; }
+.rd-card.static:hover { transform: none; }
+.rd-card .count {
+  position: absolute; right: -4px; top: -4px; padding: 1px 6px; border-radius: 999px;
+  background: var(--accent); color: #fff; font-size: .66rem; font-weight: 800;
+}
+.card-face {
+  display: flex; flex-direction: column; gap: 4px; text-align: left;
+  padding: 10px 10px 11px; border-radius: 12px; min-height: 118px;
+  border: 1.5px solid var(--border); background: linear-gradient(180deg, #1a1626, #100d19);
+}
+.card-face.k-attack { border-color: #ff547066; background: linear-gradient(180deg, #2c1620, #100d19); }
+.card-face.k-skill  { border-color: #22d3ee66; background: linear-gradient(180deg, #12242e, #100d19); }
+.card-face.k-power  { border-color: #a86bff66; background: linear-gradient(180deg, #221838, #100d19); }
+.card-face .cost {
+  align-self: flex-start; min-width: 20px; text-align: center; padding: 1px 0;
+  border-radius: 999px; background: #ffd76a; color: #2a1f04; font-size: .74rem; font-weight: 800;
+}
+.card-face .nm { font-size: .82rem; font-weight: 800; color: var(--text-1); }
+.card-face .kind { font-size: .58rem; letter-spacing: .1em; text-transform: uppercase; color: var(--text-3); }
+.card-face .tx { font-size: .68rem; color: var(--text-2); line-height: 1.32; }
+.relic-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 10px; }
+.relic-card {
+  display: flex; flex-direction: column; gap: 5px; align-items: flex-start; text-align: left;
+  padding: 12px; border-radius: 12px; cursor: pointer;
+  border: 1px solid #ffd76a55; background: #ffd76a12; color: var(--text-2);
+  transition: transform .12s var(--ease-out), background .12s;
+}
+.relic-card:hover { transform: translateY(-2px); background: #ffd76a22; }
+.relic-card .ic {
+  width: 26px; height: 26px; display: grid; place-items: center; border-radius: 999px;
+  background: #ffd76a22; border: 1px solid #ffd76a; color: #ffd76a; font-weight: 800; font-size: .8rem;
+}
+.relic-card .nm { font-size: .86rem; font-weight: 700; color: var(--text-1); }
+.relic-card .ds { font-size: .7rem; color: var(--text-3); line-height: 1.32; }
+.modal:has(.reward-body) { width: min(720px, 100%); }
