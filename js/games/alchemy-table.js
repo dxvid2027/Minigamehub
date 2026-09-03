@@ -1,21 +1,27 @@
 // ==========================================================================
-// Alchemy Table — start with four elements and end with a hundred and twenty-eight.
+// Alchemy Table — start with four elements and end with a hundred and
+// twenty-eight, every one of them with its own picture.
 //
 // Drag one thing onto another. If the pair is a recipe, you discover what it
 // makes and it joins the shelf permanently. That is the entire rule, and
 // everything else in the game is the recipe tree: 124 recipes in eight
-// tiers reaching 128 elements, where the interesting ones need something
-// you only got two steps earlier.
+// tiers, where the interesting ones need something you only got two steps
+// earlier.
 //
-// Discoveries are saved, so the shelf is a collection you build across
-// sessions rather than a puzzle you solve once. A hint costs a little of
-// the score you have banked, which keeps it a real decision.
+// The shelf is a real scrolling cabinet with category tabs and a scrollbar.
+// It used to be a fixed two-row strip with a `scroll` field nothing ever
+// wrote to, so past about a dozen discoveries the rest were simply
+// unreachable — you could make things you could never pick up again.
+//
+// Artwork lives in alchemyArt.js: one drawing per element, sharing a small
+// vocabulary of primitives so the set reads as one illustrated collection.
 // ==========================================================================
 import { GameBase } from "./gameBase.js";
 import { audioManager } from "../systems/audioManager.js";
 import { saveManager } from "../systems/saveManager.js";
 import { openModal, closeModal } from "../ui/modal.js";
-import { el, clamp, formatNumber, choice, shuffle } from "../core/utils.js";
+import { el, clamp, formatNumber, choice } from "../core/utils.js";
+import { drawElement, ringColor, inkColor } from "./alchemyArt.js";
 
 // --- The tree -------------------------------------------------------------
 // [result, a, b]. Written as a flat list because the tree is the content:
@@ -118,7 +124,6 @@ const GROUP_OF = {
 };
 
 const START = ["water", "fire", "earth", "air"];
-
 // Recipes keyed both ways so order never matters.
 const LOOKUP = new Map();
 for (const [out, a, b] of RECIPES) {
@@ -126,6 +131,22 @@ for (const [out, a, b] of RECIPES) {
   LOOKUP.set(`${b}|${a}`, out);
 }
 const ALL = [...new Set([...START, ...RECIPES.map(r => r[0])])];
+const ORDER = Object.fromEntries(ALL.map((id, i) => [id, i]));
+
+// --- Categories -----------------------------------------------------------
+// The shelf can be filtered down to one family. With 128 elements a single
+// flat list is a haystack even when it scrolls.
+const CATS = [
+  { id: "all",     name: "All",     match: () => true },
+  { id: "nature",  name: "Nature",  ids: "water fire earth air steam mud dust lava rain energy sea mountain wind heat cloud stone sand clay storm lightning obsidian geyser swamp desert island volcano ash glass metal" },
+  { id: "life",    name: "Life",    ids: "life algae plant moss tree grass flower seed bacteria egg fish bird lizard beetle worm forest jungle dinosaur dragon phoenix mammal horse wolf" },
+  { id: "sky",     name: "Sky",     ids: "sun sky moon star space rainbow time horizon galaxy universe black_hole singularity satellite colony creation" },
+  { id: "made",    name: "Crafted", ids: "brick wall house wood paper book wheel cart boat blade sword armour tool forge steel gear engine train ship plane rocket machine computer network ai" },
+  { id: "people",  name: "People",  ids: "human farmer smith sailor knight wizard pirate astronaut scholar philosopher" },
+  { id: "magic",   name: "Arcane",  ids: "magic spell potion curse death ghost soul golem gold philosophers_stone elixir immortality myth alchemy" },
+  { id: "civ",     name: "Realms",  ids: "village city castle kingdom empire war peace history library university science legend" },
+];
+for (const c of CATS) if (c.ids) { const set = new Set(c.ids.split(" ")); c.match = (id) => set.has(id); }
 
 function label(id) {
   return id.split("_").map(w => w[0].toUpperCase() + w.slice(1)).join(" ");
@@ -137,14 +158,14 @@ export class AlchemyTableGame extends GameBase {
     return [
       "Drag one element onto another. If the pair makes something, it is discovered and joins the shelf for good.",
       "You start with water, fire, earth and air. Everything else — all 124 of them — comes out of those four.",
-      "Order never matters. Water on fire and fire on water are the same combination.",
-      "Stuck? A hint names two things on your shelf that make something new, for a small slice of your score.",
-      "Discoveries are saved between sessions. The shelf is a collection, not a puzzle you finish in one sitting.",
+      "The shelf scrolls: use the wheel, drag the scrollbar on its right edge, or the tabs above it to show one family at a time.",
+      "Tapping an element on the shelf puts a copy straight onto the table, which is quicker than dragging on a phone.",
+      "Order never matters. Stuck? A hint names two things you already own that make something new, for a slice of your score.",
     ];
   }
   getTouchLayout() { return "none"; }
-  getTouchHint() { return "Drag an element from the shelf onto another to combine them."; }
-  getKeyboardHint() { return "Drag with the mouse. H asks for a hint."; }
+  getTouchHint() { return "Tap an element to place it, then drag it onto another. Swipe the shelf to scroll."; }
+  getKeyboardHint() { return "Drag with the mouse, wheel to scroll the shelf. H for a hint, L for the codex."; }
   getScene() { return "aurora"; }
 
   // ------------------------------------------------------------- SAVE ----
@@ -157,9 +178,14 @@ export class AlchemyTableGame extends GameBase {
     return a;
   }
   _save() { saveManager.saveNow(); }
+  /** Discovered elements, in tree order so the shelf never reshuffles. */
   _foundList() {
     const f = this._store().found;
     return ALL.filter(id => f[id]);
+  }
+  _shelfList() {
+    const cat = CATS[this.catIdx || 0];
+    return this._foundList().filter(id => cat.match(id));
   }
 
   getPlayLabel() { return "Open the table"; }
@@ -179,21 +205,37 @@ export class AlchemyTableGame extends GameBase {
     this.input.onPointer("move", (p) => this._move(p.x, p.y));
     this.input.onPointer("up", (p) => this._up(p.x, p.y));
     this.input.onKey("KeyH", () => this._hint());
+    this.input.onKey("KeyL", () => this.openCodex());
+    this.input.onKey("KeyC", () => { this.bench = []; audioManager.play("click"); });
+    // The wheel is the natural way to scroll a cabinet on a desktop.
+    this._onWheel = (e) => {
+      if (this.state !== "playing") return;
+      const r = this.canvas.getBoundingClientRect();
+      if (e.clientY < r.top + (this.shelfY || 0) * (r.height / (this.viewH || 1))) return;
+      e.preventDefault();
+      this._scrollBy(e.deltaY * 0.6);
+    };
+    this.canvas.addEventListener("wheel", this._onWheel, { passive: false });
+    this.catIdx = 0;
   }
+
+  onDestroy() { this.canvas?.removeEventListener("wheel", this._onWheel); }
 
   onResize() { this._relayout(); }
 
   onStart() {
-    this.found = this._foundList();
     this.bench = [];               // things placed out on the table
     this.drag = null;
     this.scroll = 0;
     this.pops = [];
+    this.motes = [];
     this.msg = "Drag one element onto another";
-    this.msgT = 3;
+    this.msgT = 3.5;
     this.elapsed = 0;
     this.newest = null;
+    this.newestT = 0;
     this.discoveredThisRun = 0;
+    this.catIdx = 0;
     this.setScore(Object.keys(this._store().found).length * 40);
     this._relayout();
     this._updateHud();
@@ -201,26 +243,65 @@ export class AlchemyTableGame extends GameBase {
 
   _relayout() {
     const W = this.viewW || 600, H = this.viewH || 600;
-    this.shelfY = H - 132;
-    this.cell = clamp(Math.floor(W / 7), 58, 84);
+    // The cabinet takes the bottom 40% of a tall stage but never less than
+    // three rows, which is what makes it worth scrolling at all.
+    this.cell = clamp(Math.round(W / 7), 56, 78);
+    // A row is `cell` tall and its name sits in the last few pixels, so the
+    // panel needs the tab strip plus a little slack or the bottom row's
+    // label is clipped by the stage edge.
+    const rows = clamp(Math.floor((H * 0.42 - 40) / this.cell), 2, 5);
+    this.shelfH = rows * this.cell + 40;
+    this.shelfY = H - this.shelfH;
+    this.tabY = this.shelfY + 5;
+    this.gridY = this.shelfY + 34;
+    this.perRow = Math.max(1, Math.floor((W - 26) / this.cell));
+    this._clampScroll();
   }
 
+  _rowsNeeded() { return Math.ceil(this._shelfList().length / this.perRow); }
+  _maxScroll() {
+    const visible = this.shelfH - 40;
+    return Math.max(0, this._rowsNeeded() * this.cell - visible);
+  }
+  _clampScroll() { this.scroll = clamp(this.scroll || 0, 0, this._maxScroll()); }
+  _scrollBy(d) { this.scroll = clamp((this.scroll || 0) + d, 0, this._maxScroll()); }
+
   // ------------------------------------------------------------- LAYOUT --
-  /** Shelf slots along the bottom, in a scrolling two-row strip. */
+  _tabs() {
+    const W = this.viewW;
+    // Leave room on the right for the scrollbar so the last tab and the bar
+    // never share a pixel.
+    const w = Math.min(74, (W - 30) / CATS.length - 3);
+    const total = CATS.length * w + (CATS.length - 1) * 3;
+    const x0 = (W - 14 - total) / 2;
+    return CATS.map((c, i) => ({ i, c, x: x0 + i * (w + 3), y: this.tabY, w, h: 24 }));
+  }
+
   _shelfSlots() {
-    const W = this.viewW, c = this.cell;
-    const perRow = Math.max(1, Math.floor((W - 16) / c));
-    return this.found.map((id, i) => ({
+    const c = this.cell;
+    const list = this._shelfList();
+    return list.map((id, i) => ({
       id,
-      x: 8 + (i % perRow) * c,
-      y: this.shelfY + 8 + Math.floor(i / perRow) * c - this.scroll,
+      x: 13 + (i % this.perRow) * c,
+      y: this.gridY + Math.floor(i / this.perRow) * c - this.scroll,
       w: c - 6, h: c - 6,
     }));
   }
 
+  _scrollbar() {
+    const max = this._maxScroll();
+    if (max <= 0) return null;
+    const track = { x: this.viewW - 9, y: this.gridY, w: 6, h: this.shelfH - 40 };
+    const frac = track.h / (track.h + max);
+    const thumbH = Math.max(26, track.h * frac);
+    const t = this.scroll / max;
+    return { track, thumb: { x: track.x, y: track.y + t * (track.h - thumbH), w: track.w, h: thumbH } };
+  }
+
   _hitShelf(x, y) {
-    if (y < this.shelfY) return null;
+    if (y < this.gridY - 4 || y > this.viewH) return null;
     for (const s of this._shelfSlots()) {
+      if (s.y + s.h < this.gridY - 4 || s.y > this.viewH) continue;
       if (x >= s.x && x <= s.x + s.w && y >= s.y && y <= s.y + s.h) return s;
     }
     return null;
@@ -237,20 +318,81 @@ export class AlchemyTableGame extends GameBase {
   // ------------------------------------------------------------- INPUT ---
   _down(x, y) {
     if (this.state !== "playing") return;
+    // Tabs.
+    for (const t of this._tabs()) {
+      if (x >= t.x && x <= t.x + t.w && y >= t.y && y <= t.y + t.h) {
+        this.catIdx = t.i; this.scroll = 0; audioManager.play("select");
+        this._say(`${t.c.name} — ${this._shelfList().length} shown`, "#ffd76a");
+        return;
+      }
+    }
+    // Scrollbar thumb.
+    const sb = this._scrollbar();
+    if (sb && x > sb.track.x - 10 && y >= sb.track.y && y <= sb.track.y + sb.track.h) {
+      this.barDrag = { grabY: y, from: this.scroll };
+      return;
+    }
     const b = this._hitBench(x, y);
-    if (b) { this.drag = { id: b.id, x, y, from: b }; this.bench = this.bench.filter(v => v !== b); return; }
+    if (b) {
+      this.drag = { id: b.id, x, y, from: b };
+      this.bench = this.bench.filter(v => v !== b);
+      return;
+    }
     const s = this._hitShelf(x, y);
-    if (s) { this.drag = { id: s.id, x, y, from: null }; return; }
+    if (s) {
+      // A press on the shelf may become a drag or a swipe-scroll; which one
+      // is decided on the first move, so both gestures live on one finger.
+      this.shelfPress = { id: s.id, x, y, sy: y, scroll0: this.scroll, moved: 0 };
+      return;
+    }
   }
 
-  _move(x, y) { if (this.drag) { this.drag.x = x; this.drag.y = y; } }
+  _move(x, y) {
+    if (this.barDrag) {
+      const sb = this._scrollbar();
+      if (sb) {
+        const max = this._maxScroll();
+        const span = sb.track.h - sb.thumb.h;
+        this.scroll = clamp(this.barDrag.from + ((y - this.barDrag.grabY) / (span || 1)) * max, 0, max);
+      }
+      return;
+    }
+    if (this.shelfPress) {
+      const p = this.shelfPress;
+      p.moved = Math.max(p.moved, Math.hypot(x - p.x, y - p.y));
+      // A mostly-vertical drag inside the cabinet scrolls it; anything else
+      // lifts the element out.
+      if (!p.mode && p.moved > 8) {
+        p.mode = Math.abs(y - p.y) > Math.abs(x - p.x) * 1.2 && y > this.gridY ? "scroll" : "lift";
+        if (p.mode === "lift") { this.drag = { id: p.id, x, y, from: null }; this.shelfPress = null; return; }
+      }
+      if (p.mode === "scroll") this.scroll = clamp(p.scroll0 - (y - p.sy), 0, this._maxScroll());
+      return;
+    }
+    if (this.drag) { this.drag.x = x; this.drag.y = y; }
+  }
 
   _up(x, y) {
+    if (this.barDrag) { this.barDrag = null; return; }
+    if (this.shelfPress) {
+      const p = this.shelfPress;
+      this.shelfPress = null;
+      // A tap (no real movement) drops a copy onto the table. On a phone this
+      // is the whole difference between playable and not.
+      if (p.moved < 8) {
+        const tx = this.viewW / 2 + (Math.random() - 0.5) * this.viewW * 0.32;
+        const ty = this.shelfY * (0.34 + Math.random() * 0.3);
+        const onto = this._hitBench(tx, ty);
+        if (onto) this._combine(p.id, onto, tx, ty);
+        else this.bench.push({ id: p.id, x: tx, y: ty, pop: 0.3 });
+        audioManager.play("place");
+      }
+      return;
+    }
     if (!this.drag) return;
     const d = this.drag;
     this.drag = null;
-    // Dropped back on the shelf: put it away.
-    if (y > this.shelfY) return;
+    if (y > this.shelfY) return;             // dropped back into the cabinet
     const onto = this._hitBench(x, y);
     if (onto) { this._combine(d.id, onto, x, y); return; }
     this.bench.push({ id: d.id, x, y, pop: 0.3 });
@@ -260,41 +402,58 @@ export class AlchemyTableGame extends GameBase {
     const idB = target.id;
     const out = LOOKUP.get(`${idA}|${idB}`);
     if (!out) {
-      // No recipe: both stay on the table, nudged apart, and say so.
-      this.bench.push({ id: idA, x: x - 34, y, pop: 0.2, shake: 0.3 });
-      target.x = x + 34;
-      target.shake = 0.3;
+      this.bench.push({ id: idA, x: x - 36, y, pop: 0.2, shake: 0.35 });
+      target.x = x + 36;
+      target.shake = 0.35;
       audioManager.play("error");
       this._say(`${label(idA)} + ${label(idB)} — nothing`, "#8b90ac");
       return;
     }
     this.bench = this.bench.filter(v => v !== target);
-    this.bench.push({ id: out, x, y, pop: 0.55 });
-    this.pops.push({ x, y, t: 0, color: colorOf(out) });
+    this.bench.push({ id: out, x, y, pop: 0.6 });
+    this.pops.push({ x, y, t: 0, color: ringColor(out) });
+    for (let i = 0; i < 16; i++) {
+      this.motes.push({
+        x, y, vx: (Math.random() - 0.5) * 260, vy: (Math.random() - 0.5) * 260,
+        t: 0, life: 0.5 + Math.random() * 0.5, c: i % 2 ? ringColor(out) : inkColor(out),
+      });
+    }
 
     const store = this._store();
     const isNew = !store.found[out];
     if (isNew) {
       store.found[out] = true;
       this._save();
-      this.found = this._foundList();
       this.newest = out;
+      this.newestT = 6;
       this.discoveredThisRun++;
       this.addScore(120 + tierOf(out) * 40);
       audioManager.play("powerup");
-      this._say(`Discovered ${label(out)}`, colorOf(out));
+      this._say(`Discovered ${label(out)}`, ringColor(out));
+      // Jump the cabinet to the new arrival so it is never hidden below.
+      this._revealNewest();
       if (Object.keys(store.found).length >= ALL.length) this._complete();
     } else {
       audioManager.play("select");
-      this._say(`${label(out)}`, colorOf(out));
+      this._say(`${label(out)}`, ringColor(out));
     }
     this._updateHud();
   }
 
-  /**
-   * A hint names a pair on the shelf that makes something undiscovered. It
-   * costs score rather than being free, so it stays a decision.
-   */
+  /** Scrolls (and if needed re-filters) the cabinet so `newest` is visible. */
+  _revealNewest() {
+    if (!this.newest) return;
+    if (!CATS[this.catIdx].match(this.newest)) this.catIdx = 0;
+    const i = this._shelfList().indexOf(this.newest);
+    if (i < 0) return;
+    const row = Math.floor(i / this.perRow);
+    const visible = this.shelfH - 40;
+    const top = row * this.cell, bottom = top + this.cell;
+    if (top < this.scroll) this.scroll = top;
+    else if (bottom > this.scroll + visible) this.scroll = bottom - visible;
+    this._clampScroll();
+  }
+
   _hint() {
     if (this.state !== "playing") return;
     const store = this._store();
@@ -324,7 +483,41 @@ export class AlchemyTableGame extends GameBase {
     });
   }
 
-  _say(text, color) { this.msg = text; this.msgColor = color; this.msgT = 2.4; }
+  /** The codex: every element, drawn, with what makes it once you know. */
+  openCodex() {
+    const store = this._store();
+    const grid = el("div", { class: "fish-grid" });
+    for (const id of ALL) {
+      const found = store.found[id];
+      const made = RECIPES.find(r => r[0] === id);
+      const card = el("div", { class: `fish-card${found ? " caught" : ""}` }, [
+        el("span", { class: "prev" }),
+        el("span", { class: "nm" }, found ? label(id) : "?????"),
+        el("span", { class: "st" }, found
+          ? (made ? `${label(made[1])} + ${label(made[2])}` : "A starting element")
+          : "Undiscovered"),
+      ]);
+      const c = el("canvas", { width: 128, height: 96 });
+      c.style.cssText = "width:64px;height:48px";
+      const cx = c.getContext("2d");
+      cx.scale(2, 2);
+      cx.translate(32, 24);
+      cx.globalAlpha = found ? 1 : 0.16;
+      drawElement(cx, id, 0);
+      card.querySelector(".prev").appendChild(c);
+      grid.appendChild(card);
+    }
+    openModal({
+      title: `Codex — ${Object.keys(store.found).length}/${ALL.length}`,
+      bodyNode: el("div", { class: "fish-log" }, [
+        el("p", { class: "zone-intro" }, "Everything you have found, with the pair that makes it. The rest stay silhouettes until you get there."),
+        grid,
+      ]),
+      footerNode: el("button", { class: "btn btn-primary", onClick: () => closeModal() }, "Back to the table"),
+    });
+  }
+
+  _say(text, color) { this.msg = text; this.msgColor = color; this.msgT = 2.6; }
 
   _updateHud() {
     const store = this._store();
@@ -340,13 +533,19 @@ export class AlchemyTableGame extends GameBase {
   onUpdate(dt) {
     this.elapsed += dt;
     if (this.msgT > 0) this.msgT -= dt;
+    if (this.newestT > 0) this.newestT -= dt;
     for (const b of this.bench) {
       if (b.pop > 0) b.pop -= dt;
       if (b.shake > 0) b.shake -= dt;
     }
     for (let i = this.pops.length - 1; i >= 0; i--) {
       this.pops[i].t += dt;
-      if (this.pops[i].t > 0.7) this.pops.splice(i, 1);
+      if (this.pops[i].t > 0.8) this.pops.splice(i, 1);
+    }
+    for (let i = this.motes.length - 1; i >= 0; i--) {
+      const m = this.motes[i];
+      m.t += dt; m.x += m.vx * dt; m.y += m.vy * dt; m.vy += 180 * dt; m.vx *= 0.96;
+      if (m.t >= m.life) this.motes.splice(i, 1);
     }
   }
 
@@ -356,135 +555,261 @@ export class AlchemyTableGame extends GameBase {
     ctx.save();
     ctx.scale(this.dpr, this.dpr);
 
-    this._drawTable(ctx, W, H);
+    this._drawRoom(ctx, W, H);
+    this._drawCircle(ctx, W);
     for (const p of this.pops) this._drawPop(ctx, p);
-    for (const b of this.bench) this._drawToken(ctx, b.id, b.x, b.y, 30 + (b.pop > 0 ? b.pop * 18 : 0), b.shake);
-    this._drawShelf(ctx, W, H);
+    for (const b of this.bench) this._drawToken(ctx, b.id, b.x, b.y, 30 + Math.max(0, b.pop) * 20, b.shake);
+    this._drawMotes(ctx);
+    this._drawCabinet(ctx, W, H);
     if (this.drag) this._drawToken(ctx, this.drag.id, this.drag.x, this.drag.y, 34, 0, true);
     this._drawMessage(ctx, W, H);
     ctx.restore();
   }
 
-  /** The table surface: wood grain, a chalk circle and a couple of tools. */
-  _drawTable(ctx, W, H) {
-    const g = ctx.createLinearGradient(0, 0, 0, H);
-    g.addColorStop(0, "#241a14"); g.addColorStop(1, "#160f0b");
+  /** The room: a lamplit workbench with shelves and glassware behind it. */
+  _drawRoom(ctx, W, H) {
+    const top = this.shelfY;
+    const g = ctx.createLinearGradient(0, 0, 0, top);
+    g.addColorStop(0, "#241a16"); g.addColorStop(0.55, "#1a1210"); g.addColorStop(1, "#120c0b");
     ctx.fillStyle = g;
-    ctx.fillRect(0, 0, W, H);
-    ctx.strokeStyle = "rgba(255,255,255,0.02)";
-    ctx.lineWidth = 8;
-    for (let y = 20; y < this.shelfY; y += 34) {
+    ctx.fillRect(0, 0, W, top);
+
+    // Lamp glow from the top-left, which is where every highlight points.
+    const lamp = ctx.createRadialGradient(W * 0.18, -20, 10, W * 0.18, -20, H * 0.85);
+    lamp.addColorStop(0, "rgba(255,196,110,0.30)");
+    lamp.addColorStop(1, "rgba(255,150,60,0)");
+    ctx.fillStyle = lamp;
+    ctx.fillRect(0, 0, W, top);
+
+    // Back shelf with jars.
+    const sy = top * 0.2;
+    ctx.fillStyle = "rgba(60,42,32,0.85)";
+    ctx.fillRect(W * 0.52, sy, W * 0.46, 7);
+    const jars = [["#7cf0d0", 12], ["#ff9f43", 15], ["#a86bff", 10], ["#5aa8e8", 13], ["#ffd76a", 11]];
+    jars.forEach(([col, h], i) => {
+      const x = W * 0.56 + i * (W * 0.083);
+      ctx.fillStyle = "rgba(210,235,245,0.14)";
+      roundRect(ctx, x - 7, sy - h, 14, h, 3); ctx.fill();
+      ctx.fillStyle = col + "55";
+      roundRect(ctx, x - 6, sy - h * 0.55, 12, h * 0.55, 2); ctx.fill();
+      ctx.fillStyle = "rgba(90,64,48,0.9)";
+      roundRect(ctx, x - 8, sy - h - 3, 16, 3.4, 1.6); ctx.fill();
+    });
+
+    // A hanging lantern on the left, gently swinging.
+    const lx = W * 0.14, ly = top * 0.16 + Math.sin(this.elapsed * 0.8) * 3;
+    ctx.strokeStyle = "rgba(120,90,60,0.7)"; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(lx, 0); ctx.lineTo(lx, ly - 10); ctx.stroke();
+    ctx.fillStyle = "rgba(70,50,34,0.95)";
+    roundRect(ctx, lx - 9, ly - 10, 18, 20, 4); ctx.fill();
+    const flick = 0.6 + Math.sin(this.elapsed * 9) * 0.18 + Math.sin(this.elapsed * 21) * 0.08;
+    ctx.fillStyle = `rgba(255,196,110,${0.85 * flick})`;
+    roundRect(ctx, lx - 6, ly - 7, 12, 14, 3); ctx.fill();
+    const halo = ctx.createRadialGradient(lx, ly, 2, lx, ly, 90);
+    halo.addColorStop(0, `rgba(255,190,110,${0.22 * flick})`);
+    halo.addColorStop(1, "rgba(255,180,90,0)");
+    ctx.fillStyle = halo;
+    ctx.beginPath(); ctx.arc(lx, ly, 90, 0, 7); ctx.fill();
+
+    // The bench top: planks with a grain, catching the lamp.
+    const benchTop = top * 0.30;
+    const bg = ctx.createLinearGradient(0, benchTop, 0, top);
+    bg.addColorStop(0, "#5c3d28"); bg.addColorStop(1, "#3a2618");
+    ctx.fillStyle = bg;
+    ctx.fillRect(0, benchTop, W, top - benchTop);
+    ctx.strokeStyle = "rgba(0,0,0,0.28)";
+    ctx.lineWidth = 2;
+    for (let y = benchTop + 26; y < top; y += 30) {
       ctx.beginPath();
-      for (let x = 0; x <= W; x += 24) {
-        const yy = y + Math.sin(x * 0.02 + y) * 3;
-        x ? ctx.lineTo(x, yy) : ctx.moveTo(x, yy);
-      }
+      for (let x = 0; x <= W; x += 22) ctx.lineTo(x, y + Math.sin(x * 0.02 + y) * 1.6);
       ctx.stroke();
     }
-    // Chalk working circle.
-    const cx = W / 2, cy = (this.shelfY) * 0.46;
-    const r = Math.min(W, this.shelfY) * 0.34;
-    ctx.strokeStyle = "rgba(255,255,255,0.09)";
+    ctx.fillStyle = "rgba(255,196,110,0.05)";
+    ctx.fillRect(0, benchTop, W, 4);
+    // Front edge.
+    ctx.fillStyle = "#2a1a12";
+    ctx.fillRect(0, top - 5, W, 5);
+  }
+
+  /** The chalk working circle, and the prompt when the table is empty. */
+  _drawCircle(ctx, W) {
+    const cx = W / 2, cy = this.shelfY * 0.62;
+    const r = Math.min(W, this.shelfY) * 0.3;
+    ctx.save();
+    ctx.strokeStyle = "rgba(255,240,210,0.11)";
     ctx.lineWidth = 2;
     ctx.beginPath(); ctx.arc(cx, cy, r, 0, 7); ctx.stroke();
-    ctx.beginPath(); ctx.arc(cx, cy, r * 0.72, 0, 7); ctx.stroke();
-    for (let i = 0; i < 8; i++) {
-      const a = (i / 8) * Math.PI * 2 + this.elapsed * 0.05;
+    ctx.beginPath(); ctx.arc(cx, cy, r * 0.74, 0, 7); ctx.stroke();
+    // A slowly turning inner sigil.
+    ctx.save();
+    ctx.translate(cx, cy);
+    ctx.rotate(this.elapsed * 0.07);
+    ctx.beginPath();
+    for (let i = 0; i < 5; i++) {
+      const a = -Math.PI / 2 + (i * 2 / 5) * Math.PI * 2;
+      const x = Math.cos(a) * r * 0.74, y = Math.sin(a) * r * 0.74;
+      i ? ctx.lineTo(x, y) : ctx.moveTo(x, y);
+    }
+    ctx.closePath();
+    ctx.strokeStyle = "rgba(255,240,210,0.09)";
+    ctx.stroke();
+    ctx.restore();
+    for (let i = 0; i < 12; i++) {
+      const a = (i / 12) * Math.PI * 2;
       ctx.beginPath();
-      ctx.moveTo(cx + Math.cos(a) * r * 0.72, cy + Math.sin(a) * r * 0.72);
+      ctx.moveTo(cx + Math.cos(a) * r * 0.74, cy + Math.sin(a) * r * 0.74);
       ctx.lineTo(cx + Math.cos(a) * r, cy + Math.sin(a) * r);
       ctx.stroke();
     }
     if (!this.bench.length) {
-      ctx.fillStyle = "rgba(255,255,255,0.16)";
+      ctx.fillStyle = "rgba(255,240,210,0.22)";
       ctx.font = "700 13px 'Inter', system-ui, sans-serif";
       ctx.textAlign = "center";
-      ctx.fillText("drop elements here", cx, cy + 4);
+      ctx.fillText(this.useTouch ? "tap an element below to place it here"
+                                 : "drag elements from the cabinet onto this circle", cx, cy + 4);
     }
+    ctx.restore();
   }
 
-  /** The shelf strip: every discovered element, in discovery order. */
-  _drawShelf(ctx, W, H) {
-    ctx.fillStyle = "rgba(10,7,16,0.9)";
-    ctx.fillRect(0, this.shelfY, W, H - this.shelfY);
-    ctx.strokeStyle = "rgba(255,255,255,0.12)";
-    ctx.lineWidth = 1.5;
-    ctx.beginPath(); ctx.moveTo(0, this.shelfY); ctx.lineTo(W, this.shelfY); ctx.stroke();
-
+  /** The cabinet: tabs, a scrolling grid of medallions, and a scrollbar. */
+  _drawCabinet(ctx, W, H) {
+    const top = this.shelfY;
     ctx.save();
-    ctx.beginPath(); ctx.rect(0, this.shelfY + 1, W, H - this.shelfY - 1); ctx.clip();
-    for (const s of this._shelfSlots()) {
-      if (s.y > H || s.y + s.h < this.shelfY) continue;
-      const isNew = s.id === this.newest;
-      this._drawToken(ctx, s.id, s.x + s.w / 2, s.y + s.h / 2 - 4, s.w * 0.42, 0, false, isNew);
-      ctx.fillStyle = "rgba(255,255,255,0.7)";
+    // Panel.
+    const g = ctx.createLinearGradient(0, top, 0, H);
+    g.addColorStop(0, "#1b1420"); g.addColorStop(1, "#100b14");
+    ctx.fillStyle = g;
+    ctx.fillRect(0, top, W, H - top);
+    ctx.strokeStyle = "rgba(255,215,150,0.22)";
+    ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(0, top + 1); ctx.lineTo(W, top + 1); ctx.stroke();
+
+    // Tabs.
+    for (const t of this._tabs()) {
+      const on = this.catIdx === t.i;
+      ctx.fillStyle = on ? "rgba(255,215,106,0.9)" : "rgba(255,255,255,0.06)";
+      roundRect(ctx, t.x, t.y, t.w, t.h, 7); ctx.fill();
+      ctx.fillStyle = on ? "#2a1f04" : "rgba(255,255,255,0.55)";
+      ctx.font = "800 10px 'Inter', system-ui, sans-serif";
+      ctx.textAlign = "center";
+      ctx.fillText(t.c.name.toUpperCase(), t.x + t.w / 2, t.y + 16);
+    }
+
+    // Grid, clipped to the cabinet so scrolled rows cut off cleanly.
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(0, this.gridY - 4, W, H - this.gridY + 4);
+    ctx.clip();
+    const list = this._shelfSlots();
+    for (const s of list) {
+      if (s.y + s.h < this.gridY - 6 || s.y > H) continue;
+      const isNew = s.id === this.newest && this.newestT > 0;
+      this._drawToken(ctx, s.id, s.x + s.w / 2, s.y + s.h / 2 - 5, s.w * 0.40, 0, false, isNew);
+      ctx.fillStyle = "rgba(255,255,255,0.72)";
       ctx.font = "700 8px 'Inter', system-ui, sans-serif";
       ctx.textAlign = "center";
       const nm = label(s.id);
-      ctx.fillText(nm.length > 11 ? nm.slice(0, 10) + "…" : nm, s.x + s.w / 2, s.y + s.h - 1);
+      ctx.fillText(nm.length > 12 ? nm.slice(0, 11) + "…" : nm, s.x + s.w / 2, s.y + s.h - 1);
+    }
+    if (!list.length) {
+      ctx.fillStyle = "rgba(255,255,255,0.3)";
+      ctx.font = "700 12px 'Inter', system-ui, sans-serif";
+      ctx.textAlign = "center";
+      ctx.fillText("Nothing discovered in this family yet", W / 2, this.gridY + 34);
+    }
+    ctx.restore();
+
+    // Scrollbar, plus a fade at the top and bottom edges so it is obvious
+    // there is more above or below.
+    const sb = this._scrollbar();
+    if (sb) {
+      ctx.fillStyle = "rgba(255,255,255,0.08)";
+      roundRect(ctx, sb.track.x, sb.track.y, sb.track.w, sb.track.h, 3); ctx.fill();
+      ctx.fillStyle = this.barDrag ? "#ffd76a" : "rgba(255,215,106,0.6)";
+      roundRect(ctx, sb.thumb.x, sb.thumb.y, sb.thumb.w, sb.thumb.h, 3); ctx.fill();
+
+      if (this.scroll > 2) {
+        const f = ctx.createLinearGradient(0, this.gridY, 0, this.gridY + 18);
+        f.addColorStop(0, "rgba(16,11,20,0.95)"); f.addColorStop(1, "rgba(16,11,20,0)");
+        ctx.fillStyle = f; ctx.fillRect(0, this.gridY - 2, W - 12, 20);
+      }
+      if (this.scroll < this._maxScroll() - 2) {
+        const f = ctx.createLinearGradient(0, H, 0, H - 18);
+        f.addColorStop(0, "rgba(16,11,20,0.95)"); f.addColorStop(1, "rgba(16,11,20,0)");
+        ctx.fillStyle = f; ctx.fillRect(0, H - 18, W - 12, 18);
+      }
     }
     ctx.restore();
   }
 
   /**
-   * One element token. The glyph is chosen by the element's group, so a
-   * creature never looks like a machine even though nothing here is a
-   * bespoke drawing for each of the 120.
+   * One element as a medallion: a metal rim, a tinted well, the element's
+   * own drawing, and a glass highlight over the top.
    */
   _drawToken(ctx, id, x, y, r, shakeT = 0, lifted = false, isNew = false) {
-    const c = colorOf(id);
-    const sx = shakeT > 0 ? Math.sin(shakeT * 60) * shakeT * 14 : 0;
+    const rim = ringColor(id);
+    const sx = shakeT > 0 ? Math.sin(shakeT * 60) * shakeT * 16 : 0;
     ctx.save();
     ctx.translate(x + sx, y);
 
     if (lifted) {
-      ctx.shadowColor = "rgba(0,0,0,0.5)";
-      ctx.shadowBlur = 14; ctx.shadowOffsetY = 5;
+      ctx.shadowColor = "rgba(0,0,0,0.55)";
+      ctx.shadowBlur = 18; ctx.shadowOffsetY = 7;
     }
     if (isNew) {
       const p = 0.5 + Math.sin(this.elapsed * 5) * 0.5;
-      ctx.strokeStyle = hexA("#ffd76a", 0.4 + p * 0.5);
-      ctx.lineWidth = 2;
-      ctx.beginPath(); ctx.arc(0, 0, r + 4, 0, 7); ctx.stroke();
+      ctx.strokeStyle = `rgba(255,215,106,${0.35 + p * 0.5})`;
+      ctx.lineWidth = 2.4;
+      ctx.beginPath(); ctx.arc(0, 0, r + 5 + p * 2, 0, 7); ctx.stroke();
     }
-    // Disc.
-    const g = ctx.createRadialGradient(-r * 0.3, -r * 0.35, r * 0.1, 0, 0, r);
-    g.addColorStop(0, shade(c, 0.28));
-    g.addColorStop(1, shade(c, -0.3));
-    ctx.fillStyle = g;
+
+    // Well.
+    const well = ctx.createRadialGradient(-r * 0.3, -r * 0.4, r * 0.1, 0, 0, r);
+    well.addColorStop(0, shade(rim, 0.16));
+    well.addColorStop(0.72, shade(rim, -0.34));
+    well.addColorStop(1, shade(rim, -0.52));
+    ctx.fillStyle = well;
     ctx.beginPath(); ctx.arc(0, 0, r, 0, 7); ctx.fill();
-    ctx.strokeStyle = shade(c, 0.4);
-    ctx.lineWidth = 1.6;
-    ctx.beginPath(); ctx.arc(0, 0, r, 0, 7); ctx.stroke();
     ctx.shadowBlur = 0;
 
-    // Glyph.
+    // Picture, scaled from the art module's 32px box.
     ctx.save();
-    ctx.scale(r / 30, r / 30);
-    ctx.strokeStyle = "rgba(255,255,255,0.9)";
-    ctx.fillStyle = "rgba(255,255,255,0.9)";
-    ctx.lineWidth = 2.4; ctx.lineCap = "round"; ctx.lineJoin = "round";
-    drawGlyph(ctx, GROUP_OF[id] || "made", id, this.elapsed);
+    ctx.beginPath(); ctx.arc(0, 0, r * 0.94, 0, 7); ctx.clip();
+    ctx.scale(r / 17, r / 17);
+    drawElement(ctx, id, this.elapsed);
     ctx.restore();
+
+    // Rim: a bright arc top-left, dark bottom-right, then a glass sheen.
+    ctx.lineWidth = Math.max(1.6, r * 0.1);
+    ctx.strokeStyle = shade(rim, 0.42);
+    ctx.beginPath(); ctx.arc(0, 0, r - ctx.lineWidth / 2, Math.PI * 0.9, Math.PI * 1.95); ctx.stroke();
+    ctx.strokeStyle = shade(rim, -0.4);
+    ctx.beginPath(); ctx.arc(0, 0, r - ctx.lineWidth / 2, Math.PI * 1.95, Math.PI * 0.9); ctx.stroke();
+    ctx.fillStyle = "rgba(255,255,255,0.16)";
+    ctx.beginPath();
+    ctx.ellipse(-r * 0.28, -r * 0.46, r * 0.5, r * 0.24, -0.5, 0, 7);
+    ctx.fill();
     ctx.restore();
   }
 
   _drawPop(ctx, p) {
-    const k = p.t / 0.7;
+    const k = p.t / 0.8;
     ctx.save();
     ctx.globalAlpha = Math.max(0, 1 - k);
     ctx.strokeStyle = p.color;
-    ctx.lineWidth = 3 * (1 - k) + 0.5;
-    ctx.beginPath(); ctx.arc(p.x, p.y, 12 + k * 52, 0, 7); ctx.stroke();
-    for (let i = 0; i < 8; i++) {
-      const a = (i / 8) * Math.PI * 2;
-      const d = 14 + k * 46;
-      ctx.beginPath();
-      ctx.arc(p.x + Math.cos(a) * d, p.y + Math.sin(a) * d, 2.6 * (1 - k), 0, 7);
-      ctx.fillStyle = p.color;
-      ctx.fill();
-    }
+    ctx.lineWidth = 3.4 * (1 - k) + 0.5;
+    ctx.beginPath(); ctx.arc(p.x, p.y, 12 + k * 62, 0, 7); ctx.stroke();
+    ctx.beginPath(); ctx.arc(p.x, p.y, 6 + k * 34, 0, 7); ctx.stroke();
     ctx.restore();
+  }
+
+  _drawMotes(ctx) {
+    for (const m of this.motes) {
+      ctx.globalAlpha = Math.max(0, 1 - m.t / m.life);
+      ctx.fillStyle = m.c;
+      ctx.beginPath(); ctx.arc(m.x, m.y, 2.6 * (1 - m.t / m.life) + 0.6, 0, 7); ctx.fill();
+    }
+    ctx.globalAlpha = 1;
   }
 
   _drawMessage(ctx, W, H) {
@@ -492,104 +817,23 @@ export class AlchemyTableGame extends GameBase {
     ctx.save();
     ctx.globalAlpha = Math.min(1, this.msgT / 0.5);
     ctx.textAlign = "center";
-    ctx.fillStyle = "rgba(8,6,14,0.7)";
-    const w = ctx.measureText(this.msg).width;
-    roundRect(ctx, W / 2 - 130, 14, 260, 30, 15); ctx.fill();
-    ctx.fillStyle = this.msgColor || "#ffffff";
     ctx.font = "800 14px 'Sora', system-ui, sans-serif";
-    ctx.fillText(this.msg, W / 2, 34);
+    const w = Math.max(180, ctx.measureText(this.msg).width + 40);
+    ctx.fillStyle = "rgba(10,7,14,0.78)";
+    roundRect(ctx, W / 2 - w / 2, 12, w, 30, 15); ctx.fill();
+    ctx.strokeStyle = hexA(this.msgColor || "#ffffff", 0.5);
+    ctx.lineWidth = 1.4;
+    roundRect(ctx, W / 2 - w / 2, 12, w, 30, 15); ctx.stroke();
+    ctx.fillStyle = this.msgColor || "#ffffff";
+    ctx.fillText(this.msg, W / 2, 32);
     ctx.restore();
   }
 }
 
-/** Group glyphs. One routine, switched on the group, plus a few specials. */
-function drawGlyph(ctx, group, id, t) {
-  if (id === "water" || group === "water") {
-    ctx.beginPath();
-    ctx.moveTo(0, -11); ctx.quadraticCurveTo(9, 1, 0, 10); ctx.quadraticCurveTo(-9, 1, 0, -11);
-    ctx.closePath(); ctx.fill();
-  } else if (group === "fire") {
-    ctx.beginPath();
-    ctx.moveTo(0, 11);
-    ctx.quadraticCurveTo(-9, 3, -3, -4);
-    ctx.quadraticCurveTo(-2, -10, 2, -12);
-    ctx.quadraticCurveTo(1, -5, 5, -6);
-    ctx.quadraticCurveTo(10, 1, 0, 11);
-    ctx.closePath(); ctx.fill();
-  } else if (group === "earth") {
-    ctx.beginPath();
-    ctx.moveTo(-11, 8); ctx.lineTo(-3, -8); ctx.lineTo(4, 2); ctx.lineTo(8, -4); ctx.lineTo(12, 8);
-    ctx.closePath(); ctx.fill();
-  } else if (group === "air") {
-    for (let i = -1; i <= 1; i++) {
-      ctx.beginPath();
-      ctx.moveTo(-11, i * 6);
-      ctx.quadraticCurveTo(2, i * 6 - 4, 9, i * 6);
-      ctx.stroke();
-    }
-  } else if (group === "sky" || group === "cosmic") {
-    ctx.beginPath();
-    for (let i = 0; i < 10; i++) {
-      const a = -Math.PI / 2 + (i / 10) * Math.PI * 2;
-      const r = i % 2 ? 4.5 : 11;
-      i ? ctx.lineTo(Math.cos(a) * r, Math.sin(a) * r) : ctx.moveTo(Math.cos(a) * r, Math.sin(a) * r);
-    }
-    ctx.closePath(); ctx.fill();
-  } else if (group === "life") {
-    ctx.beginPath();
-    ctx.moveTo(0, 11); ctx.lineTo(0, -2);
-    ctx.stroke();
-    ctx.beginPath();
-    ctx.ellipse(-5, -5, 5.5, 3.4, -0.7, 0, 7); ctx.fill();
-    ctx.beginPath();
-    ctx.ellipse(5, -7, 5.5, 3.4, 0.7, 0, 7); ctx.fill();
-  } else if (group === "magic") {
-    ctx.beginPath(); ctx.arc(0, 0, 8, 0, 7); ctx.stroke();
-    ctx.beginPath();
-    for (let i = 0; i < 3; i++) {
-      const a = (i / 3) * Math.PI * 2 + t * 0.6;
-      ctx.moveTo(0, 0);
-      ctx.lineTo(Math.cos(a) * 11, Math.sin(a) * 11);
-    }
-    ctx.stroke();
-  } else if (group === "people") {
-    ctx.beginPath(); ctx.arc(0, -6, 4, 0, 7); ctx.fill();
-    ctx.beginPath();
-    ctx.moveTo(0, -2); ctx.lineTo(0, 6);
-    ctx.moveTo(-6, 1); ctx.lineTo(6, 1);
-    ctx.moveTo(0, 6); ctx.lineTo(-5, 12);
-    ctx.moveTo(0, 6); ctx.lineTo(5, 12);
-    ctx.stroke();
-  } else if (group === "civ") {
-    ctx.fillRect(-11, -2, 6, 13);
-    ctx.fillRect(-2, -8, 6, 19);
-    ctx.fillRect(7, -4, 5, 15);
-  } else {
-    // made: a gear, which is the honest default for a manufactured thing
-    ctx.beginPath(); ctx.arc(0, 0, 6, 0, 7); ctx.stroke();
-    for (let i = 0; i < 6; i++) {
-      const a = (i / 6) * Math.PI * 2;
-      ctx.beginPath();
-      ctx.moveTo(Math.cos(a) * 7, Math.sin(a) * 7);
-      ctx.lineTo(Math.cos(a) * 11.5, Math.sin(a) * 11.5);
-      ctx.stroke();
-    }
-  }
-}
-
-function colorOf(id) {
-  const g = GROUP_OF[id];
-  if (g && GROUPS[g]?.color) return GROUPS[g].color;
-  const i = START.indexOf(id);
-  return i >= 0 ? GROUPS.base.colors[i] : "#8b90ac";
-}
-
 /** How deep in the tree something is — used only to score discoveries. */
 function tierOf(id) {
-  const r = RECIPES.find(x => x[0] === id);
-  if (!r) return 0;
-  const idx = RECIPES.indexOf(r);
-  return Math.floor(idx / 16);
+  const i = RECIPES.findIndex(x => x[0] === id);
+  return i < 0 ? 0 : Math.floor(i / 16);
 }
 
 function shade(hex, amt) {
@@ -599,6 +843,7 @@ function shade(hex, amt) {
 }
 
 function hexA(hex, a) {
+  if (!hex.startsWith("#")) return hex;
   const v = parseInt(hex.slice(1), 16);
   return `rgba(${(v >> 16) & 255},${(v >> 8) & 255},${v & 255},${a})`;
 }
