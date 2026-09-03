@@ -98,7 +98,31 @@ export class GameBase {
     this.setHud({ Score: 0 });
 
     this._fitStage();
-    this._onWindowResize = () => { this._layoutTouchControls(); this._fitStage(); };
+    // The stage is sized from what sits above it, and that height is not
+    // final on the first pass: the HUD reflows once its stats arrive and once
+    // the display font loads, and on a short screen it collapses from two
+    // rows to one. Without re-measuring, every game kept the stage it was
+    // given during the very first layout — which is why a phone turned
+    // sideways gave a 16:9 game *less* room than it had upright.
+    if (typeof ResizeObserver !== "undefined") {
+      let lastH = -1;
+      this._hudObs = new ResizeObserver(() => {
+        const h = Math.round(this.hud.getBoundingClientRect().height);
+        if (h === lastH) return;
+        lastH = h;
+        this._fitStage();
+      });
+      this._hudObs.observe(this.hud);
+    }
+    // Vertical space is scarce in two situations that look nothing alike from
+    // CSS: a phone held sideways, and a wide game rotated into fullscreen on
+    // an upright phone (where the *viewport* is still portrait). Both get the
+    // same compact HUD, decided here so the stylesheet needs one rule.
+    this._shortMq = window.matchMedia("(max-height: 520px) and (orientation: landscape)");
+    this._syncCompactHud();
+    this._onShortChange = () => { this._syncCompactHud(); this._fitStage(); };
+    this._shortMq.addEventListener?.("change", this._onShortChange);
+    this._onWindowResize = () => { this._layoutTouchControls(); this._syncCompactHud(); this._fitStage(); };
     // The controls button shows which mode is live, so it needs the first sync.
     queueMicrotask(() => { this._syncInputModeUI(); this._syncBankButton(); this._syncLevelButton(); });
     window.addEventListener("resize", this._onWindowResize);
@@ -144,6 +168,11 @@ export class GameBase {
     if (h > maxH) { h = maxH; w = h * ratio; }
     this.stageOuter.style.width = `${Math.floor(w)}px`;
     this.stageOuter.style.height = `${Math.floor(h)}px`;
+    // Overlaid controls are positioned against the stage's box, so they have
+    // to be re-pinned whenever that box moves. Without this they kept the
+    // geometry of the first layout and hung off the bottom of the stage on a
+    // landscape phone, where the stage is resized after the HUD collapses.
+    if (this.touchEl?.classList.contains("overlay")) this._pinOverlayToStage();
   }
 
   // Convenience canvas factory sized to the stage with devicePixelRatio handling.
@@ -377,6 +406,14 @@ export class GameBase {
         // even when its play button drops you straight into the current level.
         this._nav() && !this.onPlayPressed
           ? labelledButton("grid", this._nav().title, "btn btn-ghost btn-lg", () => this.openLevelSelect())
+          : null,
+        // A wide game on an upright phone gets a quarter of the screen, and
+        // the fullscreen icon in the HUD is not where anyone looks for the
+        // fix. Offer it in words, next to the play button, where the choice
+        // is actually being made — it turns the surface sideways and roughly
+        // triples the playfield.
+        this._rotationUseful?.() && !this.isFullscreen?.()
+          ? labelledButton("expand", "Fill the screen", "btn btn-ghost btn-lg", () => this.toggleFullscreen())
           : null,
         // Games with permanent between-run upgrades expose their shop here.
         upgrades
@@ -631,6 +668,12 @@ export class GameBase {
 
   _wantsRotation() { return this.isFullscreen() && this._rotationUseful(); }
 
+  /** Compact HUD when the screen is short, or when the stage is turned. */
+  _syncCompactHud() {
+    const short = !!this._shortMq?.matches || !!this._rotated;
+    document.body.classList.toggle("compact-hud", short);
+  }
+
   _applyRotation(want = this._wantsRotation()) {
     const rotate = !!want;
     if (rotate === this._rotated) return rotate;
@@ -646,6 +689,7 @@ export class GameBase {
       Object.assign(this.root.style, { width: "", height: "", left: "", top: "" });
     }
     this.input?.setStageRotation?.(rotate ? 90 : 0);
+    this._syncCompactHud();
     return rotate;
   }
 
@@ -866,7 +910,14 @@ export class GameBase {
     // The viewport, not the wrapper: the wrapper is only as tall as its
     // content, so it reads as "wide" even on an upright phone.
     const wide = window.innerWidth > window.innerHeight;
-    const overlay = stickLayout && (wide || this.isFullscreen());
+    // A short screen has no dead space to put a band in. A d-pad band is
+    // ~148px, and on a 393px-tall landscape phone it ran off the bottom of
+    // the viewport entirely — the buttons were there, below the fold, on
+    // Tetris, Maze Runner, Deep Delve, Abyss Angler and Shadow Vault. Where
+    // height is that scarce the controls go over the stage instead, which is
+    // the trade every phone game makes in landscape.
+    const short = !!this._shortMq?.matches;
+    const overlay = (stickLayout && (wide || this.isFullscreen())) || short;
     this.touchEl.classList.toggle("band", !overlay);
     this.touchEl.classList.toggle("overlay", overlay);
     this.touchEl.classList.add("active");
@@ -916,6 +967,9 @@ export class GameBase {
     // library page with no way back except the Esc key.
     if (document.fullscreenElement) document.exitFullscreen?.().catch(() => {});
     screen.orientation?.unlock?.();
+    this._hudObs?.disconnect();
+    this._shortMq?.removeEventListener?.("change", this._onShortChange);
+    document.body.classList.remove("compact-hud");
     this._immersive(false);
     window.removeEventListener("resize", this._onWindowResize);
     window.removeEventListener("orientationchange", this._onWindowResize);

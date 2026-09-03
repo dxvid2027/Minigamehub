@@ -317,10 +317,22 @@
   .play-hud .hud-stat { padding: 3px 9px; min-width: 46px; flex: 1 1 auto; }
   .play-hud .hud-stat b { font-size: .88rem; }
   .play-hud .hud-stat span { font-size: .54rem; letter-spacing: .02em; }
-  .play-hud .hud-actions { flex: none; gap: 5px; }
   .play-hud .hud-stat b { white-space: nowrap; }
-  .play-hud .icon-btn { width: 32px; height: 32px; font-size: .9rem; }
-  .play-hud .icon-btn svg { width: 17px; height: 17px; }
+  /* Thumb-sized HUD buttons.
+     These were 32px, which is well under any platform's minimum tap target
+     and was the single worst thing to hit on a phone — every game's pause,
+     restart and info sat below it. 42px is comfortable, and the row is
+     allowed to compress them (never past 34px) in the rare case where a game
+     shows all eight at once, so a crowded HUD shrinks instead of overflowing.
+     The title shrinks first, since it is one emoji and the least useful
+     thing in the row. */
+  .play-hud .hud-actions { flex: 0 1 auto; gap: 4px; min-width: 0; }
+  .play-hud .hud-left { flex: 0 1 auto; min-width: 0; overflow: hidden; }
+  .play-hud .icon-btn {
+    width: 42px; height: 42px; font-size: .95rem;
+    flex: 0 1 42px; min-width: 34px;
+  }
+  .play-hud .icon-btn svg { width: 19px; height: 19px; }
   .game-tip { display: none; }
   .game-overlay .instructions { font-size: .8rem; padding: 10px 14px; }
   .game-overlay { padding: 14px; gap: 10px; justify-content: flex-start; }
@@ -333,6 +345,47 @@
   body.in-game .topbar { display: none; }
   body.in-game .page { padding-top: max(12px, env(safe-area-inset-top)); }
 }
+
+/* ---------------------------------------------------------------- */
+/* Compact HUD — set by GameBase whenever vertical space is scarce    */
+/*                                                                   */
+/* Two cases, one look: a phone turned sideways, and a wide game      */
+/* rotated into fullscreen on an upright phone. Both leave under      */
+/* ~520px of usable height, where the normal two-row phone HUD ate    */
+/* a quarter of the screen — a 16:9 game came out *smaller* in        */
+/* landscape (24%) than upright (25%). GameBase toggles the body      */
+/* class from a media query and from the rotation, so the rule lives  */
+/* in one place rather than being written once per case.              */
+/* ---------------------------------------------------------------- */
+body.compact-hud.in-game .topbar,
+body.compact-hud.in-game .bottom-nav { display: none; }
+body.compact-hud.in-game .app-shell { padding-bottom: 0; }
+body.compact-hud.in-game .page { padding-top: max(4px, env(safe-area-inset-top)); padding-bottom: 4px; }
+body.compact-hud .play-wrap { gap: 5px; }
+body.compact-hud .play-hud { flex-wrap: nowrap; gap: 6px; align-items: center; }
+body.compact-hud .play-hud .hud-left { order: 1; flex: 0 0 auto; }
+body.compact-hud .play-hud .hud-stats {
+  order: 2; flex: 1 1 auto; flex-basis: auto; flex-wrap: nowrap;
+  justify-content: center; gap: 5px; overflow-x: auto;
+  scrollbar-width: none; min-width: 0;
+}
+body.compact-hud .play-hud .hud-stats::-webkit-scrollbar { display: none; }
+body.compact-hud .play-hud .hud-actions { order: 3; flex: 0 0 auto; margin-left: 0; gap: 4px; }
+body.compact-hud .play-hud .hud-title { font-size: 0; gap: 0; }
+body.compact-hud .play-hud .hud-title::first-letter { font-size: 1.15rem; }
+body.compact-hud .play-hud .hud-stat { padding: 1px 7px; min-width: 0; border-radius: 8px; }
+body.compact-hud .play-hud .hud-stat b { font-size: .8rem; }
+body.compact-hud .play-hud .hud-stat span { font-size: .46rem; letter-spacing: .02em; }
+body.compact-hud .play-hud .icon-btn { width: 40px; height: 40px; min-width: 32px; }
+body.compact-hud .play-hud .icon-btn svg { width: 17px; height: 17px; }
+body.compact-hud .game-tip { display: none; }
+/* The start and end panels have to fit the same short screen. */
+body.compact-hud .game-overlay { padding: 10px; gap: 6px; justify-content: center; }
+body.compact-hud .game-overlay .overlay-icon { font-size: 1.6rem; }
+body.compact-hud .game-overlay h2 { font-size: 1.05rem; }
+body.compact-hud .game-overlay p { font-size: .78rem; margin: 0; }
+body.compact-hud .game-overlay .instructions { display: none; }
+body.compact-hud .game-overlay .stat-strip { gap: 6px; }
 
 /* ---------------------------------------------------------------- */
 /* Fullscreen / immersive play                                       */

@@ -151,6 +151,13 @@
 .icon-btn svg { width: 18px; height: 18px; }
 .icon-btn:hover { color: var(--text-0); background: var(--surface-3); border-color: var(--border-strong); transform: translateY(-1px); }
 .icon-btn:active { transform: translateY(0) scale(.95); }
+/* On any touch device the 38px chip is under the minimum comfortable tap
+   target, and a tablet gets no hover to compensate. Pointer-coarse, rather
+   than a width breakpoint, so it catches touch laptops and big tablets too. */
+@media (pointer: coarse) {
+  .icon-btn { width: 44px; height: 44px; }
+  .icon-btn svg { width: 20px; height: 20px; }
+}
 
 .currency-chip {
   display: flex; align-items: center; gap: 8px;
@@ -416,6 +423,20 @@
   body.in-game .toast { max-width: 100%; padding: 8px 12px; font-size: .82rem; }
   body.in-game .toast .ic { width: 28px; height: 28px; font-size: .95rem; }
 }
+/* A phone held sideways has no spare strip at the bottom — the playfield
+   reaches it, and the on-screen controls sit on top of that. Toasts move to a
+   narrow column in the top-right, clear of both the compact HUD and the
+   d-pad, and stop being full width. */
+body.compact-hud #toast-root {
+  /* Below the one-row HUD, not over its buttons. */
+  top: calc(52px + env(safe-area-inset-top)); bottom: auto;
+  left: auto; right: 8px; align-items: flex-end; gap: 5px;
+}
+body.compact-hud .toast {
+  min-width: 0; max-width: min(300px, 46vw);
+  padding: 6px 10px; font-size: .74rem;
+}
+body.compact-hud .toast .ic { width: 22px; height: 22px; font-size: .8rem; }
 /* In immersive play a toast over the action is worse than no toast. */
 body.immersive #toast-root { display: none; }
 .toast {
