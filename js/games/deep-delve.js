@@ -8,6 +8,15 @@
 // The tension is entirely in the return trip. Ore gets richer the deeper you
 // go, but so does the climb home, and thrusters burn fuel far faster than
 // the drill does. Every run is a bet on how much further you can push.
+//
+// Three things give a trip a shape beyond "go down until scared":
+//   - Ore comes in veins, not specks, so a good seam is a find worth working
+//     rather than a pixel you happened to drill through.
+//   - A contract at the depot names an ore and a quantity and pays a bonus
+//     for filling it, which decides which seam is worth your hold this run.
+//   - Eight artifacts are buried at known depth bands. Each is a permanent
+//     perk, so the reason to go deeper survives having enough credits.
+// And at 460 m there is a bottom: the Core, which ends the expedition.
 // ==========================================================================
 import { GameBase } from "./gameBase.js";
 import { audioManager } from "../systems/audioManager.js";
@@ -79,6 +88,33 @@ const UPGRADES = [
 
 const BASE = { speed: 1, fuel: 100, hull: 100, slots: 12, lift: 1, light: 5 };
 
+// --- Consumables ----------------------------------------------------------
+// Bought at the garage and carried into the shaft. They are the answer to
+// the three ways a run goes wrong: walled in, holed, or too deep to climb.
+const KIT = [
+  { id: "charge", name: "Blast Charge", cost: 120, desc: "Clears a wide pocket of rock instantly, ore and all.", color: "#ff9f43" },
+  { id: "patch",  name: "Hull Patch",   cost: 180, desc: "Repairs 60 hull, anywhere in the shaft.",             color: "#2ee6a6" },
+  { id: "beacon", name: "Return Beacon",cost: 260, desc: "Teleports the rig and its cargo straight to the depot.", color: "#22d3ee" },
+];
+
+// --- Artifacts ------------------------------------------------------------
+// One per depth band, each a permanent perk once carried to the surface.
+// They are the reason the shaft still matters after the shop is bought out.
+const ARTIFACTS = [
+  { id: "compass", name: "Rusted Compass", at: 40,  perk: "Ore glints through one tile of rock.", color: "#c98f4a" },
+  { id: "core",    name: "Warm Core",      at: 90,  perk: "+25% fuel capacity.",                  color: "#ff9f43" },
+  { id: "lens",    name: "Miner's Lens",   at: 145, perk: "+2 tiles of lamp light.",              color: "#ffd76a" },
+  { id: "plate",   name: "Ancient Plate",  at: 200, perk: "+40 hull.",                            color: "#8b90ac" },
+  { id: "drill",   name: "Black Drill Bit",at: 260, perk: "+30% drilling speed.",                 color: "#7c5cff" },
+  { id: "hold",    name: "Void Satchel",   at: 320, perk: "+6 cargo slots.",                      color: "#ff4fd8" },
+  { id: "wing",    name: "Ember Wing",     at: 385, perk: "Thrusters burn 25% less fuel.",        color: "#ff6b28" },
+  { id: "heart",   name: "Heart of the Deep", at: 440, perk: "Ore sells for 25% more.",           color: "#5ce6ff" },
+];
+const ARTIFACT_BY_ID = Object.fromEntries(ARTIFACTS.map(a => [a.id, a]));
+
+// The bottom of the shaft. Reaching it ends the expedition as a win.
+const CORE_DEPTH = WORLD_ROWS - 6;
+
 // Hazard pockets are the reason a run ends badly rather than slowly.
 const HAZARDS = {
   gas:  { color: "#9ce86a", damage: 0, fuelBurn: 22, name: "gas pocket" },
@@ -93,7 +129,10 @@ export class DeepDelveGame extends GameBase {
       "Hold up to fire the thrusters and climb. Thrusters burn fuel far faster than the drill does.",
       "Ore fills the cargo hold. Fly back to the depot on the surface to sell it — ore you are still carrying when the run ends is lost.",
       "Green gas pockets burn fuel. Lava tears the hull apart. Long falls hurt too, so ride the thrusters down the deep shafts.",
-      "Credits buy permanent rig upgrades between runs. Seven strata lie below, and the ore gets far richer as you go.",
+      "Credits buy permanent rig upgrades and kit between runs. Press 1, 2 and 3 in the shaft for a blast charge, a hull patch and a return beacon.",
+      "The depot posts a standing order each trip: bring back enough of one ore and it pays a bonus on top.",
+      "Eight relics are buried at known depths and are permanent perks once you carry them to the depot — lose the rig and you lose them too.",
+      `Seven strata lie below, and at ${CORE_DEPTH} m there is the Core. Reaching it ends the expedition with everything in the hold.`,
     ];
   }
   getTouchLayout() { return "dpad"; }
@@ -112,14 +151,29 @@ export class DeepDelveGame extends GameBase {
     if (typeof r.bestDepth !== "number") r.bestDepth = 0;
     if (typeof r.bestRun !== "number") r.bestRun = 0;
     if (typeof r.totalOre !== "number") r.totalOre = 0;
+    if (!r.relics) r.relics = {};        // artifacts carried to the surface
+    if (!r.kit) r.kit = {};              // consumables in stock
+    if (typeof r.cores !== "number") r.cores = 0;
     return r;
   }
+  _has(relic) { return !!this._store().relics[relic]; }
   _save() { saveManager.saveNow(); }
 
   _lv(id) { return this._store().lv[id] || 0; }
+  /**
+   * A rig stat: its base, plus what upgrades have bought, plus whatever
+   * artifacts you have brought home. Perks are applied here so nothing else
+   * in the game has to know they exist.
+   */
   _stat(unit) {
     const u = UPGRADES.find(x => x.unit === unit);
-    return BASE[unit] + this._lv(u.id) * u.per;
+    let v = BASE[unit] + this._lv(u.id) * u.per;
+    if (unit === "fuel" && this._has("core")) v *= 1.25;
+    if (unit === "light" && this._has("lens")) v += 2;
+    if (unit === "hull" && this._has("plate")) v += 40;
+    if (unit === "speed" && this._has("drill")) v *= 1.3;
+    if (unit === "slots" && this._has("hold")) v += 6;
+    return v;
   }
   _cost(u) { return Math.round(u.base * Math.pow(u.step, this._lv(u.id))); }
 
@@ -130,7 +184,8 @@ export class DeepDelveGame extends GameBase {
     const r = this._store();
     return el("div", { class: "delve-summary" }, [
       el("span", {}, `◆ ${formatNumber(r.credits)} credits`),
-      el("span", {}, `Deepest: ${r.bestDepth} m`),
+      el("span", {}, `Deepest: ${r.bestDepth} m of ${CORE_DEPTH}`),
+      el("span", {}, `Relics: ${Object.keys(r.relics).length}/${ARTIFACTS.length}`),
       el("span", {}, `Best haul: ◆ ${formatNumber(r.bestRun)}`),
     ]);
   }
@@ -174,13 +229,58 @@ export class DeepDelveGame extends GameBase {
       }
     };
     const head = el("strong", { class: "rig-credits" }, `◆ ${formatNumber(r.credits)} credits`);
+    const kitRow = el("div", { class: "bait-row" });
+    const renderKit = () => {
+      kitRow.innerHTML = "";
+      for (const k of KIT) {
+        const owned = r.kit[k.id] || 0;
+        const afford = r.credits >= k.cost;
+        kitRow.appendChild(el("button", {
+          class: `bait-card${afford ? "" : " poor"}`,
+          disabled: !afford,
+          style: `--bt:${k.color}`,
+          onClick: () => {
+            if (r.credits < k.cost) return;
+            r.credits -= k.cost;
+            r.kit[k.id] = owned + 1;
+            this._save();
+            audioManager.play("powerup");
+            renderKit();
+            head.textContent = `◆ ${formatNumber(r.credits)} credits`;
+          },
+        }, [
+          el("span", { class: "sw" }),
+          el("span", { class: "nm" }, `${k.name}${owned ? ` ×${owned}` : ""}`),
+          el("span", { class: "ds" }, k.desc),
+          el("span", { class: "cost" }, `◆ ${k.cost}`),
+        ]));
+      }
+    };
+    const relicRow = el("div", { class: "bait-row" });
+    for (const art of ARTIFACTS) {
+      const got = !!r.relics[art.id];
+      relicRow.appendChild(el("div", {
+        class: `bait-card${got ? " active" : " poor"}`,
+        style: `--bt:${art.color}`,
+      }, [
+        el("span", { class: "sw" }),
+        el("span", { class: "nm" }, got ? art.name : "Undiscovered"),
+        el("span", { class: "ds" }, got ? art.perk : `Buried around ${art.at} m`),
+      ]));
+    }
     render();
+    renderKit();
     openModal({
       title: "The Garage",
       bodyNode: el("div", { class: "rig-shop" }, [
         el("p", { class: "zone-intro" }, "Upgrades are permanent. Credits come from ore you actually carried back to the depot."),
         head,
+        el("h4", { class: "dock-h" }, "Rig"),
         grid,
+        el("h4", { class: "dock-h" }, "Kit — carried into the shaft, spent when used"),
+        kitRow,
+        el("h4", { class: "dock-h" }, `Relics ${Object.keys(r.relics).length}/${ARTIFACTS.length} — permanent once carried home`),
+        relicRow,
       ]),
       footerNode: el("div", { class: "modal-foot" }, [
         el("button", { class: "btn btn-primary", onClick: () => { closeModal(); onGo(); } }, "Drop the rig"),
@@ -195,6 +295,10 @@ export class DeepDelveGame extends GameBase {
     this.input.onKey("Space", () => { this._thrustKey = true; });
     this.input.onKey("KeyE", () => this._tryDepot());
     this.input.onKey("Enter", () => this._tryDepot());
+    this.input.onKey("Digit1", () => this._useKit("charge"));
+    this.input.onKey("Digit2", () => this._useKit("patch"));
+    this.input.onKey("Digit3", () => this._useKit("beacon"));
+    this.input.onPointer("down", (p) => this._tapKit(p.x, p.y));
     this._thrustKey = false;
   }
 
@@ -227,8 +331,37 @@ export class DeepDelveGame extends GameBase {
     this.elapsed = 0;
     this._sky = null;
     this._warned = 0;
+    this._dead = false;
+    this._stranded = false;
+    // Kit is carried from the garage; what is spent is spent.
+    const store = this._store();
+    this.kit = { charge: store.kit.charge || 0, patch: store.kit.patch || 0, beacon: store.kit.beacon || 0 };
+    this.relicsFound = [];
+    this.contract = this._rollContract();
+    this.blasts = [];
     this.setScore(0);
     this._updateHud();
+  }
+
+  /**
+   * The depot's standing order for this trip: an ore it wants and how much.
+   * It is drawn only from ores you can actually reach at your best depth, so
+   * it is always a job you could take rather than a taunt.
+   */
+  _rollContract() {
+    const best = Math.max(30, this._store().bestDepth);
+    const reachable = new Set();
+    for (const st of STRATA) {
+      if (st.from > best) continue;
+      for (const ore of Object.keys(st.ores)) reachable.add(ore);
+    }
+    const pool = [...reachable];
+    if (!pool.length) return null;
+    // Prefer the richest ore in reach: that is the interesting order.
+    pool.sort((a, b) => ORES[b].value - ORES[a].value);
+    const ore = pool[Math.min(pool.length - 1, randInt(0, Math.min(2, pool.length - 1)))];
+    const n = randInt(3, 7);
+    return { ore, n, reward: Math.round(ORES[ore].value * n * 0.85 + 150) };
   }
 
   /**
@@ -253,31 +386,88 @@ export class DeepDelveGame extends GameBase {
         // so the deep shaft reads as broken rather than uniform.
         if (rng() < 0.035 + Math.min(0.05, depth / 9000)) { this.grid[i] = 0; continue; }
 
-        // Ore.
-        if (rng() < st.density) {
-          const total = Object.values(st.ores).reduce((a, b) => a + b, 0);
-          let roll = rng() * total;
-          let picked = null;
-          for (const [ore, w] of Object.entries(st.ores)) {
-            if (roll < w) { picked = ore; break; }
-            roll -= w;
-          }
-          if (picked) { this.grid[i] = 2; this.tileData.set(i, { ore: picked }); continue; }
-        }
-
-        // Hazards.
+        // Hazards. Ore is not placed here — it is grown as veins below, so
+        // a seam is something you follow rather than a speck you happen to
+        // clip while digging past.
         if (st.hazard && rng() < 0.022 + depth / 40000) {
           this.grid[i] = 3;
           this.tileData.set(i, { hazard: st.hazard });
         }
       }
     }
+
+    this._growVeins(rng, rows);
+    this._buryArtifacts(rng);
+    this._digCore();
     // The depot sits on the surface; clear a landing pad around it.
     this.depotX = Math.floor(COLS / 2);
     for (let x = this.depotX - 2; x <= this.depotX + 2; x++) {
       for (let y = 0; y < SURFACE_ROWS; y++) this.grid[y * COLS + x] = 0;
     }
     this.rows = rows;
+  }
+
+  /**
+   * Ore veins. Each one starts at a random tile and wanders a few steps in
+   * a drifting direction, which is what makes a seam read as a seam. The
+   * count per stratum comes from its density so the overall richness of a
+   * layer is unchanged — only its shape is.
+   */
+  _growVeins(rng, rows) {
+    for (let band = SURFACE_ROWS; band < rows; band += 20) {
+      const depth = band - SURFACE_ROWS;
+      const st = this._stratumAt(depth);
+      const tiles = 20 * COLS;
+      const veins = Math.max(1, Math.round((tiles * st.density) / 5.5));
+      const total = Object.values(st.ores).reduce((a, b) => a + b, 0);
+      for (let v = 0; v < veins; v++) {
+        let roll = rng() * total, ore = null;
+        for (const [k, w] of Object.entries(st.ores)) { if (roll < w) { ore = k; break; } roll -= w; }
+        if (!ore) continue;
+        // Richer ore comes in shorter seams, so a gold vein is a genuine find.
+        const len = Math.max(2, Math.round(7 - ORES[ore].mass * 1.4 + rng() * 3));
+        let x = Math.floor(rng() * COLS);
+        let y = band + Math.floor(rng() * 20);
+        let dx = rng() < 0.5 ? -1 : 1, dy = rng() < 0.35 ? 1 : 0;
+        for (let k = 0; k < len; k++) {
+          if (x < 0 || x >= COLS || y < SURFACE_ROWS || y >= rows) break;
+          const i = y * COLS + x;
+          if (this.grid[i] === 1) { this.grid[i] = 2; this.tileData.set(i, { ore }); }
+          // Wander: mostly along the seam, occasionally turning.
+          if (rng() < 0.3) dx = rng() < 0.5 ? -1 : 1;
+          if (rng() < 0.3) dy = rng() < 0.5 ? 1 : 0;
+          if (rng() < 0.55) x += dx; else y += dy || 1;
+        }
+      }
+    }
+  }
+
+  /** One artifact per depth band, in a small hollow so it is findable. */
+  _buryArtifacts(rng) {
+    this.artifacts = [];
+    const store = this._store();
+    for (const art of ARTIFACTS) {
+      if (store.relics[art.id]) continue;          // already carried home
+      const y = SURFACE_ROWS + art.at + Math.floor(rng() * 10) - 5;
+      const x = 1 + Math.floor(rng() * (COLS - 2));
+      // Hollow it out so the relic is visible once the lamp reaches it.
+      for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+        const i = (y + dy) * COLS + (x + dx);
+        if (i >= 0 && i < this.grid.length) { this.grid[i] = 0; this.tileData.delete(i); }
+      }
+      this.artifacts.push({ id: art.id, x, y, taken: false, bob: rng() * 6.3 });
+    }
+  }
+
+  /** The bottom: a chamber around the Core, the end of the expedition. */
+  _digCore() {
+    const cy = SURFACE_ROWS + CORE_DEPTH;
+    this.coreX = Math.floor(COLS / 2);
+    this.coreY = cy;
+    for (let dy = -3; dy <= 3; dy++) for (let dx = -4; dx <= 4; dx++) {
+      const i = (cy + dy) * COLS + (this.coreX + dx);
+      if (i >= 0 && i < this.grid.length) { this.grid[i] = 0; this.tileData.delete(i); }
+    }
   }
 
   _stratumAt(depth) {
@@ -367,6 +557,24 @@ export class DeepDelveGame extends GameBase {
       if (h.damage) { this._damage(h.damage * dt, "lava"); this.shakeT = 0.12; }
     }
 
+    // --- artifacts and the Core --------------------------------------
+    for (const a of this.artifacts) {
+      if (a.taken) continue;
+      const ax = a.x * TILE + TILE / 2, ay = a.y * TILE + TILE / 2;
+      if (Math.hypot(ax - r.x, ay - r.y) < TILE * 0.8) {
+        a.taken = true;
+        this.relicsFound.push(a.id);
+        audioManager.play("powerup");
+        this.shakeT = 0.25;
+        this._float(`Found: ${ARTIFACT_BY_ID[a.id].name}`, ARTIFACT_BY_ID[a.id].color);
+        this.addScore(900);
+      }
+    }
+    if (!this._reachedCore && this.coreY !== undefined) {
+      const cxp = this.coreX * TILE + TILE / 2, cyp = this.coreY * TILE + TILE / 2;
+      if (Math.hypot(cxp - r.x, cyp - r.y) < TILE * 1.2) { this._reachCore(); return; }
+    }
+
     // --- depth / fuel / hull ----------------------------------------
     this.depth = Math.max(0, Math.floor(r.y / TILE) - SURFACE_ROWS + 1);
     if (this.depth > this.maxDepth) this.maxDepth = this.depth;
@@ -386,6 +594,10 @@ export class DeepDelveGame extends GameBase {
     }
 
     this._stepDust(dt);
+    for (let i = this.blasts.length - 1; i >= 0; i--) {
+      this.blasts[i].t += dt;
+      if (this.blasts[i].t > 0.5) this.blasts.splice(i, 1);
+    }
     if (this.shakeT > 0) this.shakeT -= dt;
     this._updateHud();
   }
@@ -430,12 +642,11 @@ export class DeepDelveGame extends GameBase {
     r.y = Math.max(halfH, r.y);
   }
 
-  _dig(cx, cy) {
+  _dig(cx, cy, silent = false) {
     const i = cy * COLS + cx;
     const data = this.tileData.get(i);
     this.grid[i] = 0;
-    audioManager.play("hit");
-    this.shakeT = Math.max(this.shakeT, 0.07);
+    if (!silent) { audioManager.play("hit"); this.shakeT = Math.max(this.shakeT, 0.07); }
     for (let k = 0; k < 6; k++) {
       this._puff(cx * TILE + TILE / 2 + randFloat(-12, 12), cy * TILE + TILE / 2 + randFloat(-12, 12),
                  this._stratumAt(cy - SURFACE_ROWS).grain);
@@ -454,6 +665,63 @@ export class DeepDelveGame extends GameBase {
     }
   }
 
+  // --------------------------------------------------------------- KIT ---
+  /** Bottom-of-screen kit buttons, so touch has the same three actions. */
+  _kitBar() {
+    const W = this.viewW, H = this.viewH;
+    const w = Math.min(96, (W - 24) / 3 - 6);
+    const total = 3 * w + 12;
+    const x0 = (W - total) / 2;
+    return KIT.map((k, i) => ({ i, k, x: x0 + i * (w + 6), y: H - 40, w, h: 30 }));
+  }
+
+  _tapKit(px, py) {
+    if (this.state !== "playing") return;
+    for (const b of this._kitBar()) {
+      if (px >= b.x && px <= b.x + b.w && py >= b.y && py <= b.y + b.h) { this._useKit(b.k.id); return; }
+    }
+  }
+
+  _useKit(id) {
+    if (this.state !== "playing" || this._dead) return;
+    if ((this.kit[id] || 0) <= 0) { audioManager.play("error"); this._float("None left", "#ff5470"); return; }
+    const r = this.rig;
+    const cx = Math.floor(r.x / TILE), cy = Math.floor(r.y / TILE);
+
+    if (id === "charge") {
+      // A wide pocket, ore and all — the answer to being walled in, or to a
+      // seam you do not have the fuel to drill out one tile at a time.
+      for (let dy = -2; dy <= 2; dy++) for (let dx = -2; dx <= 2; dx++) {
+        if (dx * dx + dy * dy > 6) continue;
+        const x = cx + dx, y = cy + dy;
+        if (x < 0 || x >= COLS || y < SURFACE_ROWS || y >= this.rows) continue;
+        const i = y * COLS + x;
+        if (this.grid[i] === 1 || this.grid[i] === 2) this._dig(x, y, true);
+      }
+      this.blasts.push({ x: r.x, y: r.y, t: 0 });
+      this.shakeT = 0.4;
+      audioManager.play("explosion");
+      this._float("Charge blown", "#ff9f43");
+    } else if (id === "patch") {
+      this.hull = Math.min(this.maxHull, this.hull + 60);
+      audioManager.play("powerup");
+      this._float("+60 hull", "#2ee6a6");
+    } else if (id === "beacon") {
+      r.x = this.depotX * TILE + TILE / 2;
+      r.y = (SURFACE_ROWS - 0.5) * TILE;
+      r.vx = 0; r.vy = 0;
+      this.blasts.push({ x: r.x, y: r.y, t: 0 });
+      audioManager.play("warp");
+      this._float("Beacon home", "#22d3ee");
+    }
+    this.kit[id]--;
+    // Spend it out of the permanent stock too, so the shop count is honest.
+    const store = this._store();
+    store.kit[id] = Math.max(0, (store.kit[id] || 0) - 1);
+    this._save();
+    this._updateHud();
+  }
+
   _damage(amount, cause) {
     this.hull -= amount;
     if (this.hull <= 0) { this.hull = 0; this._end(cause); }
@@ -464,7 +732,23 @@ export class DeepDelveGame extends GameBase {
     if (this.state !== "playing" || this.depth > 0) return;
     if (Math.abs(this.rig.x - (this.depotX * TILE + TILE / 2)) > TILE * 2.2) return;
     let earned = 0;
-    for (const [ore, n] of Object.entries(this.cargo)) earned += ORES[ore].value * n;
+    const priceMul = this._has("heart") ? 1.25 : 1;
+    for (const [ore, n] of Object.entries(this.cargo)) earned += Math.round(ORES[ore].value * n * priceMul);
+    // The contract pays on top, once, when the hold has enough of its ore.
+    if (this.contract && !this.contract.paid && (this.cargo[this.contract.ore] || 0) >= this.contract.n) {
+      this.contract.paid = true;
+      earned += this.contract.reward;
+      this._float(`Contract filled: +◆ ${formatNumber(this.contract.reward)}`, "#7cf0d0");
+      this.addScore(this.contract.reward);
+    }
+    // Relics are banked here too — carried, not merely touched.
+    if (this.relicsFound.length) {
+      const store = this._store();
+      for (const id of this.relicsFound) store.relics[id] = true;
+      this._float(`${this.relicsFound.length} relic${this.relicsFound.length > 1 ? "s" : ""} secured`, "#ffd76a");
+      this.relicsFound = [];
+      this._save();
+    }
     if (earned > 0) {
       this.credits += earned;
       this.cargo = {}; this.cargoMass = 0;
@@ -487,6 +771,35 @@ export class DeepDelveGame extends GameBase {
     this._updateHud();
   }
 
+  /** Touching the Core ends the expedition as a win, cargo banked. */
+  _reachCore() {
+    if (this._dead) return;
+    this._reachedCore = true;
+    this._dead = true;
+    const store = this._store();
+    let earned = 0;
+    const priceMul = this._has("heart") ? 1.25 : 1;
+    for (const [ore, n] of Object.entries(this.cargo)) earned += Math.round(ORES[ore].value * n * priceMul);
+    // Reaching the bottom counts as a delivery: the hold and every relic on
+    // board come home with you rather than being lost at the deepest point.
+    for (const id of this.relicsFound) store.relics[id] = true;
+    store.credits += earned + 5000;
+    store.cores = (store.cores || 0) + 1;
+    if (store.bestDepth < this.maxDepth) store.bestDepth = this.maxDepth;
+    this._save();
+    this.addScore(earned + 5000);
+    audioManager.play("win");
+    this.endGame({
+      result: "win", score: this.credits + earned + 5000,
+      message: `The Core at ${CORE_DEPTH} m. Everything in the hold came up with you.`,
+      extraStats: [
+        { label: "Depth", value: `${this.maxDepth} m` },
+        { label: "Relics", value: `${Object.keys(store.relics).length}/${ARTIFACTS.length}` },
+        { label: "Cores", value: store.cores },
+      ],
+    });
+  }
+
   _end(cause) {
     if (this._dead) return;
     this._dead = true;
@@ -495,12 +808,13 @@ export class DeepDelveGame extends GameBase {
     if (store.bestRun < this.credits) store.bestRun = this.credits;
     this._save();
     const lost = Object.values(this.cargo).reduce((a, b) => a + b, 0);
+    const lostRelics = this.relicsFound.length;
     const reason = cause === "lava" ? "The hull burned through in the lava."
       : cause === "fall" ? "The rig broke apart on impact."
       : "Stranded with no fuel, the hull ground itself away.";
     this.endGame({
       result: "loss", score: this.credits,
-      message: `${reason} ${lost ? `${lost} pieces of ore went down with it.` : "The hold was empty, at least."}`,
+      message: `${reason} ${lost ? `${lost} pieces of ore` : "Nothing"}${lostRelics ? ` and ${lostRelics} relic${lostRelics > 1 ? "s" : ""}` : ""} went down with it.`,
       extraStats: [
         { label: "Deepest", value: `${this.maxDepth} m` },
         { label: "Stratum", value: this._stratumAt(this.maxDepth).name },
@@ -561,14 +875,129 @@ export class DeepDelveGame extends GameBase {
 
     this._drawTiles(ctx, viewRows);
     this._drawDepot(ctx);
+    this._drawCore(ctx);
+    this._drawArtifacts(ctx);
     this._drawDust(ctx);
+    this._drawBlasts(ctx);
     this._drawRig(ctx);
     this._drawLight(ctx, viewRows);
     ctx.restore();
 
     this._drawGauges(ctx, W, H);
+    this._drawContract(ctx, W);
+    this._drawKitBar(ctx, W, H);
     this._drawFloaters(ctx, W, H);
     ctx.restore();
+  }
+
+  /** Buried relics: a pedestal, a glow, and the relic turning above it. */
+  _drawArtifacts(ctx) {
+    for (const a of this.artifacts) {
+      if (a.taken) continue;
+      const art = ARTIFACT_BY_ID[a.id];
+      const x = a.x * TILE + TILE / 2;
+      const y = a.y * TILE + TILE / 2 + Math.sin(this.elapsed * 1.6 + a.bob) * 3;
+      const g = ctx.createRadialGradient(x, y, 2, x, y, TILE * 1.6);
+      g.addColorStop(0, hexA(art.color, 0.55));
+      g.addColorStop(1, hexA(art.color, 0));
+      ctx.fillStyle = g;
+      ctx.beginPath(); ctx.arc(x, y, TILE * 1.6, 0, 7); ctx.fill();
+      // Pedestal.
+      ctx.fillStyle = "#3a3244";
+      ctx.fillRect(x - 12, a.y * TILE + TILE * 0.72, 24, 8);
+      // The relic itself: a faceted shard that turns.
+      ctx.save();
+      ctx.translate(x, y);
+      ctx.rotate(Math.sin(this.elapsed + a.bob) * 0.4);
+      ctx.fillStyle = art.color;
+      ctx.beginPath();
+      ctx.moveTo(0, -11); ctx.lineTo(8, -2); ctx.lineTo(5, 10); ctx.lineTo(-5, 10); ctx.lineTo(-8, -2);
+      ctx.closePath(); ctx.fill();
+      ctx.fillStyle = "rgba(255,255,255,0.5)";
+      ctx.beginPath();
+      ctx.moveTo(0, -11); ctx.lineTo(-8, -2); ctx.lineTo(0, 2); ctx.closePath(); ctx.fill();
+      ctx.restore();
+    }
+  }
+
+  /** The Core chamber at the bottom of the shaft. */
+  _drawCore(ctx) {
+    if (this.coreY === undefined) return;
+    const x = this.coreX * TILE + TILE / 2, y = this.coreY * TILE + TILE / 2;
+    const pulse = 0.7 + Math.sin(this.elapsed * 2) * 0.3;
+    const g = ctx.createRadialGradient(x, y, 4, x, y, TILE * 4);
+    g.addColorStop(0, `rgba(255,240,180,${0.5 * pulse})`);
+    g.addColorStop(0.4, `rgba(255,120,60,${0.28 * pulse})`);
+    g.addColorStop(1, "rgba(255,90,40,0)");
+    ctx.fillStyle = g;
+    ctx.beginPath(); ctx.arc(x, y, TILE * 4, 0, 7); ctx.fill();
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.rotate(this.elapsed * 0.3);
+    for (let i = 0; i < 3; i++) {
+      ctx.strokeStyle = `rgba(255,180,90,${0.5 - i * 0.12})`;
+      ctx.lineWidth = 2.5;
+      ctx.beginPath();
+      ctx.ellipse(0, 0, TILE * (0.9 + i * 0.4), TILE * (0.34 + i * 0.16), i * 1.1, 0, 7);
+      ctx.stroke();
+    }
+    ctx.restore();
+    const cg = ctx.createRadialGradient(x - 4, y - 4, 2, x, y, 18);
+    cg.addColorStop(0, "#fff6d0"); cg.addColorStop(1, "#ff6b28");
+    ctx.fillStyle = cg;
+    ctx.beginPath(); ctx.arc(x, y, 16 * pulse, 0, 7); ctx.fill();
+  }
+
+  _drawBlasts(ctx) {
+    for (const b of this.blasts) {
+      const k = b.t / 0.5;
+      ctx.globalAlpha = Math.max(0, 1 - k);
+      const g = ctx.createRadialGradient(b.x, b.y, 2, b.x, b.y, 20 + k * 90);
+      g.addColorStop(0, "#ffffff"); g.addColorStop(0.4, "#ffb347"); g.addColorStop(1, "rgba(255,110,40,0)");
+      ctx.fillStyle = g;
+      ctx.beginPath(); ctx.arc(b.x, b.y, 20 + k * 90, 0, 7); ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+  }
+
+  /** The standing order, top-left under the gauges. */
+  _drawContract(ctx, W) {
+    const c = this.contract;
+    if (!c) return;
+    const have = this.cargo[c.ore] || 0;
+    const done = c.paid || have >= c.n;
+    const y = 74;
+    ctx.fillStyle = "rgba(8,10,20,0.55)";
+    roundRect(ctx, 12, y, 172, 26, 8); ctx.fill();
+    ctx.fillStyle = done ? "#2ee6a6" : ORES[c.ore].edge;
+    ctx.beginPath(); ctx.arc(24, y + 13, 5, 0, 7); ctx.fill();
+    ctx.fillStyle = "rgba(255,255,255,0.85)";
+    ctx.font = "700 10px 'Inter', system-ui, sans-serif";
+    ctx.textAlign = "left";
+    ctx.fillText(c.paid ? `Order filled · ◆ ${formatNumber(c.reward)}`
+                        : `Order: ${Math.min(have, c.n)}/${c.n} ${ORES[c.ore].name} · ◆ ${formatNumber(c.reward)}`,
+                 34, y + 17);
+  }
+
+  /** Three kit buttons: the same actions on keyboard and on touch. */
+  _drawKitBar(ctx, W, H) {
+    for (const b of this._kitBar()) {
+      const n = this.kit[b.k.id] || 0;
+      ctx.globalAlpha = n > 0 ? 1 : 0.3;
+      ctx.fillStyle = "rgba(14,12,22,0.85)";
+      roundRect(ctx, b.x, b.y, b.w, b.h, 8); ctx.fill();
+      ctx.strokeStyle = hexA(b.k.color, n > 0 ? 0.7 : 0.3);
+      ctx.lineWidth = 1.4;
+      roundRect(ctx, b.x, b.y, b.w, b.h, 8); ctx.stroke();
+      ctx.fillStyle = b.k.color;
+      ctx.font = "800 9px 'Inter', system-ui, sans-serif";
+      ctx.textAlign = "center";
+      ctx.fillText(`${b.i + 1} ${b.k.name.split(" ")[1].toUpperCase()}`, b.x + b.w / 2, b.y + 13);
+      ctx.fillStyle = "rgba(255,255,255,0.7)";
+      ctx.font = "700 10px 'Inter', system-ui, sans-serif";
+      ctx.fillText(`×${n}`, b.x + b.w / 2, b.y + 24);
+      ctx.globalAlpha = 1;
+    }
   }
 
   /** Sky above the dirt line, fading to the stratum colour as you descend. */
@@ -850,6 +1279,11 @@ export class DeepDelveGame extends GameBase {
     });
     ctx.globalAlpha = 1;
   }
+}
+
+function hexA(hex, a) {
+  const v = parseInt(hex.slice(1), 16);
+  return `rgba(${(v >> 16) & 255},${(v >> 8) & 255},${v & 255},${a})`;
 }
 
 function roundRect(ctx, x, y, w, h, r) {
