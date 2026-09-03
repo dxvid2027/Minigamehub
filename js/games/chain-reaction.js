@@ -13,7 +13,6 @@
 import { GameBase } from "./gameBase.js";
 import { audioManager } from "../systems/audioManager.js";
 import { saveManager } from "../systems/saveManager.js";
-import { openModal, closeModal } from "../ui/modal.js";
 import { el, clamp, formatNumber, seededRng } from "../core/utils.js";
 
 const LEVELS = 24;
@@ -68,32 +67,23 @@ export class ChainReactionGame extends GameBase {
     ]);
   }
 
-  onPlayPressed() { audioManager.play("click"); this.openLevels(); }
-
-  openLevels() {
+  getLevelNav() {
     const store = this._store();
-    const grid = el("div", { class: "orb-grid" });
-    for (let i = 0; i < LEVELS; i++) {
-      const open = this._unlocked(i);
-      const done = store.cleared[i];
-      grid.appendChild(el("button", {
-        class: `orb-card${open ? "" : " locked"}${done ? " perfect" : ""}`,
-        disabled: !open,
-        onClick: () => { closeModal(); this.levelIdx = i; this.start(); },
-      }, [
-        el("span", { class: "n" }, String(i + 1)),
-        el("span", { class: "st" }, open ? (done ? `${done} parts` : "Open") : "Locked"),
-      ]));
-    }
-    openModal({
+    return {
+      index: this.levelIdx,
+      count: LEVELS,
+      label: "Contraption",
       title: "Contraptions",
-      bodyNode: el("div", { class: "orb-picker" }, [
-        el("p", { class: "zone-intro" }, "Twenty-four fixed problems. The number under a solved level is the fewest parts you have used on it."),
-        grid,
-      ]),
-      footerNode: el("button", { class: "btn btn-ghost", onClick: () => closeModal() }, "Back"),
-    });
+      intro: "Twenty-four fixed problems. The number under a solved level is the fewest parts you have used on it.",
+      unlocked: (i) => this._unlocked(i),
+      cleared: (i) => store.cleared[i],
+      note: (i) => (store.cleared[i] ? `${store.cleared[i]} parts`
+        : this._unlocked(i) ? "Open" : "Locked"),
+      goTo: (i) => { this.levelIdx = i; this.start(); },
+    };
   }
+
+  onPlayPressed() { this.openLevelSelect(); }
 
   // -------------------------------------------------------------- SETUP --
   onInit() {

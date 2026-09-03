@@ -859,3 +859,52 @@ body.immersive #toast-root { display: none; }
 .track-card.cleared { border-color: var(--tc); }
 .track-card.locked { opacity: .42; cursor: not-allowed; }
 .modal:has(.track-picker) { width: min(700px, 100%); }
+
+/* ── Level picker ─────────────────────────────────────────────────────────
+   The one campaign menu, shared by every game with numbered levels. Cards
+   stay at least 44px tall so a thumb can hit them, and the grid reflows to
+   three columns on a phone rather than shrinking the tap target. */
+.level-picker { display: block; }
+.level-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
+  gap: 8px;
+}
+.level-card {
+  position: relative;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px;
+  min-height: 62px; padding: 9px 6px;
+  border: 1px solid var(--border); border-radius: 12px;
+  background: #ffffff0d; color: var(--text-1);
+  cursor: pointer; transition: transform .14s ease, background .14s ease, border-color .14s ease;
+}
+.level-card:hover:not(:disabled) { transform: translateY(-2px); background: #ffffff1a; border-color: var(--accent); }
+.level-card:active:not(:disabled) { transform: translateY(0) scale(.97); }
+.level-card .n { font-size: 1.08rem; font-weight: 800; line-height: 1; }
+.level-card .st {
+  font-size: .6rem; letter-spacing: .05em; text-transform: uppercase;
+  color: var(--text-3); text-align: center; line-height: 1.2;
+}
+.level-card.done { border-color: #2ee6a666; background: #2ee6a614; }
+.level-card.done .st { color: #2ee6a6; }
+.level-card .tick {
+  position: absolute; top: 4px; right: 6px;
+  font-size: .6rem; font-weight: 900; color: #2ee6a6;
+}
+/* Where you are right now, so the picker doubles as a progress readout. */
+.level-card.here { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent) inset; }
+.level-card.here .n { color: var(--accent); }
+.level-card.locked { opacity: .38; cursor: not-allowed; }
+.modal:has(.level-picker) { width: min(660px, 100%); }
+
+@media (max-width: 560px) {
+  .level-grid { grid-template-columns: repeat(auto-fill, minmax(70px, 1fr)); gap: 7px; }
+  .level-card { min-height: 58px; padding: 8px 4px; }
+}
+
+/* A d-pad action button carrying a word rather than a glyph — "WAIT", "DIG".
+   The glyph buttons are sized for a symbol, so the text needs its own scale. */
+.touch-controls .action-btns button.labelled {
+  font-size: .74rem; font-weight: 800; letter-spacing: .06em;
+  line-height: 1; padding: 0 6px;
+}

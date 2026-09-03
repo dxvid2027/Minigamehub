@@ -81,9 +81,30 @@ export class PulseRunnerGame extends GameBase {
     ]);
   }
 
-  onPlayPressed() { audioManager.play("click"); this.openTracks(); }
+  /**
+   * The campaign contract, so the win screen offers the next track and the
+   * HUD carries a track button. The picker itself stays bespoke — a track
+   * card has to show BPM, difficulty and a grade, which a numbered tile
+   * cannot — so openLevelSelect is pointed at it below.
+   */
+  getLevelNav() {
+    const store = this._store();
+    return {
+      index: this.trackIdx,
+      count: TRACKS.length,
+      label: "Track",
+      title: "Track Select",
+      unlocked: (i) => this._unlocked(i),
+      cleared: (i) => !!store.best[TRACKS[i].id],
+      goTo: (i) => { this.trackIdx = i; this.start(); },
+    };
+  }
+  openLevelSelect() { audioManager.play("click"); this.openTracks(); }
+
+  onPlayPressed() { this.openTracks(); }
 
   openTracks() {
+    audioManager.play("click");
     const store = this._store();
     const grid = el("div", { class: "track-grid" });
     TRACKS.forEach((t, i) => {

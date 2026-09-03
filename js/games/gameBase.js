@@ -72,6 +72,9 @@ export class GameBase {
       this.hudStatsEl = el("div", { class: "hud-stats" }),
       el("div", { class: "hud-actions" }, [
         iconButton("info", "How to play", () => this.showHowToPlay()),
+        // Campaign games get a level button here, so the picker is reachable
+        // mid-run and not only from the start screen.
+        this.levelBtn = iconButton("grid", "Levels", () => this.openLevelSelect()),
         this.inputBtn = iconButton("keyboard", "Controls", () => this.cycleInputMode()),
         // Games that keep long-run progress let you stop and bank it rather
         // than having to lose on purpose or throw the run away.
@@ -97,7 +100,7 @@ export class GameBase {
     this._fitStage();
     this._onWindowResize = () => { this._layoutTouchControls(); this._fitStage(); };
     // The controls button shows which mode is live, so it needs the first sync.
-    queueMicrotask(() => { this._syncInputModeUI(); this._syncBankButton(); });
+    queueMicrotask(() => { this._syncInputModeUI(); this._syncBankButton(); this._syncLevelButton(); });
     window.addEventListener("resize", this._onWindowResize);
     window.addEventListener("orientationchange", this._onWindowResize);
   }
@@ -204,6 +207,130 @@ export class GameBase {
   setScore(n) { this.score = n; this.setHud({ Score: formatNumber(this.score) }); }
   addScore(n) { this.setScore(this.score + n); }
 
+  // -------------------------------------------------------- LEVEL NAV ------
+  /**
+   * Campaign contract. A game with numbered levels returns a descriptor here
+   * and gets the whole menu for free: a picker in the HUD, "Next level" on the
+   * win screen, and a jump list from the pause screen. Everything is optional
+   * except `count` and `goTo` — the rest falls back to sensible defaults, so a
+   * game with nothing but a level count still gets a working picker.
+   *
+   *   {
+   *     index,                  // zero-based level currently loaded
+   *     count,                  // how many there are
+   *     label,                  // singular noun: "Vault", "Level", "Track"
+   *     title,                  // picker heading (defaults to label + "s")
+   *     intro,                  // one line under the heading
+   *     unlocked(i) -> bool,    // default: everything up to the first unbeaten
+   *     cleared(i)  -> truthy,  // shown as the "done" state
+   *     note(i)     -> string,  // small line under the number
+   *     goTo(i)                 // load level i and start it
+   *   }
+   */
+  getLevelNav() { return null; }
+
+  /** Normalised nav, or null. Every consumer below goes through this. */
+  _nav() {
+    const raw = this.getLevelNav?.();
+    if (!raw || !raw.count || typeof raw.goTo !== "function") return null;
+    const label = raw.label || "Level";
+    return {
+      index: raw.index || 0,
+      count: raw.count,
+      label,
+      title: raw.title || `${label}s`,
+      intro: raw.intro || "",
+      cleared: raw.cleared || (() => false),
+      unlocked: raw.unlocked || ((i) => i === 0 || !!(raw.cleared || (() => false))(i - 1)),
+      note: raw.note || null,
+      goTo: raw.goTo,
+    };
+  }
+
+  _syncLevelButton() {
+    if (!this.levelBtn) return;
+    const nav = this._nav();
+    this.levelBtn.hidden = !nav;
+    if (nav) this.levelBtn.title = this.levelBtn.ariaLabel = `${nav.title} (${nav.index + 1}/${nav.count})`;
+  }
+
+  /** The next level, or null when there is none or it is still locked. */
+  _nextLevel() {
+    const nav = this._nav();
+    if (!nav) return null;
+    const i = nav.index + 1;
+    if (i >= nav.count || !nav.unlocked(i)) return null;
+    return { nav, i };
+  }
+
+  nextLevel() {
+    const next = this._nextLevel();
+    if (!next) return;
+    audioManager.play("click");
+    this._flushPlaytime();
+    this.onDestroyRound?.();
+    this._setOverlay(false);
+    this.pauseBtn.disabled = false;
+    next.nav.goTo(next.i);
+    this._syncLevelButton();
+  }
+
+  /**
+   * One picker for every campaign game. Levels you have not reached are shown
+   * but disabled, so the shape of what is left is always visible.
+   */
+  openLevelSelect() {
+    const nav = this._nav();
+    if (!nav) return;
+    audioManager.play("click");
+    // Opening the picker mid-run pauses; closing it without picking resumes.
+    // `jumped` keeps the close handler from resuming a run we just replaced.
+    const wasPlaying = this.state === "playing";
+    let jumped = false;
+    if (wasPlaying) this.pause();
+
+    const grid = el("div", { class: "level-grid" });
+    for (let i = 0; i < nav.count; i++) {
+      const open = nav.unlocked(i);
+      const done = nav.cleared(i);
+      const here = i === nav.index && this.state !== "idle";
+      const note = nav.note ? nav.note(i) : (done ? "Cleared" : open ? "Open" : "Locked");
+      grid.appendChild(el("button", {
+        class: `level-card${open ? "" : " locked"}${done ? " done" : ""}${here ? " here" : ""}`,
+        disabled: !open,
+        onClick: () => {
+          jumped = true;
+          closeModal();
+          this._flushPlaytime();
+          this.onDestroyRound?.();
+          this._setOverlay(false);
+          this.pauseBtn.disabled = false;
+          nav.goTo(i);
+          this._syncLevelButton();
+        },
+      }, [
+        el("span", { class: "n" }, String(i + 1)),
+        el("span", { class: "st" }, String(note)),
+        done ? el("span", { class: "tick" }, "\u2713") : null,
+      ]));
+    }
+
+    openModal({
+      title: nav.title,
+      bodyNode: el("div", { class: "level-picker" }, [
+        nav.intro ? el("p", { class: "zone-intro" }, nav.intro) : null,
+        grid,
+      ]),
+      footerNode: el("button", {
+        class: "btn btn-ghost",
+        onClick: () => closeModal(),
+      }, wasPlaying ? "Keep playing" : "Back"),
+      // Resuming lives here alone, so the Escape key, the backdrop and the
+      // footer button all take the same path.
+      onClose: () => { if (!jumped && wasPlaying && this.state === "paused") this.resume(); },
+    });
+  }
+
   // ---------------------------------------------------------- OVERLAYS -----
   /**
    * Start / pause / end screens hide the on-screen controls: a d-pad floating
@@ -246,6 +373,11 @@ export class GameBase {
         // happened to leave the campaign pointer on.
         labelledButton("play", this.getPlayLabel?.() || "Start Game", "btn btn-primary btn-lg",
           () => (this.onPlayPressed ? this.onPlayPressed() : this.start())),
+        // A campaign game always offers the picker next to the play button,
+        // even when its play button drops you straight into the current level.
+        this._nav() && !this.onPlayPressed
+          ? labelledButton("grid", this._nav().title, "btn btn-ghost btn-lg", () => this.openLevelSelect())
+          : null,
         // Games with permanent between-run upgrades expose their shop here.
         upgrades
           ? labelledButton("sparkles", `Upgrades (${upgrades.cfg.icon} ${formatNumber(upgrades.currency)})`,
@@ -265,6 +397,7 @@ export class GameBase {
       el("div", { class: "overlay-actions" }, [
         labelledButton("play", "Resume", "btn btn-primary btn-lg", () => this.resume()),
         labelledButton("restart", "Restart", "btn btn-ghost", () => this.confirmRestart()),
+        this._nav() ? labelledButton("grid", this._nav().title, "btn btn-ghost", () => this.openLevelSelect()) : null,
         labelledLink("library", "Exit to Library", "btn btn-outline", "#/library"),
       ]),
     );
@@ -275,6 +408,10 @@ export class GameBase {
     this._syncBankButton();
     this.pauseBtn.disabled = true;
     const icon = result === "win" ? "🎉" : result === "loss" ? "💀" : "🏁";
+    const nav = this._nav();
+    // Only a win advances; losing a level and being offered the next one
+    // would let you skip past anything you could not beat.
+    const next = result === "win" ? this._nextLevel() : null;
     this._setOverlay(true);
     this.overlayEl.innerHTML = "";
     this.overlayEl.append(
@@ -287,7 +424,14 @@ export class GameBase {
         ...extraStats.map(s => statBlock(s.label, s.value)),
       ]),
       el("div", { class: "overlay-actions" }, [
-        labelledButton("restart", "Play Again", "btn btn-primary btn-lg", () => this.restart()),
+        // Winning a level puts the next one under the thumb: replaying the one
+        // you just beat is the rarer thing to want, so it steps back a rank.
+        next
+          ? labelledButton("arrowRight", `${nav.label} ${next.i + 1}`, "btn btn-primary btn-lg", () => this.nextLevel())
+          : null,
+        labelledButton("restart", next ? "Replay" : "Play Again",
+          next ? "btn btn-ghost btn-lg" : "btn btn-primary btn-lg", () => this.restart()),
+        nav ? labelledButton("grid", nav.title, "btn btn-ghost", () => this.openLevelSelect()) : null,
         labelledLink("library", "Back to Library", "btn btn-ghost", "#/library"),
       ]),
     );
@@ -684,7 +828,10 @@ export class GameBase {
         labels: this.getTouchButtonLabels?.() || {},
       });
     } else if (layout === "dpad") {
-      this.input.buildDPad(this.touchEl, { buttons: this.getTouchButtons?.() || ["a"] });
+      this.input.buildDPad(this.touchEl, {
+        buttons: this.getTouchButtons?.() || ["a"],
+        labels: this.getTouchButtonLabels?.() || {},
+      });
     } else if (layout === "single") {
       this.input.buildSingleButton(this.touchEl, this.getTouchIcon?.() || "▲");
     } else {

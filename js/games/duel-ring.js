@@ -82,9 +82,25 @@ export class DuelRingGame extends GameBase {
     ]);
   }
 
-  onPlayPressed() { audioManager.play("click"); this.openLadder(); }
+  /** The ladder as a campaign, so the win screen offers the next opponent. */
+  getLevelNav() {
+    const d = this._store();
+    return {
+      index: this.rung || 0,
+      count: FOES.length,
+      label: "Bout",
+      title: "The Ladder",
+      unlocked: (i) => i <= d.rung,
+      cleared: (i) => i < d.rung,
+      goTo: (i) => { this.rung = i; this.start(); },
+    };
+  }
+  openLevelSelect() { this.openLadder(); }
+
+  onPlayPressed() { this.openLadder(); }
 
   openLadder() {
+    audioManager.play("click");
     const d = this._store();
     const grid = el("div", { class: "foe-grid" });
     FOES.forEach((f, i) => {

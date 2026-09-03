@@ -16,6 +16,11 @@ export class InputController {
     this._tapCb = null;
     this.pointer = { x: 0, y: 0, down: false };
     this.virtual = { up: false, down: false, left: false, right: false, a: false, b: false };
+    // Taps on the on-screen controls, latched until a game reads them. A tap
+    // can be shorter than a frame, so a game that only samples "is it held
+    // down" during its update never sees one — which is why the d-pad did
+    // nothing in the turn-based games. This queue survives until consumed.
+    this.virtualTaps = new Set();
     this._touchStart = null;
     this._rot = 0;   // stage rotation in degrees; see setStageRotation()
     this._onKeyDown = (e) => {
@@ -40,6 +45,16 @@ export class InputController {
 
   onKey(code, fn, on = "down") { this._keyHandlers.push({ code, fn, on }); }
   isDown(...codes) { return codes.some(c => this.keys.has(c)); }
+  /**
+   * One press of an on-screen button, consumed. Use this instead of `isDown`
+   * wherever a press means a discrete action — a step on a grid, a card
+   * flipped — rather than a direction held.
+   */
+  consumeTap(name) {
+    if (!this.virtualTaps.has(name)) return false;
+    this.virtualTaps.delete(name);
+    return true;
+  }
   consumePressed(code) {
     if (this.pressedThisFrame.has(code)) { this.pressedThisFrame.delete(code); return true; }
     return false;
@@ -151,17 +166,39 @@ export class InputController {
   onTap(fn) { this._tapCb = fn; }
 
   // Builds a virtual D-pad + action buttons inside `container` (a .touch-controls element).
-  buildDPad(container, { buttons = ["a"] } = {}) {
+  /**
+   * D-pad plus action buttons.
+   *
+   * Each direction sets its `virtual` flag *and* the arrow key it stands for.
+   * Half the grid games ask `isDown("ArrowUp", "KeyW")` and never looked at
+   * `virtual.up`, which meant their on-screen d-pad did nothing at all on a
+   * phone — the buttons were drawn, pressed, and ignored. Feeding the key set
+   * makes one d-pad work for every game regardless of which of the two it
+   * reads, and `pressedThisFrame` makes `consumePressed` fire once per tap.
+   *
+   * Only the d-pad does this. The analog stick deliberately does not: an
+   * injected key reads as a full-deflection ±1 and would flatten the stick
+   * back into eight directions.
+   */
+  buildDPad(container, { buttons = ["a"], labels: customLabels = {} } = {}) {
     container.innerHTML = "";
     container.classList.add("active");
     const dpad = document.createElement("div");
     dpad.className = "zone dpad";
-    const dirs = [["up", "▲", "up"], ["left", "◀", "left"], ["right", "▶", "right"], ["down", "▼", "down"]];
-    dirs.forEach(([cls, label]) => {
+    const dirs = [["up", "▲", "ArrowUp"], ["left", "◀", "ArrowLeft"],
+                  ["right", "▶", "ArrowRight"], ["down", "▼", "ArrowDown"]];
+    dirs.forEach(([cls, label, code]) => {
       const b = document.createElement("button");
       b.className = cls; b.textContent = label; b.type = "button";
       b.setAttribute("aria-label", cls);
-      this._bindHold(b, () => this.virtual[cls] = true, () => this.virtual[cls] = false);
+      this._bindHold(b,
+        () => {
+          this.virtual[cls] = true;
+          this.virtualTaps.add(cls);
+          if (!this.keys.has(code)) this.pressedThisFrame.add(code);
+          this.keys.add(code);
+        },
+        () => { this.virtual[cls] = false; this.keys.delete(code); });
       dpad.appendChild(b);
     });
     container.appendChild(dpad);
@@ -170,10 +207,20 @@ export class InputController {
       const wrap = document.createElement("div");
       wrap.className = "zone action-btns";
       const labels = { a: "●", b: "■" };
+      const codes = { a: "Space", b: "ShiftLeft" };
       buttons.forEach(key => {
         const b = document.createElement("button");
-        b.className = key; b.textContent = labels[key] || key.toUpperCase(); b.type = "button";
-        this._bindHold(b, () => this.virtual[key] = true, () => this.virtual[key] = false);
+        b.className = key; b.textContent = customLabels[key] || labels[key] || key.toUpperCase();
+        b.type = "button";
+        if (customLabels[key]) b.classList.add("labelled");
+        const code = codes[key];
+        this._bindHold(b,
+          () => {
+            this.virtual[key] = true;
+            this.virtualTaps.add(key);
+            if (code) { if (!this.keys.has(code)) this.pressedThisFrame.add(code); this.keys.add(code); }
+          },
+          () => { this.virtual[key] = false; if (code) this.keys.delete(code); });
         wrap.appendChild(b);
       });
       container.appendChild(wrap);

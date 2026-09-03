@@ -120,6 +120,12 @@ class AudioManager {
       case "achievement": [659.25, 880, 1108.7].forEach((f, i) => this._tone({ freq: f, dur: 0.18, delay: i * 0.06, type: "triangle", gain: 0.18 })); break;
       case "combo": this._tone({ freq: 800 + Math.random() * 400, dur: 0.07, type: "square", gain: 0.13 }); break;
       case "select": this._tone({ freq: 600, dur: 0.05, type: "sine", gain: 0.12 }); break;
+      // Several games already asked for these three and were falling through
+      // to the generic 440Hz beep, which made a footstep and a misclick sound
+      // identical.
+      case "step": this._noise({ dur: 0.045, gain: 0.09, filterFreq: 1400 }); break;
+      case "tick": this._tone({ freq: 380, dur: 0.04, type: "sine", gain: 0.08 }); break;
+      case "place": this._tone({ freq: 300, dur: 0.07, type: "triangle", gain: 0.13, slideTo: 420 }); break;
       case "flap": this._tone({ freq: 300, dur: 0.08, type: "sine", gain: 0.14, slideTo: 500 }); break;
       case "jump": this._tone({ freq: 340, dur: 0.09, type: "square", gain: 0.14, slideTo: 620 }); break;
       case "gameover": this._noise({ dur: 0.3, gain: 0.2, filterFreq: 700 }); [330, 220].forEach((f, i) => this._tone({ freq: f, dur: 0.3, delay: i * 0.12, type: "sawtooth", gain: 0.16 })); break;

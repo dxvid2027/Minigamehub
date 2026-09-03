@@ -17,7 +17,6 @@
 import { GameBase } from "./gameBase.js";
 import { audioManager } from "../systems/audioManager.js";
 import { saveManager } from "../systems/saveManager.js";
-import { openModal, closeModal } from "../ui/modal.js";
 import { el, clamp, formatNumber, seededRng } from "../core/utils.js";
 
 const LEVELS = 30;
@@ -77,32 +76,31 @@ export class OrbitalCommandGame extends GameBase {
     ]);
   }
 
-  onPlayPressed() { audioManager.play("click"); this.openLevels(); }
-
-  openLevels() {
+  /**
+   * The campaign, described once. The framework builds the picker from it and
+   * gets "next mission" on the win screen and a mission button in the HUD in
+   * the bargain, so the same list no longer has to be written out twice.
+   */
+  getLevelNav() {
     const store = this._store();
-    const grid = el("div", { class: "orb-grid" });
-    for (let i = 0; i < LEVELS; i++) {
-      const open = this._unlocked(i);
-      const stars = store.stars[i] || 0;
-      grid.appendChild(el("button", {
-        class: `orb-card${open ? "" : " locked"}${stars === 3 ? " perfect" : ""}`,
-        disabled: !open,
-        onClick: () => { closeModal(); this.levelIdx = i; this.start(); },
-      }, [
-        el("span", { class: "n" }, String(i + 1)),
-        el("span", { class: "st" }, open ? "★★★".slice(0, stars) + "☆☆☆".slice(0, 3 - stars) : "Locked"),
-      ]));
-    }
-    openModal({
+    return {
+      index: this.levelIdx,
+      count: LEVELS,
+      label: "Mission",
       title: "Mission Select",
-      bodyNode: el("div", { class: "orb-picker" }, [
-        el("p", { class: "zone-intro" }, `Thirty gravity problems. ★ ${this._totalStars()} of ${LEVELS * 3} collected — three stars means you cleared it with a single probe.`),
-        grid,
-      ]),
-      footerNode: el("button", { class: "btn btn-ghost", onClick: () => closeModal() }, "Back"),
-    });
+      intro: `Thirty gravity problems. ★ ${this._totalStars()} of ${LEVELS * 3} collected — three stars means you cleared it with a single probe.`,
+      unlocked: (i) => this._unlocked(i),
+      cleared: (i) => (store.stars[i] || 0) > 0,
+      note: (i) => {
+        if (!this._unlocked(i)) return "Locked";
+        const st = store.stars[i] || 0;
+        return st ? "★★★".slice(0, st) + "☆☆☆".slice(0, 3 - st) : "Open";
+      },
+      goTo: (i) => { this.levelIdx = i; this.start(); },
+    };
   }
+
+  onPlayPressed() { this.openLevelSelect(); }
 
   // -------------------------------------------------------------- SETUP --
   onInit() {

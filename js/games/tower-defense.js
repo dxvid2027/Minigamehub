@@ -448,6 +448,27 @@ export class TowerDefenseGame extends GameBase {
    * buttons; a grid in its own window has room to show each map's number,
    * name and how far you got, and choosing one starts it immediately.
    */
+  /**
+   * The campaign contract. The picker below stays as it is — thirty named
+   * maps need their names — but describing the campaign here gets the win
+   * screen a "next map" button and puts the picker in the HUD, reachable
+   * mid-run instead of only from the start screen.
+   */
+  getLevelNav() {
+    const c = this._campaign();
+    const open = this._unlockedLevels();
+    return {
+      index: this.levelIdx,
+      count: LEVELS.length,
+      label: "Map",
+      title: "Maps",
+      unlocked: (i) => i < open,
+      cleared: (i) => (c.best[String(i)] || 0) >= WAVES_PER_LEVEL,
+      goTo: (i) => { this._loadLevel(i); this._saveCampaign({ level: i }); this.start(); },
+    };
+  }
+  openLevelSelect() { this.onPlayPressed(); }
+
   onPlayPressed() {
     audioManager.play("click");
     const c = this._campaign();

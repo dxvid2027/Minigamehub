@@ -95,9 +95,30 @@ export class CannonCoastGame extends GameBase {
     ]);
   }
 
-  onPlayPressed() { audioManager.play("click"); this.openLadder(); }
+  /**
+   * The ladder is a campaign: each rung unlocks the next. Describing it here
+   * gets a "next opponent" button on the win screen and the ladder into the
+   * HUD; the picker itself stays bespoke, since an opponent card carries a
+   * name, hit points and an accuracy word that a numbered tile cannot.
+   */
+  getLevelNav() {
+    const c = this._store();
+    return {
+      index: this.rung || 0,
+      count: FOES.length,
+      label: "Rung",
+      title: "The Ladder",
+      unlocked: (i) => i <= c.bestRung,
+      cleared: (i) => i < c.bestRung,
+      goTo: (i) => { this.rung = i; this.start(); },
+    };
+  }
+  openLevelSelect() { this.openLadder(); }
+
+  onPlayPressed() { this.openLadder(); }
 
   openLadder() {
+    audioManager.play("click");
     const c = this._store();
     const grid = el("div", { class: "foe-grid" });
     FOES.forEach((f, i) => {
