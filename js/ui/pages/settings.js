@@ -8,6 +8,8 @@ import { el } from "../../core/utils.js";
 import { confirmModal } from "../modal.js";
 import { toast } from "../toast.js";
 import { iconMarkup } from "../icons.js";
+import { codeForm } from "../codeEntry.js";
+import { unlockedSecretGames } from "../../systems/secretCodes.js";
 
 function sliderRow(label, key, onInput) {
   const s = saveManager.data.settings;
@@ -156,7 +158,23 @@ export function renderSettings(container) {
     ]),
   ]);
 
-  const panels = [audioPanel, appearancePanel, accessibilityPanel, performancePanel, dataPanel];
+  // --- Secret codes ---
+  const unlockedList = el("div", { class: "code-unlocked" });
+  const listUnlocked = () => {
+    unlockedList.innerHTML = "";
+    const games = unlockedSecretGames();
+    if (!games.length) return;
+    unlockedList.append(el("label", {}, "Unlocked"), ...games.map(g =>
+      el("a", { class: "btn btn-ghost btn-sm", href: `#/play/${g.id}` }, `${g.emoji} ${g.title}`)));
+  };
+  listUnlocked();
+  const codesPanel = panel("codes", "Codes", "lock", [
+    el("p", {}, "Some games are hidden. Enter a code here to unlock one — it will appear in your library."),
+    codeForm({ onUnlock: listUnlocked }).node,
+    unlockedList,
+  ]);
+
+  const panels = [audioPanel, appearancePanel, accessibilityPanel, performancePanel, codesPanel, dataPanel];
   const navBtns = panels.map((p, i) => el("button", { class: i === 0 ? "active" : "", onClick: (e) => {
     panels.forEach(pp => pp.classList.remove("active"));
     p.classList.add("active");

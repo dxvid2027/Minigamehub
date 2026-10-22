@@ -324,7 +324,8 @@ export class InputController {
         const b = document.createElement("button");
         b.className = key; b.textContent = labels[key] || key.toUpperCase(); b.type = "button";
         b.setAttribute("aria-label", labels[key] ? String(labels[key]) : key);
-        this._bindHold(b, () => this.virtual[key] = true, () => this.virtual[key] = false);
+        // Taps are latched as well, so a press shorter than a frame still counts.
+        this._bindHold(b, () => { this.virtual[key] = true; this.virtualTaps.add(key); }, () => this.virtual[key] = false);
         wrap.appendChild(b);
       });
       container.appendChild(wrap);

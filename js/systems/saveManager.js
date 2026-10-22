@@ -28,6 +28,7 @@ function defaultSave() {
       activeTheme: "dark",
       titleBadge: null,
       unlockedBadges: [],
+      unlockedSecrets: [],   // ids of SECRET_GAMES opened with a code
     },
     settings: {
       masterVolume: 0.8,

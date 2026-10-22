@@ -245,6 +245,22 @@ pruning; **Checkers** enforces mandatory captures and jump chains; **Sudoku**
 generates fresh puzzles via backtracking; **Maze Runner** generates mazes with a
 recursive-backtracker.
 
+### 🔒 Secret game
+
+**Golden Goal** (⚽ football) is hidden from the library until its code is
+redeemed — via the **Code** button in the library toolbar, the **Codes** tab
+in Settings, or the lock screen at `#/play/golden-goal`. Codes live in
+`js/systems/secretCodes.js`; unlocked secrets are stored in
+`profile.unlockedSecrets`. Secret games sit in `SECRET_GAMES`
+(`data/games.js`), outside `GAMES`, so they don't change any counts or
+achievements.
+
+Golden Goal is a top-down 11-a-side match on a floodlit stadium with a
+48-nation World Cup (12 groups → round of 32 → final), a 36-club Champions
+League (league phase → play-off → knockouts), quick matches, penalty
+shoot-outs, live tables and a knockout bracket. Every fixture can be played
+or simulated, and the run is saved after each match.
+
 ---
 
 ## 📁 Project structure
