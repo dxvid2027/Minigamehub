@@ -765,19 +765,22 @@ export class Match {
     if (target) target.kickCd = 0;
   }
 
-  _passTo(p, m, loft = false, thrown = false) {
-    const lead = Math.min(1.2, hyp(m.x - p.x, m.y - p.y) / 18);
+  _passTo(p, m, loft = false, thrown = false, firm = false) {
+    const lead = Math.min(1.2, hyp(m.x - p.x, m.y - p.y) / (firm ? 26 : 18));
     const tx = m.x + m.vx * lead * 0.8, ty = m.y + m.vy * lead * 0.8;
-    if (loft) this._loft(p, tx, ty, clamp(hyp(tx - p.x, ty - p.y) * 0.24, 5, 9.5), m);
-    else this._ground(p, tx, ty, m, thrown);
+    if (loft) this._loft(p, tx, ty, clamp(hyp(tx - p.x, ty - p.y) * 0.24, 5, 9.5), m, firm);
+    else this._ground(p, tx, ty, m, thrown, firm);
   }
 
-  _ground(p, tx, ty, target = null, thrown = false) {
+  /** `firm`: your own passes — driven hard and straight at the receiver. */
+  _ground(p, tx, ty, target = null, thrown = false, firm = false) {
     const b = this.ball;
     const d = hyp(tx - b.x, ty - b.y) || 1;
-    const err = ((100 - p.pas) / 100) * 0.16 * gauss();
+    const err = ((100 - p.pas) / 100) * (firm ? 0.03 : 0.16) * gauss();
     const ang = Math.atan2(ty - b.y, tx - b.x) + err;
-    const v = clamp(speedForDistance(d + 3.5), 8, thrown ? 15 : 26);
+    const v = firm
+      ? clamp(speedForDistance(d + 16), 18, thrown ? 17 : 33)
+      : clamp(speedForDistance(d + 3.5), 8, thrown ? 15 : 26);
     this._release(p, "pass", target);
     b.vx = Math.cos(ang) * v; b.vy = Math.sin(ang) * v;
     b.vz = thrown ? 2.6 : 0; b.z = thrown ? 1.8 : 0;
@@ -785,10 +788,10 @@ export class Match {
     audioManager.play("pop");
   }
 
-  _loft(p, tx, ty, vz, target = null) {
+  _loft(p, tx, ty, vz, target = null, firm = false) {
     const b = this.ball;
     const d = hyp(tx - b.x, ty - b.y) || 1;
-    const err = ((100 - p.pas) / 100) * 0.12 * gauss();
+    const err = ((100 - p.pas) / 100) * (firm ? 0.03 : 0.12) * gauss();
     const ang = Math.atan2(ty - b.y, tx - b.x) + err;
     const flight = (2 * vz) / G;
     const h = (d * 0.92) / flight;
@@ -828,7 +831,13 @@ export class Match {
     const owner = this.ball.owner === p;
     const top = p.spd * (owner ? 0.9 : 1.04);
     let vx = 0, vy = 0;
+    const b = this.ball;
     if (m > 0.15) { const k = Math.min(1, m); vx = (mx / m) * top * k; vy = (my / m) * top * k; }
+    else if (!b.owner && b.target === p) {
+      // A pass is on its way to you: step towards it so it arrives.
+      const dx = b.x - p.x, dy = b.y - p.y, d = hyp(dx, dy);
+      if (d > 0.5) { vx = (dx / d) * top; vy = (dy / d) * top; }
+    }
     const acc = Math.min(1, dt * (m > 0.15 ? 8 : 6));
     p.vx += (vx - p.vx) * acc; p.vy += (vy - p.vy) * acc;
     if (this.charging && owner) { p.vx *= 0.97; p.vy *= 0.97; }
@@ -873,25 +882,26 @@ export class Match {
   }
 
   _userPass(p, thrown = false) {
-    const dir = this._inputDir(p);
+    // A pass always finds a team-mate: the one you point at if there is one,
+    // otherwise the best open man. It is never just kicked into space.
+    const ax = this.input.axes();
+    const aimed = hyp(ax.x, ax.y) > 0.2;
+    const dir = aimed ? Math.atan2(ax.y, ax.x) : p.dir;
     const fx = Math.cos(dir), fy = Math.sin(dir);
     let best = null, bestS = -Infinity;
     for (const m of this.bySide[0]) {
-      if (m === p || m.role === "GK" && !thrown) continue;
+      if (m === p || m.role === "GK" || m.stun > 0) continue;
       const dx = m.x - p.x, dy = m.y - p.y, d = hyp(dx, dy);
-      if (d < 2 || d > 48) continue;
+      if (d < 2.5 || d > 55) continue;
       const cos = (dx * fx + dy * fy) / d;
-      if (cos < 0.6) continue;
-      const lane = this.bySide[1].some(q => this._nearSegment(q, p.x, p.y, m.x, m.y, 1.3));
-      const s = cos * 3 - d / 30 - (lane ? 0.6 : 0);
+      const lane = this.bySide[1].some(q => this._nearSegment(q, p.x, p.y, m.x, m.y, 1.2));
+      let open = 10;
+      for (const q of this.bySide[1]) open = Math.min(open, hyp(q.x - m.x, q.y - m.y));
+      const s = cos * (aimed ? 4 : 1.5) - d / 35 - (lane ? 1.2 : 0) + open * 0.12 + (dx > 0 ? 0.3 : 0);
       if (s > bestS) { bestS = s; best = { m, lane, d }; }
     }
-    if (best) {
-      this._passTo(p, best.m, !thrown && best.lane && best.d > 14, thrown);
-      return;
-    }
-    // Nobody there: knock it into space.
-    this._ground(p, p.x + fx * 14, p.y + fy * 14, null, thrown);
+    if (!best) best = { m: this._nearestOutfield(0, p.x, p.y, p), lane: false, d: 10 };
+    this._passTo(p, best.m, !thrown && best.lane && best.d > 16, thrown, true);
   }
 
   _userCross(p) {
@@ -1034,7 +1044,9 @@ export class Match {
     for (const p of this.players) {
       if (p.stun > 0 || p.kickCd > 0) continue;
       const keeper = p.role === "GK" && this._inOwnBox(p);
-      const reach = keeper ? (p.dive > 0 ? 1.9 : 1.3) : 0.9;
+      // Your firm passes skim past opponents unless they are right on the line.
+      const yourPass = (b.kind === "pass" || b.kind === "cross") && b.lastSide === 0 && b.target && p.side === 1;
+      const reach = keeper ? (p.dive > 0 ? 1.9 : 1.3) : yourPass ? 0.55 : 0.9;
       const hmax = keeper ? 2.7 : 1.7;
       if (b.z > hmax) continue;
       const d = hyp(b.x - p.x, b.y - p.y);
