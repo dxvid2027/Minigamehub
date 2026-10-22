@@ -308,10 +308,12 @@ export class Match {
     }
     const kicker = this.bySide[side][9], mate = this.bySide[side][7];
     const att = this._att(side);
-    kicker.x = L / 2 - att * 0.45; kicker.y = W / 2;
+    kicker.x = L / 2 - att * 0.68; kicker.y = W / 2; kicker.dir = side === 0 ? 0 : Math.PI;
     mate.x = L / 2 - att * 3.5; mate.y = W / 2 + 6;
     Object.assign(this.ball, { x: L / 2, y: W / 2, z: 0, vx: 0, vy: 0, vz: 0, owner: kicker, inNet: false, kind: null, target: null });
     this.setPiece = { kind: "kickoff", side, taker: kicker, x: L / 2, y: W / 2, t: 0 };
+    // The picture starts on the centre spot, not wherever the camera was.
+    this.cam.x = L / 2; this.cam.y = W / 2;
     if (side === 0) this.ctrl = kicker;
     else this.ctrl = this.bySide[0][9];
   }
@@ -335,7 +337,7 @@ export class Match {
     this.phaseT += dt;
     switch (this.phase) {
       case "intro":
-        this._idle(dt);
+        // Everyone stands on their kick-off spot until the whistle.
         if (this.phaseT > 1.6) { this.phase = "setpiece"; this.phaseT = 0; audioManager.play("start"); }
         break;
       case "setpiece": this.clock += dt; this._setPieceStep(dt); break;
@@ -514,7 +516,8 @@ export class Match {
     sp.t += dt;
     const taker = sp.taker;
     for (const p of this.players) {
-      if (p === taker) { p.vx = p.vy = 0; continue; }
+      // At a kick-off nobody moves until the ball is played.
+      if (p === taker || sp.kind === "kickoff") { p.vx = p.vy = 0; continue; }
       if (p === this.ctrl && sp.side === 1) { this._userMove(p, dt); this._integrate(p, dt); continue; }
       let tgt = this._setPieceTarget(p, sp);
       this._steer(p, tgt.x, tgt.y, 0.8, dt);
@@ -529,6 +532,8 @@ export class Match {
       }
     }
     this._ballPhysics(dt);
+    // The ball sits on its spot until it is taken.
+    Object.assign(this.ball, { x: sp.x, y: sp.y, z: 0, vx: 0, vy: 0, vz: 0 });
 
     const wait = sp.kind === "corner" ? 1.2 : sp.kind === "kickoff" ? 0.6 : 0.75;
     if (sp.t < wait) return;
