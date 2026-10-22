@@ -65,6 +65,15 @@ export const GAMES = [
   { id: "duel-ring", title: "Duel Ring", category: "Sports", emoji: "\u2694\ufe0f", grad: ["#ff5470", "#ffd76a"], desc: "Fencing decided by reading a wind-up. Strike beats thrust, thrust beats parry, parry beats strike \u2014 twelve opponents who tell you less each time.", tags: ["fighting", "timing", "ladder"], ratio: "16/9", wide: true, controls: "both", module: "../../games/duel-ring.js", exportName: "DuelRingGame", addedAt: "2026-09-03T12:00:00Z" },
 ];
 
-export function getGame(id) { return GAMES.find(g => g.id === id); }
+// Games that are not in the library until a code unlocks them (see
+// js/systems/secretCodes.js). They stay out of GAMES on purpose: every count,
+// achievement and "play them all" target is built from GAMES, and a hidden
+// game must not make the Completionist badge impossible for anyone without
+// the code.
+export const SECRET_GAMES = [
+  { id: "golden-goal", title: "Golden Goal", category: "Sports", emoji: "\u26bd", grad: ["#1f9d55", "#ffd76a"], desc: "Pick a nation and win the 48-team World Cup, or take a club through the Champions League. Play every match yourself or simulate it.", tags: ["football", "soccer", "tournament", "secret"], ratio: "16/10", wide: true, controls: "both", module: "../../games/golden-goal.js", exportName: "GoldenGoalGame", secret: true },
+];
+
+export function getGame(id) { return GAMES.find(g => g.id === id) || SECRET_GAMES.find(g => g.id === id); }
 export function gamesByCategory(cat) { return GAMES.filter(g => cat === "All" ? true : g.category === cat); }
 export default GAMES;

@@ -4,6 +4,8 @@
 import { getGame } from "../../../data/games.js";
 import { el } from "../../core/utils.js";
 import { router } from "../../core/router.js";
+import { isSecretUnlocked } from "../../systems/secretCodes.js";
+import { codeForm } from "../codeEntry.js";
 
 let activeGame = null;
 
@@ -30,6 +32,21 @@ export async function renderPlay(container, gameId, token) {
       el("h3", {}, "Game not found"),
       el("p", {}, "That game doesn't exist yet. Try another one from the library."),
       el("a", { class: "btn btn-primary", href: "#/library" }, "Browse Library"),
+    ]));
+    return;
+  }
+
+  // A secret game opened by URL before its code was entered gets the code
+  // form, not the game.
+  if (meta.secret && !isSecretUnlocked(meta.id)) {
+    container.innerHTML = "";
+    container.appendChild(el("div", { class: "empty-state" }, [
+      el("div", { class: "ic" }, "🔒"),
+      el("h3", {}, "This game is locked"),
+      el("p", {}, "Enter the secret code to unlock it."),
+      el("div", { style: "max-width:360px;margin:0 auto 14px;" },
+        codeForm({ onUnlock: () => renderPlay(container, gameId, token) }).node),
+      el("a", { class: "btn btn-ghost", href: "#/library" }, "Browse Library"),
     ]));
     return;
   }

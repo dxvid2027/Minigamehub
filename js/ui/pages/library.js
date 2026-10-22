@@ -7,6 +7,8 @@ import { audioManager } from "../../systems/audioManager.js";
 import { el } from "../../core/utils.js";
 import { iconMarkup } from "../icons.js";
 import { gameCard } from "../gameCard.js";
+import { openCodeModal } from "../codeEntry.js";
+import { unlockedSecretGames } from "../../systems/secretCodes.js";
 
 const SORTS = {
   popular: (a, b) => (saveManager.data.games[b.id]?.plays || 0) - (saveManager.data.games[a.id]?.plays || 0),
@@ -25,6 +27,10 @@ export function renderLibrary(container, query = {}) {
   };
 
   container.innerHTML = "";
+  // Secret games join the library once their code has been redeemed.
+  const allGames = () => [...GAMES, ...unlockedSecretGames()];
+  const subtitleText = () => `Explore all ${allGames().length} games on MegaPlay Hub`;
+  const subtitle = el("div", { class: "subtitle" }, subtitleText());
   const resultsCount = el("div", { class: "results-count" });
   const grid = el("div", { class: "game-grid stagger-in" });
 
@@ -53,9 +59,12 @@ export function renderLibrary(container, query = {}) {
   searchBox.innerHTML = iconMarkup("search");
   searchBox.appendChild(searchInput);
 
+  const codeBtn = el("button", { class: "chip code-chip", title: "Enter a secret code", onClick: () => openCodeModal({ onUnlock: () => { subtitle.textContent = subtitleText(); renderResults(); } }) });
+  codeBtn.innerHTML = iconMarkup("lock") + "<span>Code</span>";
+
   const toolbar = el("div", { class: "library-toolbar" }, [
     searchBox,
-    sortSelect, favToggle, viewToggle,
+    sortSelect, favToggle, codeBtn, viewToggle,
   ]);
 
   const catGroup = el("div", { class: "group" }, [
@@ -89,7 +98,7 @@ export function renderLibrary(container, query = {}) {
   const filtersPanel = el("div", { class: "filters-panel card card-pad" }, [catGroup, controlsGroup, clearBtn]);
 
   function renderResults() {
-    let list = GAMES.filter(g => {
+    let list = allGames().filter(g => {
       if (state.favOnly && !saveManager.isFavorite(g.id)) return false;
       if (state.cats.length && !state.cats.includes(g.category)) return false;
       const activeCtrls = controlsGroup_inputs.filter(i => i.checked).map(i => i.dataset.ctrl);
@@ -116,7 +125,7 @@ export function renderLibrary(container, query = {}) {
 
   container.append(
     el("div", { class: "container" }, [
-      el("div", { class: "section-title" }, [el("div", {}, [el("h2", {}, "Games Library"), el("div", { class: "subtitle" }, `Explore all ${GAMES.length} games on MegaPlay Hub`)])]),
+      el("div", { class: "section-title" }, [el("div", {}, [el("h2", {}, "Games Library"), subtitle])]),
       toolbar,
       el("div", { class: "library-layout" }, [filtersPanel, el("div", {}, [resultsCount, grid])]),
     ]),
