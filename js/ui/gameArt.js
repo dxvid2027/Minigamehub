@@ -107,6 +107,13 @@ function scene(kind, rng, c1, c2) {
  * @param {Object} opts  { compact } — compact drops the fine detail for small tiles
  */
 export function gameArtSVG(meta, { compact = false } = {}) {
+  // A game with its own artwork shows that instead of a generated cover.
+  if (meta.cover) {
+    return `<svg viewBox="0 0 320 200" preserveAspectRatio="xMidYMid slice" role="img" aria-label="${meta.title} cover art">
+  <rect width="320" height="200" fill="#0b0f22"/>
+  <image href="${meta.cover}" x="0" y="-48" width="320" height="320" preserveAspectRatio="xMidYMid slice"/>
+</svg>`;
+  }
   const rng = seededRng("art-" + meta.id);
   const [c1, c2] = meta.grad;
   const uid = `a${meta.id.replace(/[^a-z0-9]/gi, "")}`;
