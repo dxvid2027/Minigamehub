@@ -58,9 +58,18 @@ export class Game2048 extends GameBase {
     this.input.onSwipe((dir) => this._queue(dir));
     this._reachedGoal = false;
     this._timers = new Set();
+    this._watchSize();
+    window.addEventListener("resize", this._onWinResize = () => this._relayout());
   }
 
-  onResize() { this._layout(); this._placeAll(true); }
+  // The board is plain DOM (no canvas), so GameBase never calls onResize for
+  // it: entering fullscreen or turning the phone used to leave every tile at
+  // its old size and position. The board watches its own size instead.
+  _watchSize() {
+    if (typeof ResizeObserver === "undefined") return;
+    this._sizeObs = new ResizeObserver(() => this._relayout());
+    this._sizeObs.observe(this.boardEl);
+  }
 
   onStart() {
     this._clearTimers();
@@ -80,7 +89,11 @@ export class Game2048 extends GameBase {
   }
 
   onDestroyRound() { this._clearTimers(); }
-  onDestroy() { this._clearTimers(); }
+  onDestroy() {
+    this._clearTimers();
+    this._sizeObs?.disconnect();
+    window.removeEventListener("resize", this._onWinResize);
+  }
 
   _later(fn, ms) {
     const t = setTimeout(() => { this._timers.delete(t); if (!this._destroyed) fn(); }, ms);
@@ -88,21 +101,31 @@ export class Game2048 extends GameBase {
   }
   _clearTimers() { this._timers?.forEach(clearTimeout); this._timers?.clear(); }
 
-  /** Read the real cell geometry out of the grid rather than guessing it. */
+  /**
+   * Read the real cell geometry out of the grid rather than guessing it.
+   * Layout offsets, not getBoundingClientRect: those stay correct when the
+   * board is scaled or turned for fullscreen. Measured cell to cell, so the
+   * gap and any rounding are included.
+   */
   _layout() {
-    const first = this.boardEl.querySelector(".cell");
-    if (!first) { this.cellSize = 0; this.stride = 0; return; }
-    this.gap = parseFloat(getComputedStyle(this.boardEl).rowGap) || 0;
-    const cellRect = first.getBoundingClientRect();
-    const layerRect = this.tileLayer.getBoundingClientRect();
-    this.cellSize = cellRect.width;
-    this.stride = this.cellSize + this.gap;
-    // Measured, not assumed: whatever box the absolute layer resolves against,
-    // this delta puts tile (0,0) exactly on cell (0,0).
-    this.origin = { x: cellRect.left - layerRect.left, y: cellRect.top - layerRect.top };
+    const cells = this.boardEl.querySelectorAll(".cell");
+    if (cells.length < SIZE + 1 || !cells[0].offsetWidth) { this.cellSize = 0; this.stride = 0; this.strideY = 0; return; }
+    const first = cells[0];
+    this.cellSize = first.offsetWidth;
+    this.stride = cells[1].offsetLeft - first.offsetLeft;
+    this.strideY = cells[SIZE].offsetTop - first.offsetTop;
+    this.origin = { x: first.offsetLeft - this.tileLayer.offsetLeft, y: first.offsetTop - this.tileLayer.offsetTop };
+    this._measured = `${this.cellSize}|${this.stride}|${this.strideY}|${this.origin.x}|${this.origin.y}`;
   }
 
-  _xy(r, c) { return { x: this.origin.x + c * this.stride, y: this.origin.y + r * this.stride }; }
+  /** Re-measure and snap every tile whenever the board changes size. */
+  _relayout() {
+    const before = this._measured;
+    this._layout();
+    if (this._measured !== before) this._placeAll(true);
+  }
+
+  _xy(r, c) { return { x: this.origin.x + c * this.stride, y: this.origin.y + r * this.strideY }; }
 
   onUpdate() {
     if (this.input.consumePressed("ArrowUp") || this.input.consumePressed("KeyW")) this._queue("up");
