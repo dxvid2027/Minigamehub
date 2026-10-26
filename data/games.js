@@ -71,7 +71,7 @@ export const GAMES = [
 // game must not make the Completionist badge impossible for anyone without
 // the code.
 export const SECRET_GAMES = [
-  { id: "golden-goal", title: "Golden Goal", category: "Sports", emoji: "\u26bd", grad: ["#1f9d55", "#ffd76a"], desc: "Pick a nation and win the 48-team World Cup, or take a club through the Champions League. Play every match yourself or simulate it.", tags: ["football", "soccer", "tournament", "secret"], ratio: "16/10", wide: true, controls: "both", module: "../../games/golden-goal.js", exportName: "GoldenGoalGame", secret: true },
+  { id: "golden-goal", title: "Golden Goal", category: "Sports", emoji: "\u26bd", grad: ["#1f9d55", "#ffd76a"], desc: "Pick a nation and win the 48-team World Cup, or take a club through the Champions League. Play every match yourself or simulate it.", tags: ["football", "soccer", "tournament", "secret"], ratio: "16/10", wide: true, controls: "both", module: "../../games/golden-goal.js", exportName: "GoldenGoalGame", secret: true, cover: "assets/images/covers/golden-goal.jpg", coverY: 0.75 },
 ];
 
 export function getGame(id) { return GAMES.find(g => g.id === id) || SECRET_GAMES.find(g => g.id === id); }
