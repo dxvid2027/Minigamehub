@@ -152,7 +152,7 @@ export class GoldenGoalGame extends GameBase {
     }, label)));
     this._screen("gg-menu", [
       el("div", { class: "gg-brand" }, [
-        el("div", { class: "gg-logo" }, "⚽"),
+        el("img", { class: "gg-logo", src: this.meta.cover, alt: "", draggable: "false" }),
         el("div", {}, [el("h2", {}, "Golden Goal"), el("p", {}, "World Cup · Champions League · Quick Match")]),
       ]),
       el("div", { class: "gg-modes" }, ["wc", "cl", "fr"].map(modeCard)),

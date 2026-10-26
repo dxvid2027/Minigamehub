@@ -111,7 +111,7 @@ export function gameArtSVG(meta, { compact = false } = {}) {
   if (meta.cover) {
     return `<svg viewBox="0 0 320 200" preserveAspectRatio="xMidYMid slice" role="img" aria-label="${meta.title} cover art">
   <rect width="320" height="200" fill="#0b0f22"/>
-  <image href="${meta.cover}" x="0" y="-48" width="320" height="320" preserveAspectRatio="xMidYMid slice"/>
+  <image href="${meta.cover}" x="0" y="${-120 * (meta.coverY ?? 0.4)}" width="320" height="320" preserveAspectRatio="xMidYMid slice"/>
 </svg>`;
   }
   const rng = seededRng("art-" + meta.id);

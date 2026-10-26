@@ -1004,6 +1004,17 @@ export class Match {
       }
     }
     if (p.dive > 0) { p.dive -= dt; p.vx *= 0.9; p.vy *= 0.9; return; }
+    // Someone dribbling into the box: come out, close the angle and go for
+    // the ball, rather than waiting on the line to be walked past.
+    const o = b.owner;
+    if (o && o.side !== side && Math.abs(o.x - gx) < BOX_D + 2 && Math.abs(o.y - W / 2) < BOX_HALF + 1) {
+      const dx = gx - o.x, dy = W / 2 - o.y, d = hyp(dx, dy) || 1;
+      const close = hyp(o.x - p.x, o.y - p.y) < 3;
+      // Stand between the ball and the middle of the goal, then dive in.
+      const tx = close ? b.x : o.x + (dx / d) * 1.4, ty = close ? b.y : o.y + (dy / d) * 1.4;
+      this._steer(p, tx, ty, 1.05, dt, 0);
+      return;
+    }
     // Loose ball in the box and nobody closer: come and claim it.
     if (!b.owner && b.kind !== "shot" && Math.abs(b.x - gx) < BOX_D && Math.abs(b.y - W / 2) < BOX_HALF && b.z < 2.4) {
       const mine = hyp(b.x - p.x, b.y - p.y);
@@ -1024,10 +1035,23 @@ export class Match {
       const o = b.owner;
       if (o.role === "GK" && this._inOwnBox(o)) return;
       for (const p of this.bySide[1 - o.side]) {
-        if (p.stun > 0 || p.slideT > 0 || p.tackleCd > 0 || p.role === "GK") continue;
-        if (hyp(b.x - p.x, b.y - p.y) > 1.05) continue;
-        p.tackleCd = 0.55;
+        const keeper = p.role === "GK" && this._inOwnBox(p);
+        if (p.stun > 0 || p.slideT > 0 || p.tackleCd > 0 || (p.role === "GK" && !keeper)) continue;
+        if (hyp(b.x - p.x, b.y - p.y) > (keeper ? 1.5 : 1.05)) continue;
+        p.tackleCd = keeper ? 0.35 : 0.55;
         let chance = 0.3 + (p.tac - o.ctl) * 0.008;
+        if (keeper) {
+          // A keeper at your feet smothers it more often than not.
+          chance = 0.55 + (p.ctl - o.ctl) * 0.01;
+          if (Math.random() < chance) {
+            this._release(o, null); b.owner = p; b.lastSide = p.side; b.lastPlayer = p; p.hold = 0; p.dive = 0.3;
+            o.stun = 0.45;
+            this._toast(p.side === 0 ? "Keeper claims it!" : "Smothered by the keeper!", "#22d3ee");
+            audioManager.play("hit");
+            return;
+          }
+          continue;
+        }
         if (p.side === 1) chance *= this.diff.tackle; else chance *= 1.15;
         if (Math.random() < chance) {
           if (Math.random() < 0.65) { this._release(o, null); b.owner = p; b.lastSide = p.side; b.lastPlayer = p; }
@@ -1112,6 +1136,19 @@ export class Match {
       if (!crossed) continue;
       const scoringSide = end === 0 ? 1 : 0;
       const inMouth = b.y > GY0 && b.y < GY1;
+      // You cannot walk the ball into the net: a goal has to be kicked. A
+      // ball carried over the line is the keeper's.
+      if (b.owner && inMouth) {
+        const keeper = this.bySide[end === 0 ? 0 : 1][0];
+        const carrier = b.owner;
+        this._release(carrier, null);
+        b.vx = b.vy = 0;
+        Object.assign(b, { x: keeper.x, y: keeper.y, owner: keeper, lastSide: keeper.side, lastPlayer: keeper });
+        keeper.hold = 0; carrier.stun = 0.4;
+        this._toast("You have to shoot to score!", "#ffd76a");
+        audioManager.play("error");
+        return;
+      }
       // Posts: a ball right on the upright comes back out.
       const nearPost = Math.min(Math.abs(b.y - GY0), Math.abs(b.y - GY1)) < 0.22;
       if (nearPost && b.z < BAR) {

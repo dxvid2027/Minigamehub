@@ -462,8 +462,8 @@ img.sprite { display: block; width: 100%; height: 100%; object-fit: contain; use
 .gg-brand h2 { margin: 0; font-size: clamp(1.4rem, 4vw, 2.1rem); letter-spacing: -.01em;
   background: linear-gradient(180deg, #fff, #ffd76a); -webkit-background-clip: text; background-clip: text; color: transparent; }
 .gg-brand p { margin: 2px 0 0; color: var(--text-2); font-size: .8rem; }
-.gg-logo { font-size: clamp(2rem, 6vw, 3rem); filter: drop-shadow(0 4px 14px #ffd76a66); animation: gg-spin 6s linear infinite; }
-@keyframes gg-spin { to { transform: rotate(360deg); } }
+.gg-logo { width: clamp(64px, 14vw, 96px); aspect-ratio: 1; border-radius: 18px; object-fit: cover;
+  box-shadow: 0 6px 20px #0009, 0 0 22px #ffd76a55; border: 2px solid #ffd76a88; animation: gg-bob 3s var(--ease-in-out) infinite; }
 
 .gg-modes { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 10px; }
 .gg-mode {
