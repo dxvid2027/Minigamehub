@@ -88,6 +88,12 @@ const UPGRADES = [
 
 const BASE = { speed: 1, fuel: 100, hull: 100, slots: 12, lift: 1, light: 5 };
 
+// Flight. Thrust must clearly beat gravity or the rig can never climb home.
+const GRAVITY = 1250;
+const THRUST = 2350;
+const MAX_CLIMB = 360;        // px/s straight up at base lift
+const THRUST_BURN = 6.5;      // fuel per second of thrust at base lift
+
 // --- Consumables ----------------------------------------------------------
 // Bought at the garage and carried into the shaft. They are the answer to
 // the three ways a run goes wrong: walled in, holed, or too deep to climb.
@@ -137,7 +143,8 @@ export class DeepDelveGame extends GameBase {
   }
   getTouchLayout() { return "dpad"; }
   getTouchButtons() { return ["a"]; }
-  getTouchHint() { return "D-pad to drive and drill, up to thrust. A sells at the depot."; }
+  getTouchButtonLabels() { return { a: "Jet" }; }
+  getTouchHint() { return "D-pad to drive and drill. Up or Jet to fly. Land on the depot pad to sell. Tap the kit buttons to use them."; }
   getKeyboardHint() { return "Arrows / WASD to drive and drill, Up or Space to thrust."; }
   getScene() { return "ember"; }
 
@@ -177,6 +184,18 @@ export class DeepDelveGame extends GameBase {
   }
   _cost(u) { return Math.round(u.base * Math.pow(u.step, this._lv(u.id))); }
 
+  /** Fuel per second while thrusting: better thrusters and the Ember Wing burn less. */
+  _thrustBurn() {
+    return THRUST_BURN / Math.sqrt(this._stat("lift")) * (this._has("wing") ? 0.75 : 1);
+  }
+
+  /** Roughly how much fuel the climb from here back to the depot will take. */
+  _fuelHome() {
+    const climb = Math.max(0, this.rig.y - SURFACE_ROWS * TILE);
+    const speed = MAX_CLIMB * (0.85 + this._stat("lift") * 0.15) * 0.8;
+    return (climb / speed) * (this._thrustBurn() + 0.55) + 2;
+  }
+
   // ------------------------------------------------------------- MENUS ---
   getPlayLabel() { return "Head to the shaft"; }
 
@@ -214,7 +233,7 @@ export class DeepDelveGame extends GameBase {
             r.credits -= cost;
             r.lv[u.id] = lv + 1;
             this._save();
-            audioManager.play("powerup");
+            audioManager.play("coin");
             render();
             head.textContent = `◆ ${formatNumber(r.credits)} credits`;
           },
@@ -244,7 +263,7 @@ export class DeepDelveGame extends GameBase {
             r.credits -= k.cost;
             r.kit[k.id] = owned + 1;
             this._save();
-            audioManager.play("powerup");
+            audioManager.play("coin");
             renderKit();
             head.textContent = `◆ ${formatNumber(r.credits)} credits`;
           },
@@ -404,6 +423,13 @@ export class DeepDelveGame extends GameBase {
     for (let x = this.depotX - 2; x <= this.depotX + 2; x++) {
       for (let y = 0; y < SURFACE_ROWS; y++) this.grid[y * COLS + x] = 0;
     }
+    // The pad stands on a steel footing you cannot drill. Without it every
+    // run started by boring straight down under the depot, and coming home
+    // meant dropping back into your own shaft.
+    for (let x = this.depotX - 1; x <= this.depotX + 1; x++) {
+      const i = SURFACE_ROWS * COLS + x;
+      this.grid[i] = 4; this.tileData.delete(i);
+    }
     this.rows = rows;
   }
 
@@ -480,7 +506,8 @@ export class DeepDelveGame extends GameBase {
     if (cx < 0 || cx >= COLS || cy < 0 || cy >= this.rows) return 1;   // walls are solid
     return this.grid[cy * COLS + cx];
   }
-  _solid(cx, cy) { const t = this._tile(cx, cy); return t === 1 || t === 2; }
+  _solid(cx, cy) { const t = this._tile(cx, cy); return t === 1 || t === 2 || t === 4; }
+  _diggable(cx, cy) { const t = this._tile(cx, cy); return (t === 1 || t === 2) && cx >= 0 && cx < COLS; }
 
   // ------------------------------------------------------------ UPDATE ---
   onUpdate(dt) {
@@ -496,13 +523,18 @@ export class DeepDelveGame extends GameBase {
     this._thrustKey = false;
 
     // --- thrust ------------------------------------------------------
+    // The thrusters have to beat gravity by a clear margin. They used to push
+    // 1150 against a pull of 1250, so holding Up only burned fuel and the rig
+    // could never climb back to the depot — which made the whole game
+    // unwinnable. Now the climb is real, and the Thrusters upgrade makes it
+    // both faster and cheaper.
     const lift = this._stat("lift");
     r.thrusting = false;
     if (up && this.fuel > 0) {
-      r.vy -= 1150 * lift * dt;
-      this.fuel = Math.max(0, this.fuel - 9.5 * dt);
+      r.vy -= THRUST * lift * dt;
+      this.fuel = Math.max(0, this.fuel - this._thrustBurn() * dt);
       r.thrusting = true;
-      if (Math.random() < 0.6) this._puff(r.x, r.y + 14, "#ffb877");
+      if (Math.random() < 0.7) this._puff(r.x + randFloat(-4, 4), r.y + 16, Math.random() < 0.5 ? "#ffb877" : "#ff6b28");
     }
 
     // --- horizontal --------------------------------------------------
@@ -513,18 +545,22 @@ export class DeepDelveGame extends GameBase {
     r.vx = clamp(r.vx, -230, 230);
 
     // --- gravity -----------------------------------------------------
-    r.vy += 1250 * dt;
-    r.vy = clamp(r.vy, -420, 620);
+    r.vy += GRAVITY * dt;
+    r.vy = clamp(r.vy, -MAX_CLIMB * (0.85 + lift * 0.15), 620);
 
     // --- drilling ----------------------------------------------------
     // A dig is a held action with a timer, so hard rock genuinely costs time
     // and the drill upgrade is felt rather than merely counted.
     let digTarget = null;
-    if (down) digTarget = [cx, cy + 1];
-    else if (left && this._solid(cx - 1, cy)) digTarget = [cx - 1, cy];
-    else if (right && this._solid(cx + 1, cy)) digTarget = [cx + 1, cy];
+    if (down && r.onGround) digTarget = [cx, cy + 1];
+    else if (left && this._diggable(cx - 1, cy)) digTarget = [cx - 1, cy];
+    else if (right && this._diggable(cx + 1, cy)) digTarget = [cx + 1, cy];
+    if (down && r.onGround && this._tile(cx, cy + 1) === 4 && this.elapsed - (this._padHint || -9) > 2.5) {
+      this._padHint = this.elapsed;
+      this._float("Drive off the pad, then drill", "#ffd76a");
+    }
 
-    if (digTarget && this._solid(digTarget[0], digTarget[1])) {
+    if (digTarget && this._diggable(digTarget[0], digTarget[1])) {
       const key = `${digTarget[0]},${digTarget[1]}`;
       if (!r.drilling || r.drilling.key !== key) {
         const st = this._stratumAt(digTarget[1] - SURFACE_ROWS);
@@ -539,8 +575,14 @@ export class DeepDelveGame extends GameBase {
       }
       if (r.drilling.t >= r.drilling.need) { this._dig(r.drilling.cx, r.drilling.cy); r.drilling = null; }
       // While cutting downward the rig creeps into the hole rather than
-      // hovering above it, which is what makes digging feel like descending.
-      if (down) r.vy = Math.max(r.vy, 40);
+      // hovering above it, and slides over to sit square on the column so it
+      // drops cleanly into the shaft instead of catching on the edge.
+      if (down) {
+        r.vy = Math.max(r.vy, 40);
+        const mid = digTarget[0] * TILE + TILE / 2;
+        r.x += (mid - r.x) * Math.min(1, dt * 14);
+        r.vx = 0;
+      }
     } else {
       r.drilling = null;
       if (r.thrusting || Math.abs(r.vx) > 20) r.drillSpin += dt * 6;
@@ -564,7 +606,7 @@ export class DeepDelveGame extends GameBase {
       if (Math.hypot(ax - r.x, ay - r.y) < TILE * 0.8) {
         a.taken = true;
         this.relicsFound.push(a.id);
-        audioManager.play("powerup");
+        audioManager.play("coin");
         this.shakeT = 0.25;
         this._float(`Found: ${ARTIFACT_BY_ID[a.id].name}`, ARTIFACT_BY_ID[a.id].color);
         this.addScore(900);
@@ -602,42 +644,52 @@ export class DeepDelveGame extends GameBase {
     this._updateHud();
   }
 
+  /**
+   * Box-against-tiles collision. The rig is checked over every tile its box
+   * overlaps rather than along its centre line only, which is what let it
+   * clip into corners and snag on the lip of a fresh hole.
+   */
   _move(dt) {
     const r = this.rig;
     const halfW = TILE * 0.34, halfH = TILE * 0.36;
+    const hits = (x0, y0, x1, y1) => {
+      for (let ty = Math.floor(y0 / TILE); ty <= Math.floor(y1 / TILE); ty++)
+        for (let tx = Math.floor(x0 / TILE); tx <= Math.floor(x1 / TILE); tx++)
+          if (this._solid(tx, ty)) return true;
+      return false;
+    };
 
+    // Horizontal.
     r.x += r.vx * dt;
-    // Horizontal collision.
-    for (const s of [-1, 1]) {
-      const edge = r.x + s * halfW;
-      const cx = Math.floor(edge / TILE), cy = Math.floor(r.y / TILE);
-      if (this._solid(cx, cy)) {
-        r.x = cx * TILE + (s < 0 ? TILE + halfW : -halfW);
-        r.vx = 0;
-      }
+    if (r.vx !== 0 && hits(r.x - halfW, r.y - halfH + 0.5, r.x + halfW, r.y + halfH - 0.5)) {
+      if (r.vx > 0) r.x = Math.floor((r.x + halfW) / TILE) * TILE - halfW - 0.01;
+      else r.x = (Math.floor((r.x - halfW) / TILE) + 1) * TILE + halfW + 0.01;
+      r.vx = 0;
     }
     r.x = clamp(r.x, halfW, COLS * TILE - halfW);
 
+    // Vertical.
     const prevVy = r.vy;
     r.y += r.vy * dt;
     r.onGround = false;
-    for (const s of [-1, 1]) {
-      const edge = r.y + s * halfH;
-      const cx = Math.floor(r.x / TILE), cy = Math.floor(edge / TILE);
-      if (this._solid(cx, cy)) {
-        r.y = cy * TILE + (s < 0 ? TILE + halfH : -halfH);
-        if (s > 0) {
-          r.onGround = true;
-          // Fall damage, above a generous free drop.
-          const impact = prevVy - 400;
-          if (impact > 0) {
-            this._damage(impact * 0.26, "fall");
-            this.shakeT = 0.2;
-            for (let i = 0; i < 8; i++) this._puff(r.x + randFloat(-14, 14), r.y + 14, "#cbb6a0");
-          }
+    if (hits(r.x - halfW + 0.5, r.y - halfH, r.x + halfW - 0.5, r.y + halfH)) {
+      if (r.vy > 0) {
+        r.y = Math.floor((r.y + halfH) / TILE) * TILE - halfH - 0.01;
+        r.onGround = true;
+        // Fall damage, above a generous free drop.
+        const impact = prevVy - 540;
+        if (impact > 0) {
+          this._damage(impact * 0.25, "fall");
+          this.shakeT = 0.22;
+          this._float(`Hard landing −${Math.round(impact * 0.25)} hull`, "#ff9f43");
+          for (let i = 0; i < 10; i++) this._puff(r.x + randFloat(-14, 14), r.y + 14, "#cbb6a0");
         }
-        r.vy = 0;
+      } else {
+        r.y = (Math.floor((r.y - halfH) / TILE) + 1) * TILE + halfH + 0.01;
       }
+      r.vy = 0;
+    } else if (r.vy >= 0 && hits(r.x - halfW + 0.5, r.y + halfH, r.x + halfW - 0.5, r.y + halfH + 1)) {
+      r.onGround = true;
     }
     r.y = Math.max(halfH, r.y);
   }
@@ -704,14 +756,14 @@ export class DeepDelveGame extends GameBase {
       this._float("Charge blown", "#ff9f43");
     } else if (id === "patch") {
       this.hull = Math.min(this.maxHull, this.hull + 60);
-      audioManager.play("powerup");
+      audioManager.play("coin");
       this._float("+60 hull", "#2ee6a6");
     } else if (id === "beacon") {
       r.x = this.depotX * TILE + TILE / 2;
       r.y = (SURFACE_ROWS - 0.5) * TILE;
       r.vx = 0; r.vy = 0;
       this.blasts.push({ x: r.x, y: r.y, t: 0 });
-      audioManager.play("warp");
+      audioManager.play("levelup");
       this._float("Beacon home", "#22d3ee");
     }
     this.kit[id]--;
@@ -753,7 +805,7 @@ export class DeepDelveGame extends GameBase {
       this.credits += earned;
       this.cargo = {}; this.cargoMass = 0;
       this._float(`Sold for ◆ ${formatNumber(earned)}`, "#ffd76a");
-      audioManager.play("powerup");
+      audioManager.play("coin");
       const store = this._store();
       store.credits += earned;
       store.totalOre += 1;
@@ -883,7 +935,16 @@ export class DeepDelveGame extends GameBase {
     this._drawLight(ctx, viewRows);
     ctx.restore();
 
+    // Scrims behind the readouts so ore and rock never shine through them.
+    const top = ctx.createLinearGradient(0, 0, 0, 110);
+    top.addColorStop(0, "rgba(6,6,12,0.78)"); top.addColorStop(1, "rgba(6,6,12,0)");
+    ctx.fillStyle = top; ctx.fillRect(0, 0, W, 110);
+    const bot = ctx.createLinearGradient(0, H - 80, 0, H);
+    bot.addColorStop(0, "rgba(6,6,12,0)"); bot.addColorStop(1, "rgba(6,6,12,0.75)");
+    ctx.fillStyle = bot; ctx.fillRect(0, H - 80, W, 80);
     this._drawGauges(ctx, W, H);
+    this._drawDepthMeter(ctx, W, H);
+    this._drawWarnings(ctx, W, H);
     this._drawContract(ctx, W);
     this._drawKitBar(ctx, W, H);
     this._drawFloaters(ctx, W, H);
@@ -1005,7 +1066,7 @@ export class DeepDelveGame extends GameBase {
     const st = this._stratumAt(Math.max(0, Math.floor(this.camY) - SURFACE_ROWS));
     const g = ctx.createLinearGradient(0, 0, 0, H);
     if (this.camY < 2) {
-      g.addColorStop(0, "#2a4d7a"); g.addColorStop(0.5, "#4d7fae"); g.addColorStop(1, "#8fb4cd");
+      g.addColorStop(0, "#14305c"); g.addColorStop(0.3, "#5b8fc4"); g.addColorStop(0.45, "#9cc3dc"); g.addColorStop(1, "#3a2a20");
     } else {
       g.addColorStop(0, st.rock2); g.addColorStop(1, "#0b0a12");
     }
@@ -1013,39 +1074,109 @@ export class DeepDelveGame extends GameBase {
     ctx.fillRect(0, 0, W, H);
   }
 
+  /**
+   * Rock textures, painted once per stratum: a bevelled block with grain,
+   * pebbles and a hairline crack, in four variants so a wall never repeats.
+   * Drawing these is far cheaper than painting every tile's detail each frame.
+   */
+  _rockTex(si, v) {
+    if (!this._tex) this._tex = {};
+    const key = si * 4 + v;
+    if (this._tex[key]) return this._tex[key];
+    const st = STRATA[si];
+    const S = TILE * 2, c = document.createElement("canvas");
+    c.width = c.height = S;
+    const g = c.getContext("2d");
+    const rng = seededRng(`rock-${si}-${v}`);
+    const grad = g.createLinearGradient(0, 0, S, S);
+    grad.addColorStop(0, st.rock); grad.addColorStop(1, st.rock2);
+    g.fillStyle = grad; g.fillRect(0, 0, S, S);
+    for (let k = 0; k < 26; k++) {
+      g.fillStyle = rng() < 0.5 ? st.grain : "rgba(0,0,0,0.35)";
+      g.globalAlpha = 0.25 + rng() * 0.3;
+      const r = 1.5 + rng() * 4.5;
+      g.beginPath(); g.ellipse(rng() * S, rng() * S, r * 1.3, r, rng() * 3, 0, 7); g.fill();
+    }
+    g.globalAlpha = 0.3;
+    g.strokeStyle = "rgba(0,0,0,0.6)"; g.lineWidth = 1.5;
+    g.beginPath();
+    let x = rng() * S, y = rng() * S * 0.3;
+    g.moveTo(x, y);
+    for (let k = 0; k < 4; k++) { x += (rng() - 0.5) * 30; y += 10 + rng() * 14; g.lineTo(x, y); }
+    g.stroke();
+    g.globalAlpha = 1;
+    // Bevel: light top-left, dark bottom-right, so each block reads as a block.
+    g.fillStyle = "rgba(255,255,255,0.14)"; g.fillRect(0, 0, S, 4); g.fillRect(0, 0, 4, S);
+    g.fillStyle = "rgba(0,0,0,0.32)"; g.fillRect(0, S - 5, S, 5); g.fillRect(S - 5, 0, 5, S);
+    this._tex[key] = c;
+    return c;
+  }
+
   _drawTiles(ctx, viewRows) {
     const y0 = Math.max(0, Math.floor(this.camY) - 1);
     const y1 = Math.min(this.rows, Math.ceil(this.camY + viewRows) + 1);
+    const solid = (x, y) => this._solid(x, y) || this._tile(x, y) === 3;
     for (let y = y0; y < y1; y++) {
       const depth = y - SURFACE_ROWS;
       const st = this._stratumAt(Math.max(0, depth));
+      const si = STRATA.indexOf(st);
       for (let x = 0; x < COLS; x++) {
         const t = this.grid[y * COLS + x];
-        if (t === 0) continue;
         const px = x * TILE, py = y * TILE;
-        if (t === 3) { this._drawHazard(ctx, px, py, this.tileData.get(y * COLS + x)?.hazard); continue; }
-
-        // Rock body: two-tone checker plus a hash of grain so a wall of tiles
-        // does not read as one flat slab.
-        const alt = (x + y) & 1;
-        ctx.fillStyle = alt ? st.rock : st.rock2;
-        ctx.fillRect(px, py, TILE, TILE);
-        const seed = (x * 73856093 ^ y * 19349663) >>> 0;
-        ctx.fillStyle = st.grain;
-        ctx.globalAlpha = 0.25;
-        for (let k = 0; k < 3; k++) {
-          const s = (seed >> (k * 5)) & 31;
-          ctx.fillRect(px + (s % 6) * 6, py + ((s >> 2) % 6) * 6, 5, 4);
+        if (t === 0) {
+          // Below the surface an open tile is a cave, not a window to the sky.
+          if (y < SURFACE_ROWS) continue;
+          ctx.fillStyle = shadeHex(st.rock2, -0.55);
+          ctx.fillRect(px, py, TILE, TILE);
+          // Soft shadow cast by rock above and beside the pocket.
+          if (solid(x, y - 1)) {
+            const g = ctx.createLinearGradient(0, py, 0, py + TILE * 0.6);
+            g.addColorStop(0, "rgba(0,0,0,0.55)"); g.addColorStop(1, "rgba(0,0,0,0)");
+            ctx.fillStyle = g; ctx.fillRect(px, py, TILE, TILE * 0.6);
+          }
+          if (solid(x - 1, y)) { ctx.fillStyle = "rgba(0,0,0,0.25)"; ctx.fillRect(px, py, 6, TILE); }
+          if (solid(x + 1, y)) { ctx.fillStyle = "rgba(0,0,0,0.25)"; ctx.fillRect(px + TILE - 6, py, 6, TILE); }
+          continue;
         }
-        ctx.globalAlpha = 1;
-        // Top lip catches the light from above.
-        ctx.fillStyle = "rgba(255,255,255,0.08)";
-        ctx.fillRect(px, py, TILE, 3);
-        ctx.fillStyle = "rgba(0,0,0,0.22)";
-        ctx.fillRect(px, py + TILE - 3, TILE, 3);
+        if (t === 3) { this._drawHazard(ctx, px, py, this.tileData.get(y * COLS + x)?.hazard); continue; }
+        if (t === 4) {
+          const g = ctx.createLinearGradient(0, py, 0, py + TILE);
+          g.addColorStop(0, "#8b90ac"); g.addColorStop(1, "#3a3f52");
+          ctx.fillStyle = g; ctx.fillRect(px, py, TILE, TILE);
+          ctx.fillStyle = "rgba(255,255,255,0.25)"; ctx.fillRect(px, py, TILE, 3);
+          ctx.fillStyle = "#c9ccd8";
+          for (const [ix, iy] of [[6, 8], [TILE - 6, 8], [6, TILE - 8], [TILE - 6, TILE - 8]]) { ctx.beginPath(); ctx.arc(px + ix, py + iy, 2, 0, 7); ctx.fill(); }
+          continue;
+        }
+
+        const seed = (x * 73856093 ^ y * 19349663) >>> 0;
+        ctx.drawImage(this._rockTex(si, seed & 3), px, py, TILE, TILE);
+        // Exposed faces catch the lamp; buried ones stay flat.
+        if (y >= SURFACE_ROWS && this._tile(x, y - 1) === 0) {
+          ctx.fillStyle = y === SURFACE_ROWS ? "#5d8a45" : "rgba(255,255,255,0.12)";
+          ctx.fillRect(px, py, TILE, y === SURFACE_ROWS ? 6 : 3);
+        }
 
         if (t === 2) this._drawOre(ctx, px, py, this.tileData.get(y * COLS + x)?.ore, seed);
       }
+    }
+    // Cracks spreading through the tile being drilled.
+    const d = this.rig?.drilling;
+    if (d) {
+      const k = Math.min(1, d.t / d.need);
+      const px = d.cx * TILE + TILE / 2, py = d.cy * TILE + TILE / 2;
+      ctx.strokeStyle = `rgba(10,8,14,${0.5 + k * 0.4})`;
+      ctx.lineWidth = 2;
+      const rng = seededRng(d.key);
+      for (let i = 0; i < 6; i++) {
+        const a = rng() * Math.PI * 2, len = TILE * 0.55 * k * (0.6 + rng() * 0.6);
+        ctx.beginPath(); ctx.moveTo(px, py);
+        ctx.lineTo(px + Math.cos(a) * len * 0.5 + (rng() - 0.5) * 6, py + Math.sin(a) * len * 0.5 + (rng() - 0.5) * 6);
+        ctx.lineTo(px + Math.cos(a) * len, py + Math.sin(a) * len);
+        ctx.stroke();
+      }
+      ctx.fillStyle = `rgba(255,220,160,${k * 0.25})`;
+      ctx.fillRect(d.cx * TILE, d.cy * TILE, TILE, TILE);
     }
   }
 
@@ -1066,6 +1197,13 @@ export class DeepDelveGame extends GameBase {
       ctx.strokeStyle = o.edge; ctx.lineWidth = 1; ctx.stroke();
       ctx.fillStyle = "rgba(255,255,255,0.55)";
       ctx.fillRect(x - 1.4, y - r + 1.6, 2.2, 2.2);
+    }
+    // A slow twinkle so a seam catches the eye from across the shaft.
+    const tw = Math.sin(this.elapsed * 2.2 + seed % 97);
+    if (tw > 0.85) {
+      const a = (tw - 0.85) / 0.15;
+      ctx.strokeStyle = `rgba(255,255,255,${a})`; ctx.lineWidth = 1.4;
+      ctx.beginPath(); ctx.moveTo(cx - 6, cy); ctx.lineTo(cx + 6, cy); ctx.moveTo(cx, cy - 6); ctx.lineTo(cx, cy + 6); ctx.stroke();
     }
   }
 
@@ -1265,8 +1403,71 @@ export class DeepDelveGame extends GameBase {
       ctx.textAlign = "center";
       ctx.fillStyle = `rgba(255,255,255,${0.5 + Math.sin(this.elapsed * 4) * 0.3})`;
       ctx.font = "700 12px 'Inter', system-ui, sans-serif";
-      ctx.fillText(this.cargoMass ? "Land on the pad to sell" : "Drill down — press Down", W / 2, H - 16);
+      const onPad = Math.abs(this.rig.x - (this.depotX * TILE + TILE / 2)) < TILE * 1.6;
+      ctx.fillText(this.cargoMass ? "Land on the pad to sell" : onPad ? "Drive off the pad, then press Down to drill" : "Press Down to drill", W / 2, H - 56);
     }
+  }
+
+  /** Strata down the right edge, with you, the relics and the Core on it. */
+  _drawDepthMeter(ctx, W, H) {
+    const x = W - 9, top = 112, bot = H - 60, h = bot - top;
+    if (h < 60) return;
+    const Y = (d) => top + (d / CORE_DEPTH) * h;
+    ctx.save();
+    ctx.globalAlpha = 0.85;
+    STRATA.forEach((st, i) => {
+      const to = STRATA[i + 1]?.from ?? CORE_DEPTH;
+      ctx.fillStyle = st.rock;
+      ctx.fillRect(x - 3, Y(st.from), 6, Y(to) - Y(st.from));
+    });
+    ctx.strokeStyle = "rgba(255,255,255,0.3)"; ctx.lineWidth = 1;
+    ctx.strokeRect(x - 3.5, top - 0.5, 7, h + 1);
+    // Best depth so far.
+    const best = this._store().bestDepth;
+    if (best > 0) { ctx.fillStyle = "rgba(255,255,255,0.6)"; ctx.fillRect(x - 6, Y(Math.min(best, CORE_DEPTH)), 12, 1.5); }
+    for (const a of this.artifacts || []) {
+      if (a.taken) continue;
+      ctx.fillStyle = ARTIFACT_BY_ID[a.id].color;
+      const ay = Y(a.y - SURFACE_ROWS);
+      ctx.beginPath(); ctx.moveTo(x - 9, ay); ctx.lineTo(x - 6, ay - 3); ctx.lineTo(x - 3, ay); ctx.lineTo(x - 6, ay + 3); ctx.closePath(); ctx.fill();
+    }
+    ctx.fillStyle = "#ffb347";
+    ctx.beginPath(); ctx.arc(x, bot + 4, 4, 0, 7); ctx.fill();
+    // You.
+    const ry = Y(Math.min(this.depth, CORE_DEPTH));
+    ctx.globalAlpha = 1;
+    ctx.fillStyle = "#ffd76a";
+    ctx.beginPath(); ctx.moveTo(x - 4, ry); ctx.lineTo(x - 12, ry - 5); ctx.lineTo(x - 12, ry + 5); ctx.closePath(); ctx.fill();
+    ctx.restore();
+  }
+
+  /**
+   * The one thing every lost run had in common was not knowing when to turn
+   * round. Fuel for the climb home is estimated live and the game says so
+   * before it is too late; a full hold points you back up as well.
+   */
+  _drawWarnings(ctx, W, H) {
+    if (!this.rig || this.depth < 3 || this.state !== "playing") return;
+    const need = this._fuelHome();
+    const low = this.fuel < need * 1.25;
+    const full = this.cargoMass >= this.slots;
+    if (!low && !full) return;
+    const blink = 0.6 + Math.sin(this.elapsed * 8) * 0.4;
+    const text = this.fuel < need ? "Not enough fuel to climb home!" : low ? "Turn back — fuel for the climb home" : "Hold full — fly up to the depot";
+    ctx.save();
+    ctx.font = "800 12px 'Inter', system-ui, sans-serif";
+    const tw = ctx.measureText(text).width + 40;
+    const x = (W - tw) / 2, y = 108;
+    ctx.fillStyle = low ? `rgba(120,20,30,${0.75})` : "rgba(20,40,60,0.8)";
+    roundRect(ctx, x, y, tw, 26, 13); ctx.fill();
+    ctx.strokeStyle = low ? `rgba(255,84,112,${blink})` : "rgba(34,211,238,0.8)"; ctx.lineWidth = 1.5;
+    roundRect(ctx, x, y, tw, 26, 13); ctx.stroke();
+    ctx.fillStyle = "#fff"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+    ctx.fillText(`▲  ${text}`, W / 2, y + 13.5);
+    ctx.font = "700 10px 'Inter', system-ui, sans-serif";
+    ctx.fillStyle = "rgba(255,255,255,0.7)";
+    ctx.fillText(`Depot ${this.depth} m up`, W / 2, y + 36);
+    ctx.restore();
   }
 
   _drawFloaters(ctx, W, H) {
@@ -1279,6 +1480,12 @@ export class DeepDelveGame extends GameBase {
     });
     ctx.globalAlpha = 1;
   }
+}
+
+function shadeHex(hex, amt) {
+  const v = parseInt(hex.slice(1), 16);
+  const f = (c) => Math.round(amt < 0 ? c * (1 + amt) : c + (255 - c) * amt);
+  return `rgb(${f((v >> 16) & 255)},${f((v >> 8) & 255)},${f(v & 255)})`;
 }
 
 function hexA(hex, a) {
