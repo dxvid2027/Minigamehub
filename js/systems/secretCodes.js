@@ -8,10 +8,15 @@ import { SECRET_GAMES } from "../../data/games.js";
 
 const CODES = {
   SEAN: "golden-goal",
+  "DRACHENHERZ-LEGENDE-7429": "dragonheart",
 };
 
-/** Codes are forgiving about spacing and case, never about the letters. */
-function normalize(code) { return String(code || "").trim().toUpperCase(); }
+/**
+ * Codes are forgiving about case, spaces and dashes, never about the
+ * letters and digits themselves.
+ */
+function normalize(code) { return String(code || "").toUpperCase().replace(/[\s\-_]+/g, ""); }
+const LOOKUP = Object.fromEntries(Object.entries(CODES).map(([c, id]) => [normalize(c), id]));
 
 function unlockedList() {
   const p = saveManager.data.profile;
@@ -31,7 +36,7 @@ export function unlockedSecretGames() {
  * opens and whether it was already open.
  */
 export function redeemCode(code) {
-  const gameId = CODES[normalize(code)];
+  const gameId = LOOKUP[normalize(code)];
   const game = gameId && SECRET_GAMES.find(g => g.id === gameId);
   if (!game) return { ok: false };
   const list = unlockedList();
