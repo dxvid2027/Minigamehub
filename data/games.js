@@ -74,6 +74,10 @@ export const SECRET_GAMES = [
   { id: "golden-goal", title: "Golden Goal", category: "Sports", emoji: "\u26bd", grad: ["#1f9d55", "#ffd76a"], desc: "Pick a nation and win the 48-team World Cup, or take a club through the Champions League. Play every match yourself or simulate it.", tags: ["football", "soccer", "tournament", "secret"], ratio: "16/10", wide: true, controls: "both", module: "../../games/golden-goal.js", exportName: "GoldenGoalGame", secret: true, cover: "assets/images/covers/golden-goal.jpg", coverY: 0.75 },
 ];
 
+SECRET_GAMES.push(
+  { id: "dragonheart", title: "Dragonheart", category: "Action", emoji: "\ud83d\udc09", grad: ["#ff6b28", "#2c4f9a"], desc: "An action RPG across six regions: sword combos, dodge rolls, spells, loot in four rarities, a village to come home to and six bosses between you and Ashvane, the Elder Dragon.", tags: ["rpg", "adventure", "bosses", "loot", "secret"], ratio: "16/10", wide: true, controls: "both", module: "../../games/dragonheart.js", exportName: "DragonheartGame", secret: true },
+);
+
 export function getGame(id) { return GAMES.find(g => g.id === id) || SECRET_GAMES.find(g => g.id === id); }
 export function gamesByCategory(cat) { return GAMES.filter(g => cat === "All" ? true : g.category === cat); }
 export default GAMES;

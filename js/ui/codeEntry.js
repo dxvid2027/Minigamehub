@@ -14,7 +14,7 @@ import { toast } from "./toast.js";
 export function codeForm({ onUnlock } = {}) {
   const input = el("input", {
     class: "text-input code-input", type: "text", placeholder: "Enter code",
-    autocomplete: "off", autocapitalize: "characters", spellcheck: "false", maxlength: "24",
+    autocomplete: "off", autocapitalize: "characters", spellcheck: "false", maxlength: "48",
     "aria-label": "Secret code",
   });
   const msg = el("div", { class: "code-msg", "aria-live": "polite" });
