@@ -150,7 +150,8 @@ export class World {
         (p.solid || p.tall ? this.props : this.decor).push(p);
         occupied.add(y * MW + x);
       } else if (rng() < 0.06) {
-        this.decor.push(this._prop(R.props[0] === "flower" ? "flower" : "tuft", (x + rng()) * T, (y + rng()) * T, false));
+        const flat = R.props.find(k => ["flower", "kelp", "shell", "dune", "bones", "reed", "lily", "rose"].includes(k));
+        this.decor.push(this._prop(flat && rng() < 0.7 ? flat : "tuft", (x + rng()) * T, (y + rng()) * T, false));
       }
     }
 
@@ -200,8 +201,15 @@ export class World {
   }
 
   _prop(type, x, y, solid) {
-    const big = { oak: 15, pine: 13, dead: 11, snowpine: 13, charred: 11, crystal: 13, rock: 13, pillar: 13, house: 46, fountain: 30, waystone: 13, iceshard: 11, obsidian: 13, vent: 12, shrub: 12, pot: 10, bush: 12, snowbush: 12, mushroom: 9 };
-    const tall = ["oak", "pine", "dead", "snowpine", "charred", "crystal", "pillar", "house", "waystone", "iceshard", "obsidian"].includes(type);
+    const big = {
+      oak: 15, pine: 13, dead: 11, snowpine: 13, charred: 11, crystal: 13, rock: 13, pillar: 13, house: 46, fountain: 30, waystone: 13,
+      iceshard: 11, obsidian: 13, vent: 12, shrub: 12, pot: 10, bush: 12, snowbush: 12, mushroom: 9,
+      palm: 12, cactus: 11, willow: 15, chimney: 13, stormpine: 13, voidspire: 13, goldtree: 15, obelisk: 13,
+      coral: 12, gear: 13, pipe: 11, stormrock: 13, crystalcluster: 13, gravestone: 10, voidcrystal: 12, starstone: 12,
+    };
+    const tall = ["oak", "pine", "dead", "snowpine", "charred", "crystal", "pillar", "house", "waystone", "iceshard", "obsidian",
+      "palm", "cactus", "willow", "chimney", "stormpine", "voidspire", "goldtree", "obelisk", "coral", "pipe", "crystalcluster",
+      "gravestone", "voidcrystal", "starstone", "stormrock", "gear"].includes(type);
     const isSolid = solid && big[type] !== undefined;
     return { type, x, y, r: big[type] || 0, solid: isSolid, tall, seed: (x * 31 + y * 17) | 0 };
   }
@@ -228,7 +236,7 @@ export class World {
   blocked(px, py, flying = false) {
     const t = this.g(Math.floor(px / T), Math.floor(py / T));
     if (t === G_WALL) return true;
-    if (t === G_LIQUID && !flying && this.region.water !== "ice") return true;
+    if (t === G_LIQUID && !flying && this.region.water !== "ice") return true;   // water, lava, void and cloud
     return false;
   }
   onLiquid(px, py) { return this.g(Math.floor(px / T), Math.floor(py / T)) === G_LIQUID; }
@@ -368,11 +376,23 @@ export class World {
       }
     }
     // Liquid: animated highlights and a bright edge where it meets land.
-    const lava = R.water === "lava", ice = R.water === "ice";
+    const lava = R.water === "lava", ice = R.water === "ice", voidL = R.water === "void", cloud = R.water === "cloud";
     for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) {
       if (this.g(x, y) !== G_LIQUID) continue;
       const wx = x * T, wy = y * T;
-      if (!ice) {
+      if (voidL) {
+        // The edge of the world: a starfield that drifts.
+        const sd = (x * 928371 ^ y * 12377) >>> 0;
+        for (let k = 0; k < 3; k++) {
+          const a = 0.3 + 0.7 * Math.abs(Math.sin(time * (1 + k * 0.7) + sd % 50 + k));
+          ctx.fillStyle = `rgba(${k ? "200,170,255" : "255,255,255"},${a})`;
+          ctx.fillRect(wx + ((sd >> (k * 4)) & 31), wy + ((sd >> (k * 5 + 2)) & 31), 1.6, 1.6);
+        }
+      } else if (cloud) {
+        ctx.fillStyle = "rgba(255,255,255,0.55)";
+        const ph = time * 0.4 + x * 0.9 + y * 0.6;
+        ctx.beginPath(); ctx.arc(wx + 10 + Math.sin(ph) * 4, wy + 14, 9, 0, 7); ctx.arc(wx + 22 + Math.cos(ph) * 3, wy + 18, 8, 0, 7); ctx.fill();
+      } else if (!ice) {
         const ph = time * (lava ? 1.2 : 2) + x * 0.7 + y * 1.3;
         ctx.strokeStyle = lava ? `rgba(255,235,160,${0.35 + Math.sin(ph) * 0.2})` : `rgba(255,255,255,${0.18 + Math.sin(ph) * 0.12})`;
         ctx.lineWidth = 1.4;
@@ -381,7 +401,7 @@ export class World {
         ctx.strokeStyle = "rgba(255,255,255,0.5)"; ctx.lineWidth = 1;
         ctx.beginPath(); ctx.moveTo(wx + 6, wy + 22); ctx.lineTo(wx + 14, wy + 12); ctx.stroke();
       }
-      const shore = lava ? "rgba(40,10,0,0.55)" : ice ? "rgba(255,255,255,0.7)" : "rgba(220,240,255,0.55)";
+      const shore = lava ? "rgba(40,10,0,0.55)" : ice ? "rgba(255,255,255,0.7)" : voidL ? "rgba(176,107,255,0.6)" : cloud ? "rgba(255,255,255,0.9)" : "rgba(220,240,255,0.55)";
       ctx.fillStyle = shore;
       if (this.g(x, y - 1) !== G_LIQUID) ctx.fillRect(wx, wy, T, 3);
       if (this.g(x, y + 1) !== G_LIQUID) ctx.fillRect(wx, wy + T - 2, T, 2);
@@ -536,6 +556,151 @@ export function drawProp(ctx, p, R, time) {
       ctx.fillStyle = p.type === "skull" ? "#e8e2d0" : "#8d8a7c";
       ctx.beginPath(); ctx.arc(x, y - 3, p.type === "skull" ? 4 : 3, 0, 7); ctx.arc(x + 6, y - 1, 2.5, 0, 7); ctx.fill();
       if (p.type === "skull") { ctx.fillStyle = "#222"; ctx.fillRect(x - 2, y - 4, 1.5, 1.5); ctx.fillRect(x + 1, y - 4, 1.5, 1.5); }
+      break;
+    }
+    case "palm": {
+      shadow(18, 7);
+      ctx.strokeStyle = "#8a6a3a"; ctx.lineWidth = 6; ctx.lineCap = "round";
+      ctx.beginPath(); ctx.moveTo(x, y); ctx.quadraticCurveTo(x + 6, y - 22, x + 2, y - 44); ctx.stroke();
+      const sw = Math.sin(time * 1.4 + s) * 0.08;
+      ctx.fillStyle = "#2f9a4a";
+      for (let i = 0; i < 6; i++) {
+        const a = -Math.PI / 2 + (i - 2.5) * 0.55 + sw;
+        ctx.beginPath(); ctx.moveTo(x + 2, y - 44);
+        ctx.quadraticCurveTo(x + 2 + Math.cos(a) * 14, y - 50 + Math.sin(a) * 10, x + 2 + Math.cos(a) * 26, y - 40 + Math.sin(a) * 18 + 8);
+        ctx.quadraticCurveTo(x + 2 + Math.cos(a) * 12, y - 44 + Math.sin(a) * 6, x + 2, y - 44); ctx.fill();
+      }
+      ctx.fillStyle = "#6a4a2a"; ctx.beginPath(); ctx.arc(x - 1, y - 42, 2.5, 0, 7); ctx.arc(x + 4, y - 41, 2.5, 0, 7); ctx.fill();
+      break;
+    }
+    case "cactus": {
+      shadow(12, 5);
+      ctx.fillStyle = "#3a9a4a"; ctx.strokeStyle = "#2a6a32"; ctx.lineWidth = 1.5;
+      const pill = (px, py, w, h) => { ctx.beginPath(); ctx.roundRect ? ctx.roundRect(px - w / 2, py - h, w, h, w / 2) : ctx.rect(px - w / 2, py - h, w, h); ctx.fill(); ctx.stroke(); };
+      pill(x, y, 11, 38); pill(x - 10, y - 12, 7, 16); pill(x + 10, y - 18, 7, 14);
+      ctx.fillStyle = "#ff7fa8"; ctx.beginPath(); ctx.arc(x, y - 38, 3, 0, 7); ctx.fill();
+      break;
+    }
+    case "willow": {
+      shadow(22, 8);
+      ctx.fillStyle = "#3a2e22"; ctx.fillRect(x - 4, y - 24, 8, 26);
+      ctx.fillStyle = "#3a5a2a"; ctx.beginPath(); ctx.arc(x, y - 36, 20, 0, 7); ctx.fill();
+      ctx.strokeStyle = "#4a6a32"; ctx.lineWidth = 2;
+      for (let i = -4; i <= 4; i++) { const sw = Math.sin(time * 1.2 + i + s) * 2; ctx.beginPath(); ctx.moveTo(x + i * 4.5, y - 30); ctx.quadraticCurveTo(x + i * 5 + sw, y - 16, x + i * 5.5 + sw, y - 4); ctx.stroke(); }
+      break;
+    }
+    case "chimney": case "pipe": {
+      shadow(13, 5);
+      const h = p.type === "chimney" ? 46 : 26;
+      const g = ctx.createLinearGradient(x - 8, 0, x + 8, 0);
+      g.addColorStop(0, "#5a4a3a"); g.addColorStop(0.5, "#b08a5a"); g.addColorStop(1, "#4a3a2a");
+      ctx.fillStyle = g; ctx.fillRect(x - 8, y - h, 16, h);
+      ctx.fillStyle = "#c9a24a"; ctx.fillRect(x - 10, y - h - 4, 20, 5); ctx.fillRect(x - 10, y - h * 0.45, 20, 3);
+      if (p.type === "chimney") for (let i = 0; i < 3; i++) { const t2 = (time * 0.6 + i / 3 + s * 0.01) % 1; ctx.fillStyle = `rgba(160,160,170,${0.5 * (1 - t2)})`; ctx.beginPath(); ctx.arc(x + t2 * 10, y - h - 8 - t2 * 28, 5 + t2 * 8, 0, 7); ctx.fill(); }
+      break;
+    }
+    case "gear": {
+      shadow(14, 5);
+      ctx.save(); ctx.translate(x, y - 14); ctx.rotate(time * 0.6 + s);
+      ctx.fillStyle = "#b08a4a";
+      for (let i = 0; i < 8; i++) { ctx.rotate(Math.PI / 4); ctx.fillRect(-3, -16, 6, 6); }
+      ctx.beginPath(); ctx.arc(0, 0, 12, 0, 7); ctx.fill();
+      ctx.fillStyle = "#3a2e22"; ctx.beginPath(); ctx.arc(0, 0, 4, 0, 7); ctx.fill();
+      ctx.restore();
+      break;
+    }
+    case "stormpine": {
+      shadow(16, 7);
+      ctx.fillStyle = "#3a2e22"; ctx.fillRect(x - 3, y - 10, 6, 12);
+      for (let i = 0; i < 3; i++) {
+        const w = 17 - i * 4, top = y - 14 - i * 11;
+        ctx.fillStyle = i % 2 ? "#3a4a5a" : "#2a3a4a";
+        ctx.beginPath(); ctx.moveTo(x - w, top + 14); ctx.lineTo(x + Math.sin(time * 2 + s) * 1.5, top - 8); ctx.lineTo(x + w, top + 14); ctx.closePath(); ctx.fill();
+      }
+      break;
+    }
+    case "stormrock": {
+      shadow(14, 6);
+      ctx.fillStyle = "#4a5466";
+      ctx.beginPath(); ctx.moveTo(x - 14, y + 2); ctx.lineTo(x - 9, y - 18); ctx.lineTo(x + 5, y - 22); ctx.lineTo(x + 14, y - 6); ctx.lineTo(x + 12, y + 3); ctx.closePath(); ctx.fill();
+      const flick = Math.sin(time * 9 + s) > 0.6;
+      ctx.strokeStyle = flick ? "#fff7a0" : "rgba(255,239,106,0.5)"; ctx.lineWidth = 1.5;
+      ctx.beginPath(); ctx.moveTo(x - 6, y - 16); ctx.lineTo(x - 1, y - 9); ctx.lineTo(x - 4, y - 5); ctx.lineTo(x + 3, y + 1); ctx.stroke();
+      break;
+    }
+    case "crystalcluster": case "voidcrystal": {
+      shadow(13, 5);
+      const vc = p.type === "voidcrystal";
+      const cols = vc ? ["#3a1a6a", "#7a3aca", "#c99aff"] : ["#2a8ac0", "#5ad0ff", "#d6f6ff"];
+      [[-7, 0, 9, 26], [7, 1, 8, 20], [0, 0, 10, 36]].forEach(([dx, dy, w, h], i) => {
+        ctx.fillStyle = cols[i];
+        ctx.beginPath(); ctx.moveTo(x + dx - w / 2, y + dy); ctx.lineTo(x + dx, y + dy - h); ctx.lineTo(x + dx + w / 2, y + dy); ctx.closePath(); ctx.fill();
+      });
+      const gl = ctx.createRadialGradient(x, y - 16, 0, x, y - 16, 22);
+      gl.addColorStop(0, vc ? `rgba(200,140,255,${0.35 + Math.sin(time * 2 + s) * 0.15})` : `rgba(160,240,255,${0.35 + Math.sin(time * 2 + s) * 0.15})`); gl.addColorStop(1, "rgba(0,0,0,0)");
+      ctx.fillStyle = gl; ctx.beginPath(); ctx.arc(x, y - 16, 22, 0, 7); ctx.fill();
+      break;
+    }
+    case "coral": {
+      shadow(12, 5);
+      const cc = ["#ff6a8a", "#ff9a4a", "#b06bff"][Math.abs(s) % 3];
+      ctx.strokeStyle = cc; ctx.lineCap = "round"; ctx.lineWidth = 4;
+      ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x, y - 18); ctx.lineTo(x - 8, y - 28); ctx.moveTo(x, y - 18); ctx.lineTo(x + 7, y - 30); ctx.moveTo(x, y - 10); ctx.lineTo(x + 9, y - 16); ctx.stroke();
+      ctx.fillStyle = "#fff"; ctx.beginPath(); ctx.arc(x - 8, y - 28, 1.6, 0, 7); ctx.arc(x + 7, y - 30, 1.6, 0, 7); ctx.fill();
+      break;
+    }
+    case "gravestone": {
+      shadow(11, 4);
+      ctx.fillStyle = "#6a6a72"; ctx.beginPath(); ctx.moveTo(x - 9, y); ctx.lineTo(x - 9, y - 18); ctx.arc(x, y - 18, 9, Math.PI, 0); ctx.lineTo(x + 9, y); ctx.closePath(); ctx.fill();
+      ctx.fillStyle = "rgba(0,0,0,0.3)"; ctx.fillRect(x - 1.5, y - 22, 3, 10); ctx.fillRect(x - 5, y - 19, 10, 3);
+      break;
+    }
+    case "voidspire": case "obelisk": {
+      shadow(13, 5);
+      const ob = p.type === "obelisk";
+      ctx.fillStyle = ob ? "#1a1428" : "#24183c";
+      ctx.beginPath(); ctx.moveTo(x - 9, y); ctx.lineTo(x - 5, y - 48); ctx.lineTo(x, y - 56); ctx.lineTo(x + 5, y - 48); ctx.lineTo(x + 9, y); ctx.closePath(); ctx.fill();
+      const pulse = 0.5 + Math.sin(time * 2 + s) * 0.4;
+      ctx.strokeStyle = ob ? `rgba(255,138,240,${pulse})` : `rgba(176,107,255,${pulse})`; ctx.lineWidth = 1.5;
+      ctx.beginPath(); ctx.moveTo(x, y - 6); ctx.lineTo(x, y - 46); ctx.moveTo(x - 4, y - 30); ctx.lineTo(x + 4, y - 30); ctx.stroke();
+      break;
+    }
+    case "goldtree": {
+      shadow(20, 8);
+      ctx.fillStyle = "#f2e6c0"; ctx.fillRect(x - 4, y - 18, 8, 20);
+      [[0, -34, 19], [-11, -27, 13], [11, -27, 13], [0, -44, 12]].forEach(([dx, dy, r], i) => {
+        ctx.fillStyle = ["#ffd76a", "#ffe9a0", "#fff3c8", "#fff8e0"][i];
+        ctx.beginPath(); ctx.arc(x + dx + Math.sin(time + s) * 1.2, y + dy, r, 0, 7); ctx.fill();
+      });
+      ctx.fillStyle = `rgba(255,255,255,${0.4 + Math.sin(time * 3 + s) * 0.3})`; ctx.beginPath(); ctx.arc(x + 6, y - 40, 2, 0, 7); ctx.fill();
+      break;
+    }
+    case "starstone": {
+      shadow(12, 5);
+      ctx.fillStyle = "#e8e4f2"; ctx.beginPath(); ctx.moveTo(x - 10, y); ctx.lineTo(x - 7, y - 24); ctx.lineTo(x + 7, y - 26); ctx.lineTo(x + 10, y); ctx.closePath(); ctx.fill();
+      ctx.fillStyle = `rgba(255,215,106,${0.6 + Math.sin(time * 2.5 + s) * 0.3})`;
+      ctx.beginPath(); for (let i = 0; i < 10; i++) { const a = -Math.PI / 2 + i * Math.PI / 5, rr = i % 2 ? 2.5 : 6; ctx.lineTo(x + Math.cos(a) * rr, y - 14 + Math.sin(a) * rr); } ctx.fill();
+      break;
+    }
+    case "kelp": case "reed": {
+      ctx.strokeStyle = p.type === "kelp" ? "#2a8a5a" : "#6a7a3a"; ctx.lineWidth = 2; ctx.lineCap = "round";
+      for (let i = -1; i <= 1; i++) { const sw = Math.sin(time * 1.5 + s + i) * 3; ctx.beginPath(); ctx.moveTo(x + i * 3, y); ctx.quadraticCurveTo(x + i * 3 + sw, y - 8, x + i * 4 + sw * 1.5, y - 15); ctx.stroke(); }
+      break;
+    }
+    case "shell": case "bones": {
+      ctx.fillStyle = p.type === "shell" ? "#ffe0d0" : "#e8dcc0";
+      if (p.type === "shell") { ctx.beginPath(); ctx.arc(x, y - 2, 4, Math.PI, 0); ctx.fill(); }
+      else { ctx.fillRect(x - 6, y - 2, 12, 2.5); ctx.beginPath(); ctx.arc(x - 6, y - 1, 2, 0, 7); ctx.arc(x + 6, y - 1, 2, 0, 7); ctx.fill(); }
+      break;
+    }
+    case "dune": {
+      ctx.strokeStyle = "rgba(160,110,50,0.4)"; ctx.lineWidth = 1.5;
+      for (let i = 0; i < 3; i++) { ctx.beginPath(); ctx.moveTo(x - 12, y + i * 4); ctx.quadraticCurveTo(x, y - 4 + i * 4, x + 12, y + i * 4); ctx.stroke(); }
+      break;
+    }
+    case "lily": case "rose": {
+      ctx.fillStyle = p.type === "lily" ? "#3a6a2a" : "#2a1a1a"; ctx.beginPath(); ctx.ellipse(x, y, 6, 3, 0, 0, 7); ctx.fill();
+      ctx.fillStyle = p.type === "lily" ? "#ffd0e8" : "#c01a3a"; ctx.beginPath(); ctx.arc(x, y - 2, 2.6, 0, 7); ctx.fill();
       break;
     }
     case "house": {

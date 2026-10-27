@@ -261,13 +261,16 @@ League (league phase → play-off → knockouts), quick matches, penalty
 shoot-outs, live tables and a knockout bracket. Every fixture can be played
 or simulated, and the run is saved after each match.
 
-**Dragonheart** (🐉 action RPG, its own longer code) runs across six regions
-from the village of Greenvale to Dragon's Spire: sword combos, dodge rolls,
-three skills won from bosses, loot in four rarities, a shop, a smith, a
-healing fountain, waystone travel and six telegraphed boss fights ending with
-Ashvane, the Elder Dragon. Files: `js/games/dragonheart.js` (game, combat,
-UI), `dhWorld.js` (region generation and ground/prop drawing), `dhArt.js`
-(hero, monsters, bosses) and `dhData.js` (balance).
+**Dragonheart** (🐉 action RPG, its own longer code) runs across sixteen
+regions, from the village of Greenvale past Dragon's Spire, the Coral Coast,
+the Clockwork Citadel and the Abyssal Rift to the Throne of Eternity: sword
+combos, dodge rolls, nine skills (keys 1–9) won from bosses, weapons with
+burn/chill/shock/leech/crit/storm effects, loot in four rarities, a shop, a
+smith, a healing fountain, waystone travel, sixteen three-phase boss fights
+ending with Nyxara, the World Eater, and a nightmare altar in every cleared
+arena that summons a far stronger version of its boss. Files:
+`js/games/dragonheart.js` (game, combat, UI), `dhWorld.js` (region generation
+and ground/prop drawing), `dhArt.js` (hero, monsters, bosses) and `dhData.js` (balance).
 
 ---
 
