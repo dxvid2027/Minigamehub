@@ -8,7 +8,7 @@ import { SECRET_GAMES } from "../../data/games.js";
 
 const CODES = {
   SEAN: "golden-goal",
-  "DRACHENHERZ-LEGENDE-7429": "dragonheart",
+  SEANALPHA: "dragonheart",
 };
 
 /**
