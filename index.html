@@ -98,6 +98,27 @@
 <div id="toast-root" aria-live="polite"></div>
 <div id="modal-root"></div>
 
+<script>
+  // The first service worker served cached files before fresh ones, so after
+  // an update the page could keep running old code (a new secret code was
+  // rejected, a new game missing). If that old cache is still here, clear it
+  // and the worker, then load the page once more straight from the network.
+  // Keep the name in step with CACHE_VERSION in sw.js.
+  (function () {
+    try {
+      if (!("caches" in window) || sessionStorage.getItem("mp-cleaned")) return;
+      caches.keys().then(function (keys) {
+        var old = keys.filter(function (k) { return k !== "megaplay-v2"; });
+        if (!old.length) return;
+        sessionStorage.setItem("mp-cleaned", "1");
+        return Promise.all(old.map(function (k) { return caches.delete(k); }))
+          .then(function () { return navigator.serviceWorker ? navigator.serviceWorker.getRegistrations() : []; })
+          .then(function (regs) { return Promise.all(regs.map(function (r) { return r.unregister(); })); })
+          .then(function () { location.reload(); });
+      }).catch(function () {});
+    } catch (e) { /* private mode without storage: nothing to clean */ }
+  })();
+</script>
 <script type="module" src="js/core/app.js"></script>
 </body>
 </html>
