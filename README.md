@@ -261,7 +261,7 @@ League (league phase → play-off → knockouts), quick matches, penalty
 shoot-outs, live tables and a knockout bracket. Every fixture can be played
 or simulated, and the run is saved after each match.
 
-**Gridiron Kings** (🏈 American football, code `MAXIHILLSIGMA`) is built
+**Gridiron Kings** (🏈 American football, code `MAXISIGMA`) is built
 for touchscreens: a stick for the left thumb, SNAP / SPRINT / move buttons for
 the right, pass buttons (A, B, X, Y, RB) riding above the receivers — tap for
 a quick pass, hold for a lob, touch or bullet throw with an aim marker — and a
