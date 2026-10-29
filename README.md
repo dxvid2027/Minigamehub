@@ -268,9 +268,15 @@ combos, dodge rolls, nine skills (keys 1–9) won from bosses, weapons with
 burn/chill/shock/leech/crit/storm effects, loot in four rarities, a shop, a
 smith, a healing fountain, waystone travel, sixteen three-phase boss fights
 ending with Nyxara, the World Eater, and a nightmare altar in every cleared
-arena that summons a far stronger version of its boss. Files:
+arena that summons a far stronger version of its boss. Every region has a
+camp with a quest giver (35 quests in all), a shrine that grants a blessing,
+and the Greenvale market has stalls, villagers and a farm. Quests reward
+cosmetics — helmets (including a Dragon Helm), capes, wings, auras and pets —
+and Grit the scrapper trades gear for Dragon Tokens, which Lysa the tailor
+takes for cosmetics and Bram for reforging gear to a higher rarity. Files:
 `js/games/dragonheart.js` (game, combat, UI), `dhWorld.js` (region generation
-and ground/prop drawing), `dhArt.js` (hero, monsters, bosses) and `dhData.js` (balance).
+and ground/prop drawing), `dhArt.js` (hero, monsters, bosses), `dhCosmetics.js` (cosmetic art),
+`dhQuests.js` (quests, cosmetics, tokens) and `dhData.js` (balance).
 
 ---
 

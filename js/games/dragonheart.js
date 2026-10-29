@@ -1,7 +1,7 @@
 // ==========================================================================
 // Dragonheart — an action RPG, unlocked with a secret code.
 //
-// Six regions run east from the village of Greenvale to Dragon's Spire. Each
+// Sixteen regions run east from the village of Greenvale. Each
 // is a large hand-shaped map with a road, monster camps, chests and a boss
 // waiting in a stone arena at the far end; beating the boss opens a portal to
 // the next region and hands over a new skill or a named weapon.
@@ -25,7 +25,9 @@ import { openModal, closeModal } from "../ui/modal.js";
 import { el, formatNumber } from "../core/utils.js";
 import { REGIONS, FOES, BOSSES, RARITY, WEAPONS, ARMORS, SKILLS, POTION_COST, xpFor, WEAPON_FX, MAX_TIER } from "./dhData.js";
 import { World, T, MW, MH, drawProp } from "./dhWorld.js";
-import { drawHero, drawFoe, drawBoss, drawNpc, drawChest } from "./dhArt.js";
+import { drawHero, drawFoe, drawBoss, drawNpc, drawChest, drawCritter } from "./dhArt.js";
+import { QUESTS, QITEMS, GIVERS, COSMETICS, COS_SLOTS, tokenValue, REFORGE, TOKEN_GOODS } from "./dhQuests.js";
+import { drawPet } from "./dhCosmetics.js";
 
 const TAU = Math.PI * 2;
 const rand = (a, b) => a + Math.random() * (b - a);
@@ -44,6 +46,11 @@ const NIGHTMARE = { hp: 2.6, atk: 1.6 };
 const HERO_SPEED = 138;
 const ROLL_SPEED = 330, ROLL_TIME = 0.3, ROLL_COST = 28;
 const MAX_POTIONS = 9;
+const BLESSINGS = {
+  might: { name: "Blessing of Might", desc: "+25% attack", color: "#ff7a5a" },
+  ward:  { name: "Blessing of Warding", desc: "-25% damage taken", color: "#7cf0ff" },
+  swift: { name: "Blessing of Swiftness", desc: "+20% speed, faster stamina", color: "#2ee6a6" },
+};
 
 const weaponOf = (it) => WEAPONS.find(w => w.id === it.id) || WEAPONS[0];
 const armorOf = (it) => ARMORS.find(a => a.id === it.id) || ARMORS[0];
@@ -68,6 +75,9 @@ export class DragonheartGame extends GameBase {
       "In the village: Mira sells potions and weapons, Bram the smith sells armour, the fountain heals. Waystones take you back.",
       "Sixteen regions in all. Named weapons burn, freeze, shock or drain. Bosses grow a third, desperate phase below a quarter of their health.",
       "Beaten a boss? Its altar in the arena summons its Nightmare form — far stronger, and it always drops legendary gear.",
+      "Every region has a camp with a quest giver (look for the ! above their head). Quests give gold and cosmetics: helmets, capes, wings, auras and pets — even a Dragon Helm.",
+      "Grit the Scrapper on the market trades your old gear for Dragon Tokens ✪. Spend them at Lysa the Tailor, or let Bram reforge your gear to a higher rarity.",
+      "Shrines give a blessing once per visit. Your bag has a Wardrobe and a Quest log.",
     ];
   }
   getKeyboardHint() { return "WASD / arrows move · J or Space attack & talk · K or Shift roll · L skill (Q or 1–9 switch) · H potion · I bag."; }
@@ -88,6 +98,7 @@ export class DragonheartGame extends GameBase {
       weapon: { kind: "weapon", id: "stick", rarity: "common" },
       armor: { kind: "armor", id: "tunic", rarity: "common" },
       bag: [], skills: [], skill: null, region: 0, unlocked: 0, bosses: {}, chests: {}, kills: 0, deaths: 0, won: false,
+      quests: {}, tokens: 0, cos: { owned: [], helm: null, cape: null, aura: null, pet: null },
     };
     for (const [k, v] of Object.entries(def)) if (s[k] === undefined) s[k] = JSON.parse(JSON.stringify(v));
     if (!s.nightmares) s.nightmares = {};
@@ -108,6 +119,7 @@ export class DragonheartGame extends GameBase {
       el("span", {}, `${REGIONS[s.region]?.name || "Greenvale"}`),
       el("span", {}, `Bosses ${beaten}/${REGIONS.length}`),
       Object.keys(s.nightmares).length ? el("span", {}, `☠ Nightmares ${Object.keys(s.nightmares).length}`) : null,
+      el("span", {}, `📜 Quests ${QUESTS.filter(q => s.quests[q.id]?.done).length}/${QUESTS.length}`),
       el("span", {}, `◈ ${formatNumber(s.gold)} gold`),
       s.won ? el("span", {}, "🐉 Ashvane defeated") : null,
     ]);
@@ -130,7 +142,7 @@ export class DragonheartGame extends GameBase {
 
   // ------------------------------------------------------------- stats ---
   get maxHp() { const s = this._store(); return Math.round(100 + (s.lv - 1) * 18 + (itemPower(s.armor).hp || 0)); }
-  get atk() { const s = this._store(); return 8 + (s.lv - 1) * 3 + (itemPower(s.weapon).atk || 0); }
+  get atk() { const s = this._store(); return Math.round((8 + (s.lv - 1) * 3 + (itemPower(s.weapon).atk || 0)) * (this.bless?.kind === "might" ? 1.25 : 1)); }
   get def() { return itemPower(this._store().armor).def || 0; }
   get maxMana() { return 60 + this._store().lv * 4; }
 
@@ -143,6 +155,7 @@ export class DragonheartGame extends GameBase {
     for (let i = 1; i <= 9; i++) this.input.onKey(`Digit${i}`, () => this._pickSkill(i - 1));
     this.input.onKey("KeyH", () => this._potion());
     this.input.onKey("KeyE", () => this._interact());
+    this.input.onKey("KeyO", () => this.state === "playing" && this._openBag("wardrobe"));
     this.input.onPointer("down", (p) => this._tap(p.x, p.y));
   }
 
@@ -204,6 +217,9 @@ export class DragonheartGame extends GameBase {
     this.boss = null;
     this.portal = s.bosses[R.boss] ? { x: W.arena.x, y: W.arena.y } : null;
     this.banner = { title: R.name, sub: R.sub, t: 0 };
+    this.shrineUsed = false;
+    this.pet = { x: h.x - 20, y: h.y + 6, ang: 0, moving: false, walk: 0 };
+    this._buildQItems();
     this._save();
     this._hud();
   }
@@ -261,6 +277,9 @@ export class DragonheartGame extends GameBase {
     this._stepShots(dt);
     this._stepHazards(dt);
     this._stepDrops(dt);
+    this._stepQItems();
+    this._stepLife(dt);
+    if (this.bless) { this.bless.t -= dt; if (this.bless.t <= 0) { this.bless = null; this._text(this.hero.x, this.hero.y - 44, "The blessing fades", "#c9ccd8"); } }
     this._checkArena();
     this.shake = Math.max(0, this.shake - dt * 3);
     // Camera with a little look-ahead.
@@ -279,7 +298,7 @@ export class DragonheartGame extends GameBase {
     h.skillCd = Math.max(0, h.skillCd - dt);
     h.slow = Math.max(0, h.slow - dt);
     if (h.shieldT > 0) { h.shieldT -= dt; if (h.shieldT <= 0) h.shield = 0; }
-    this.stamina = Math.min(100, this.stamina + 38 * dt);
+    this.stamina = Math.min(100, this.stamina + 38 * dt * (this.bless?.kind === "swift" ? 1.4 : 1));
     this.mana = Math.min(this.maxMana, this.mana + 4 * dt);
 
     const atk = this._btn(["KeyJ", "Space"], "a");
@@ -295,7 +314,7 @@ export class DragonheartGame extends GameBase {
       h.rollSpin += dt * 22;
       h.vx = Math.cos(h.rollDir) * ROLL_SPEED; h.vy = Math.sin(h.rollDir) * ROLL_SPEED;
     } else {
-      const sp = HERO_SPEED * (h.swing >= 0 ? 0.45 : 1) * (h.slow > 0 ? 0.55 : 1);
+      const sp = HERO_SPEED * (h.swing >= 0 ? 0.45 : 1) * (h.slow > 0 ? 0.55 : 1) * (this.bless?.kind === "swift" ? 1.2 : 1);
       let tvx = 0, tvy = 0;
       if (m > 0.15) { const k = Math.min(1, m); tvx = (ax.x / m) * sp * k; tvy = (ax.y / m) * sp * k; if (h.swing < 0) h.ang = Math.atan2(ax.y, ax.x); }
       const icy = W.region.water === "ice" && W.onLiquid(h.x, h.y);
@@ -430,6 +449,7 @@ export class DragonheartGame extends GameBase {
     if (r < 0.1) this._drop("heart", f.x + 6, f.y);
     else if (r < 0.14) this._drop("potion", f.x + 6, f.y);
     if (Math.random() < (f.elite ? 0.55 : 0.035)) this._drop("gear", f.x - 6, f.y, this._rollGear(f.elite));
+    this._questKill(f);
   }
 
   _hurtBoss(raw, sword = false) {
@@ -464,7 +484,7 @@ export class DragonheartGame extends GameBase {
     const def = this.def;
     // Armour matters in every region, but never makes you untouchable.
     const k = 80 + this.ri * 90;
-    let dmg = Math.max(1, Math.round(raw * d.taken * (1 - def / (def + k)) * rand(0.9, 1.1)));
+    let dmg = Math.max(1, Math.round(raw * d.taken * (1 - def / (def + k)) * rand(0.9, 1.1) * (this.bless?.kind === "ward" ? 0.75 : 1)));
     if (h.shield > 0) {
       const soak = Math.min(h.shield, dmg);
       h.shield -= soak; dmg -= soak;
@@ -635,6 +655,9 @@ export class DragonheartGame extends GameBase {
   // ----------------------------------------------------------- monsters --
   _stepFoes(dt) {
     const h = this.hero, W = this.world;
+    // Camps and the village are safe: monsters lose interest and keep out.
+    const inSafe = (x, y) => W.safe.find(z => hyp(x - z.x, y - z.y) < z.r);
+    const heroSafe = !this.boss && !!inSafe(h.x, h.y);
     for (const f of this.foes) {
       if (f.hp <= 0) continue;
       f.flash = Math.max(0, f.flash - dt);
@@ -650,7 +673,8 @@ export class DragonheartGame extends GameBase {
       f.st -= dt;
       // Knockback decays.
       if (f.kx || f.ky) { f.kx *= Math.pow(0.002, dt); f.ky *= Math.pow(0.002, dt); if (Math.abs(f.kx) + Math.abs(f.ky) < 4) f.kx = f.ky = 0; }
-      const aggro = d < 240 || f.state === "chase" || f.state === "wind" || f.state === "act" || f.state === "recover";
+      if (heroSafe && f.state === "chase") f.state = "idle";
+      const aggro = !(heroSafe && f.state === "idle") && (d < 240 || f.state === "chase" || f.state === "wind" || f.state === "act" || f.state === "recover");
       if (!aggro) {
         // Wander near home.
         if (f.st <= 0) { f.st = rand(1.5, 3.5); const a = rand(0, TAU); f.wx = f.hx + Math.cos(a) * 60; f.wy = f.hy + Math.sin(a) * 60; }
@@ -703,6 +727,8 @@ export class DragonheartGame extends GameBase {
       const nx = f.x + (mvx * slowK + f.kx) * dt, ny = f.y + (mvy * slowK + f.ky) * dt;
       const p = W.slide(f.x, f.y, nx, ny, Math.min(12, f.r * 0.8), flying);
       f.x = p.x; f.y = p.y;
+      const z = !f.summoned && inSafe(f.x, f.y);
+      if (z) { const a = Math.atan2(f.y - z.y, f.x - z.x), q = W.slide(f.x, f.y, z.x + Math.cos(a) * (z.r + 2), z.y + Math.sin(a) * (z.r + 2), Math.min(12, f.r * 0.8), true); f.x = q.x; f.y = q.y; }
       // Monsters never follow you into a boss fight.
       if (this.boss?.locked && hyp(f.x - W.arena.x, f.y - W.arena.y) < W.arena.r + 10 && !f.summoned) {
         const a = Math.atan2(f.y - W.arena.y, f.x - W.arena.x);
@@ -1084,6 +1110,7 @@ export class DragonheartGame extends GameBase {
         else if (d.kind === "heart") { const a = Math.round(this.maxHp * 0.15); h.hp = Math.min(this.maxHp, h.hp + a); this._text(h.x, h.y - 40, `+${a}`, "#2ee6a6"); audioManager.play("coin"); }
         else if (d.kind === "potion") { if (s.potions < MAX_POTIONS) { s.potions++; this._text(h.x, h.y - 40, "+1 potion", "#ff7fa8"); } else { s.gold += 15; this._text(h.x, h.y - 40, "+15 gold", "#ffd76a"); } audioManager.play("coin"); }
         else if (d.kind === "gear") { this._takeGear(d.val); }
+        else if (d.kind === "quest") { this._questGain(d.val); }
       }
     }
     this.drops = this.drops.filter(d => !d.got);
@@ -1111,7 +1138,14 @@ export class DragonheartGame extends GameBase {
   // ------------------------------------------------------- interaction ---
   _nearby() {
     const h = this.hero, W = this.world;
-    for (const n of W.npcs) if (hyp(n.x - h.x, n.y - h.y) < 46) return { kind: "npc", n, label: `Talk to ${n.name.split(" ")[0]}` };
+    for (const n of W.npcs) if (hyp(n.x - h.x, n.y - h.y) < 48) {
+      const label = n.giver && this._giverMark(n.giver) === "?" ? "Hand in quest" : n.role === "scrap" ? "Trade gear for tokens" : n.role === "tailor" ? "Browse the tailor's" : `Talk to ${n.name.split(" ")[0]}`;
+      return { kind: "npc", n, label };
+    }
+    for (const n of W.walkers) if (hyp(n.x - h.x, n.y - h.y) < 34) return { kind: "walker", n, label: `Talk to the ${n.name.toLowerCase()}` };
+    if (W.supplies && hyp(W.supplies.x - h.x, W.supplies.y - h.y) < 44) return { kind: "supplies", label: "Buy supplies" };
+    if (W.board && hyp(W.board.x - h.x, W.board.y - h.y) < 44) return { kind: "board", label: "Read the quest board" };
+    if (W.shrine && !this.shrineUsed && hyp(W.shrine.x - h.x, W.shrine.y - h.y) < 46) return { kind: "shrine", label: "Pray at the shrine" };
     if (W.fountain && hyp(W.fountain.x - h.x, W.fountain.y - h.y) < 52) return { kind: "fountain", label: "Rest at the fountain" };
     if (hyp(W.stone.x - h.x, W.stone.y - h.y) < 44) return { kind: "stone", label: "Use the waystone" };
     for (const c of this.chests) if (!c.opened && hyp(c.x - h.x, c.y - h.y) < 40) return { kind: "chest", c, label: "Open the chest" };
@@ -1126,9 +1160,23 @@ export class DragonheartGame extends GameBase {
     if (!it) return false;
     const s = this._store(), h = this.hero;
     if (it.kind === "npc") {
-      if (it.n.id === "shop") this._openShop("weapon");
-      else if (it.n.id === "smith") this._openShop("armor");
-      else this._talkElder();
+      const r = it.n.role;
+      if (r === "shop") this._openShop("weapon");
+      else if (r === "smith") this._openShop("armor");
+      else if (r === "tailor") this._openTailor();
+      else if (r === "scrap") this._openScrap();
+      else if (it.n.giver) this._openQuests(it.n.giver);
+    } else if (it.kind === "walker") {
+      const n = it.n;
+      n.say = n.lines[(n.lineI = ((n.lineI ?? -1) + 1) % n.lines.length)]; n.sayT = 3; n.st = 2.5; n.moving = false;
+      n.face = h.x < n.x ? -1 : 1;
+      audioManager.play("select");
+    } else if (it.kind === "supplies") {
+      this._openSupplies();
+    } else if (it.kind === "board") {
+      this._openBag("quests");
+    } else if (it.kind === "shrine") {
+      this._pray();
     } else if (it.kind === "fountain") {
       h.hp = this.maxHp; this.mana = this.maxMana;
       this._text(h.x, h.y - 40, "Fully healed · saved", "#2ee6a6", true);
@@ -1157,22 +1205,12 @@ export class DragonheartGame extends GameBase {
     openModal({ title, bodyNode: body, footerNode: footer || el("button", { class: "btn btn-primary", onClick: () => closeModal() }, "Close"), onClose: () => { this.modal = false; this._hud(); } });
   }
 
-  _talkElder() {
-    const s = this._store();
-    const next = REGIONS.findIndex(r => !s.bosses[r.boss]);
-    const lines = next < 0
-      ? ["You did it. Ashvane is gone, and the bells of Greenvale ring for you.", "The roads stay dangerous, though. A hero's work is never quite finished."]
-      : next === 0
-        ? ["Ah, you're awake. A dragon has woken in the far east — Ashvane — and the land is turning wild.", "Begin close to home: the Slime King lurks in the stone circle at the east end of Greenvale.", "Mira sells potions and blades, Bram forges armour. The fountain will mend you. Go well."]
-        : [`The ${BOSSES[REGIONS[next].boss].name} waits at the far end of ${REGIONS[next].name}.`, `It is a place for heroes of level ${REGIONS[next].lv} or so — you are level ${s.lv}.`, "Remember: watch for the glow before a blow lands, and roll through it."];
-    this._modal("Elder Rowan", el("div", { class: "dh-talk" }, lines.map(l => el("p", {}, l))));
-  }
-
   _openShop(kind) {
     const s = this._store();
     const body = el("div", { class: "dh-shop" });
     const render = () => {
       body.innerHTML = "";
+      if (kind === "armor") { body.append(...this._reforgeRows(render)); body.append(el("h4", { class: "dock-h" }, "Armour for sale")); }
       body.append(el("div", { class: "dh-gold" }, `◈ ${formatNumber(s.gold)} gold`));
       if (kind === "weapon") {
         body.append(el("div", { class: "dh-row" }, [
@@ -1215,16 +1253,20 @@ export class DragonheartGame extends GameBase {
     this._modal("Waystone", body);
   }
 
-  _openBag() {
+  _openBag(tab = "gear") {
     if (this.modal) return;
     const s = this._store();
     const body = el("div", { class: "dh-shop" });
     const render = () => {
       body.innerHTML = "";
+      body.append(el("div", { class: "dh-tabs" }, [["gear", "🎒 Gear"], ["wardrobe", "👑 Wardrobe"], ["quests", "📜 Quests"]].map(([id, label]) =>
+        el("button", { class: `btn btn-sm ${tab === id ? "btn-primary" : "btn-ghost"}`, onClick: () => { tab = id; audioManager.play("select"); render(); } }, label))));
+      if (tab === "wardrobe") { this._renderWardrobe(body, render); return; }
+      if (tab === "quests") { this._renderQuestLog(body); return; }
       body.append(el("div", { class: "dh-stats" }, [
         el("span", {}, `Level ${s.lv}`), el("span", {}, `XP ${s.xp}/${xpFor(s.lv)}`),
         el("span", {}, `Attack ${this.atk}`), el("span", {}, `Defence ${this.def}`), el("span", {}, `Health ${this.maxHp}`),
-        el("span", {}, `◈ ${formatNumber(s.gold)}`), el("span", {}, `Potions ${s.potions}`),
+        el("span", {}, `◈ ${formatNumber(s.gold)}`), el("span", {}, `✪ ${s.tokens}`), el("span", {}, `Potions ${s.potions}`),
       ]));
       const slot = (it, label) => el("div", { class: "dh-row eq" }, [
         el("span", { class: "dh-ic", style: `--c:${RARITY[it.rarity].color}` }, it.kind === "weapon" ? "⚔" : "🛡"),
@@ -1257,6 +1299,406 @@ export class DragonheartGame extends GameBase {
     };
     render();
     this._modal("Hero's Bag", body);
+  }
+
+  _renderWardrobe(body, render) {
+    const s = this._store();
+    const n = s.cos.owned.length, total = Object.keys(COSMETICS).length;
+    body.append(el("p", { class: "dh-empty", style: "margin:4px 0" }, `${n}/${total} cosmetics collected. Quests give most of them; Lysa sells the rest for Dragon Tokens.`));
+    for (const slot of COS_SLOTS) {
+      body.append(el("h4", { class: "dock-h" }, `${slot.icon} ${slot.name}`));
+      const none = !s.cos[slot.id];
+      body.append(el("div", { class: `dh-row${none ? " eq" : ""}` }, [
+        el("span", { class: "dh-ic", style: "--c:#6a6a7a" }, "∅"),
+        el("div", { class: "dh-info" }, [el("b", {}, "None"), el("span", {}, slot.id === "helm" ? "Show your armour's helmet" : slot.id === "cape" ? "Your armour's own cape" : "Nothing")]),
+        none ? el("em", { class: "up" }, "Wearing") : el("button", { class: "btn btn-ghost btn-sm", onClick: () => { s.cos[slot.id] = null; this._save(); render(); } }, "Wear"),
+      ]));
+      for (const [id, c] of Object.entries(COSMETICS)) {
+        if (c.slot !== slot.id) continue;
+        const owned = s.cos.owned.includes(id), worn = s.cos[slot.id] === id;
+        body.append(el("div", { class: `dh-row${worn ? " eq" : ""}${owned ? "" : " locked"}` }, [
+          el("span", { class: "dh-ic", style: `--c:${c.color}` }, owned ? slot.icon : "🔒"),
+          el("div", { class: "dh-info" }, [el("b", {}, c.name), el("span", {}, owned ? (c.from || "From Lysa the Tailor") : (c.from || `Lysa the Tailor · ✪ ${c.price}`))]),
+          !owned ? null : worn ? el("em", { class: "up" }, "Wearing") : el("button", { class: "btn btn-primary btn-sm", onClick: () => { s.cos[slot.id] = id; audioManager.play("select"); this._save(); render(); } }, "Wear"),
+        ]));
+      }
+    }
+  }
+
+  _renderQuestLog(body) {
+    const s = this._store();
+    const done = QUESTS.filter(q => s.quests[q.id]?.done).length;
+    body.append(el("p", { class: "dh-empty", style: "margin:4px 0" }, `${done}/${QUESTS.length} quests done. Look for a ! above someone's head — every region has a camp near the waystone.`));
+    REGIONS.forEach((r, ri) => {
+      if (ri > s.unlocked) return;
+      const qs = QUESTS.filter(q => q.r === ri);
+      if (!qs.length) return;
+      body.append(el("h4", { class: "dock-h" }, r.name));
+      for (const q of qs) {
+        const st = s.quests[q.id], goal = this._qGoal(q), prog = Math.min(this._qProg(q), goal);
+        const status = !st ? `Talk to ${GIVERS[q.giver].name}` : st.done ? "✓ Done" : this._qReady(q) ? `Ready — return to ${GIVERS[q.giver].name}` : `${prog}/${goal}`;
+        body.append(el("div", { class: `dh-row${st?.done ? " eq" : ""}${st ? "" : " locked"}` }, [
+          el("span", { class: "dh-ic", style: `--c:${q.item ? QITEMS[q.item].color : "#ffd76a"}` }, q.item ? QITEMS[q.item].icon : q.type === "kill" || q.type === "elite" ? "⚔" : "☠"),
+          el("div", { class: "dh-info" }, [el("b", {}, q.name), el("span", {}, q.desc), el("em", { class: "up" }, `Reward: ${this._rewardText(q.reward)}`)]),
+          el("em", { class: st?.done || this._qReady(q) ? "up" : "dh-prog" }, status),
+        ]));
+      }
+    });
+  }
+
+  // ------------------------------------------------------------ quests ---
+  _qGoal(q) { return q.n || 1; }
+  _qProg(q) {
+    const s = this._store(), st = s.quests[q.id] || {};
+    const boss = REGIONS[q.r].boss;
+    switch (q.type) {
+      case "boss": return s.bosses[boss] ? 1 : 0;
+      case "nightmare": return s.nightmares[boss] ? 1 : 0;
+      case "won": return s.won ? 1 : 0;
+      case "collect": return (st.got || []).length;
+      default: return st.n || 0;
+    }
+  }
+  _qReady(q) { const st = this._store().quests[q.id]; return !!st && !st.done && this._qProg(q) >= this._qGoal(q); }
+  /** "?" when a giver has a quest to hand in, "!" when one is on offer. */
+  _giverMark(gid) {
+    const s = this._store();
+    const qs = QUESTS.filter(q => q.giver === gid);
+    if (qs.some(q => this._qReady(q))) return "?";
+    if (qs.some(q => !s.quests[q.id])) return "!";
+    return null;
+  }
+
+  /** The glowing items of this region's active collect quests. */
+  _buildQItems() {
+    const s = this._store(), W = this.world;
+    this.qitems = [];
+    if (!W) return;
+    for (const q of QUESTS) {
+      const st = s.quests[q.id];
+      if (q.type !== "collect" || q.r !== this.ri || !st || st.done) continue;
+      for (let i = 0; i < q.n; i++) {
+        if ((st.got || []).includes(i)) continue;
+        const sp = W.questSpots[(q.slot + i) % Math.max(1, W.questSpots.length)];
+        if (sp) this.qitems.push({ q, i, x: sp.x, y: sp.y });
+      }
+    }
+  }
+
+  _stepQItems() {
+    const h = this.hero;
+    for (const it of this.qitems) {
+      if (hyp(it.x - h.x, it.y - h.y) > 22) continue;
+      it.got = true;
+      const st = this._store().quests[it.q.id];
+      (st.got = st.got || []).push(it.i);
+      this._burst(it.x, it.y - 8, QITEMS[it.q.item].color, 16, true);
+      this._questTick(it.q, `+1 ${QITEMS[it.q.item].name}`);
+    }
+    this.qitems = this.qitems.filter(i => !i.got);
+  }
+
+  _questTick(q, label) {
+    const h = this.hero, goal = this._qGoal(q);
+    this._text(h.x, h.y - 50, `${label} (${Math.min(this._qProg(q), goal)}/${goal})`, "#ff8af0");
+    audioManager.play("coin");
+    if (this._qReady(q)) {
+      this.banner = { title: "QUEST COMPLETE", sub: `${q.name} — return to ${GIVERS[q.giver].name}`, t: 0.4, gold: true };
+      audioManager.play("achievement");
+    }
+    this._save();
+  }
+
+  _questKill(f) {
+    const s = this._store();
+    for (const q of QUESTS) {
+      const st = s.quests[q.id];
+      if (!st || st.done || this._qReady(q)) continue;
+      if (q.type === "kill" && q.foe === f.type) { st.n = (st.n || 0) + 1; this._questTick(q, f.name); }
+      else if (q.type === "elite" && f.elite && q.r === this.ri) { st.n = (st.n || 0) + 1; this._questTick(q, `Elite ${f.name}`); }
+      else if (q.type === "drop" && q.r === this.ri && (!q.foe || q.foe === f.type) && Math.random() < q.chance) {
+        const pending = this.drops.filter(d => d.kind === "quest" && d.val === q.id).length;
+        if ((st.n || 0) + pending < q.n) this._drop("quest", f.x, f.y, q.id);
+      }
+    }
+  }
+
+  _questGain(id) {
+    const q = QUESTS.find(x => x.id === id), st = this._store().quests[id];
+    if (!q || !st || st.done) return;
+    st.n = Math.min(q.n, (st.n || 0) + 1);
+    this._questTick(q, `+1 ${QITEMS[q.item].name}`);
+  }
+
+  _rewardText(rw) {
+    const parts = [];
+    for (const c of rw.cos || []) parts.push(`${COS_SLOTS.find(sl => sl.id === COSMETICS[c].slot).icon} ${COSMETICS[c].name}`);
+    if (rw.gold) parts.push(`◈ ${formatNumber(rw.gold)}`);
+    if (rw.tokens) parts.push(`✪ ${rw.tokens}`);
+    if (rw.potions) parts.push(`⚗ ${rw.potions}`);
+    return parts.join(" · ");
+  }
+
+  _giveCos(id) {
+    const c = this._store().cos;
+    if (!c.owned.includes(id)) c.owned.push(id);
+    c[COSMETICS[id].slot] = id;
+  }
+
+  _claim(q) {
+    const s = this._store(), st = s.quests[q.id], rw = q.reward;
+    if (!this._qReady(q)) return;
+    st.done = true;
+    if (rw.gold) s.gold += rw.gold;
+    if (rw.tokens) s.tokens += rw.tokens;
+    if (rw.potions) s.potions = Math.min(MAX_POTIONS, s.potions + rw.potions);
+    const got = (rw.cos || []).map(c => { this._giveCos(c); return COSMETICS[c].name; });
+    this._gainXp(Math.round(xpFor(Math.max(s.lv, REGIONS[q.r].lv)) * 0.35));
+    audioManager.play("win");
+    const h = this.hero;
+    for (let i = 0; i < 50; i++) this.fx.push({ x: h.x, y: h.y - 20, vx: rand(-160, 160), vy: rand(-260, -60), g: 380, life: rand(0.7, 1.4), t: 0, color: ["#ffd76a", "#ff8af0", "#7cf0ff", "#2ee6a6"][i % 4], size: rand(2, 4) });
+    this.fx.push({ ring: true, x: h.x, y: h.y - 16, r0: 10, r1: 90, life: 0.6, t: 0, color: "#ffd76a" });
+    this.banner = got.length
+      ? { title: got.length === 1 ? got[0].toUpperCase() : "NEW COSMETICS!", sub: `${got.join(" & ")} — equipped! Change your look in Bag → Wardrobe (O)`, t: 0, gold: true }
+      : { title: "QUEST DONE", sub: q.name, t: 0, gold: true };
+    this._save(); this._hud();
+  }
+
+  _elderLines() {
+    const s = this._store();
+    const next = REGIONS.findIndex(r => !s.bosses[r.boss]);
+    if (next < 0) return ["You did it. Nyxara is gone, and the bells of Greenvale ring for you.", "The Nightmares still stir at their altars, though. A hero's work is never quite finished."];
+    if (next === 0) return ["Ah, you're awake. A dragon has woken in the far east, and something older stirs behind it. The land is turning wild.", "Begin close to home: the Slime King lurks in the stone circle at the east end of Greenvale.", "Mira sells blades, Bram forges armour, Lysa sews the finest capes — and Granny Wen and Farmer Tom could use a hand."];
+    return [`The ${BOSSES[REGIONS[next].boss].name} waits at the far end of ${REGIONS[next].name}.`, `It is a place for heroes of level ${REGIONS[next].lv} or so — you are level ${s.lv}.`, "Every region has a camp with someone who needs help. Their rewards are worth it."];
+  }
+
+  _openQuests(gid) {
+    const s = this._store(), G = GIVERS[gid];
+    const body = el("div", { class: "dh-shop" });
+    const render = () => {
+      body.innerHTML = "";
+      const hello = gid === "elder" ? this._elderLines() : [G.hello];
+      body.append(el("div", { class: "dh-talk" }, hello.map(l => el("p", {}, l))));
+      for (const q of QUESTS.filter(x => x.giver === gid)) {
+        const st = s.quests[q.id], goal = this._qGoal(q), prog = Math.min(this._qProg(q), goal);
+        let btn;
+        if (!st) btn = el("button", { class: "btn btn-primary btn-sm", onClick: () => { s.quests[q.id] = { n: 0, got: [] }; audioManager.play("select"); this._buildQItems(); this._save(); render(); } }, "Accept");
+        else if (st.done) btn = el("em", { class: "up" }, "✓ Done");
+        else if (this._qReady(q)) btn = el("button", { class: "btn btn-primary btn-sm", onClick: () => { this._claim(q); render(); } }, "Claim!");
+        else btn = el("em", { class: "dh-prog" }, `${prog}/${goal}`);
+        const hint = st && !st.done && q.type === "collect" ? " Look for the pink sparkles on your minimap." : "";
+        body.append(el("div", { class: `dh-row${st?.done ? " eq" : ""}` }, [
+          el("span", { class: "dh-ic", style: `--c:${q.item ? QITEMS[q.item].color : "#ffd76a"}` }, q.item ? QITEMS[q.item].icon : q.type === "kill" || q.type === "elite" ? "⚔" : "☠"),
+          el("div", { class: "dh-info" }, [el("b", {}, q.name), el("span", {}, q.desc + hint), el("em", { class: "up" }, `Reward: ${this._rewardText(q.reward)}`)]),
+          btn,
+        ]));
+      }
+    };
+    render();
+    this._modal(G.name, body);
+  }
+
+  // ---------------------------------------------------- shrine, supplies --
+  _pray() {
+    const W = this.world, h = this.hero;
+    this.shrineUsed = true;
+    const sp = W.props.find(p => p.type === "shrine");
+    if (sp) sp.used = true;
+    const kinds = Object.keys(BLESSINGS);
+    const kind = kinds[(Math.random() * kinds.length) | 0];
+    this.bless = { kind, t: 90 };
+    h.hp = Math.min(this.maxHp, h.hp + Math.round(this.maxHp * 0.3));
+    this.mana = this.maxMana;
+    this.fx.push({ ring: true, x: h.x, y: h.y - 16, r0: 10, r1: 120, life: 0.7, t: 0, color: BLESSINGS[kind].color });
+    this._burst(h.x, h.y - 20, BLESSINGS[kind].color, 24, true);
+    this.banner = { title: BLESSINGS[kind].name.toUpperCase(), sub: `${BLESSINGS[kind].desc} for 90 seconds · health and mana restored`, t: 0.3, gold: true };
+    audioManager.play("levelup");
+  }
+
+  _openSupplies() {
+    const s = this._store();
+    const price = Math.round(POTION_COST * (1 + this.ri * 0.6));
+    const body = el("div", { class: "dh-shop" });
+    const render = () => {
+      body.innerHTML = "";
+      body.append(el("div", { class: "dh-gold" }, `◈ ${formatNumber(s.gold)} gold`));
+      body.append(el("div", { class: "dh-row" }, [
+        el("span", { class: "dh-ic", style: "--c:#ff7fa8" }, "⚗"),
+        el("div", { class: "dh-info" }, [el("b", {}, `Health Potion (${s.potions}/${MAX_POTIONS})`), el("span", {}, "Camp prices — a little dearer than Mira's.")]),
+        el("button", { class: "btn btn-primary btn-sm", disabled: s.gold < price || s.potions >= MAX_POTIONS || undefined, onClick: () => { s.gold -= price; s.potions++; audioManager.play("coin"); this._save(); render(); } }, `◈ ${formatNumber(price)}`),
+      ]));
+      body.append(el("div", { class: "dh-row" }, [
+        el("span", { class: "dh-ic", style: "--c:#2ee6a6" }, "♥"),
+        el("div", { class: "dh-info" }, [el("b", {}, "Rest by the fire"), el("span", {}, "Restore your health and mana.")]),
+        el("button", { class: "btn btn-primary btn-sm", disabled: s.gold < price || undefined, onClick: () => { s.gold -= price; this.hero.hp = this.maxHp; this.mana = this.maxMana; audioManager.play("achievement"); this._save(); render(); } }, `◈ ${formatNumber(price)}`),
+      ]));
+    };
+    render();
+    this._modal("Camp Supplies", body);
+  }
+
+  // ------------------------------------------------ tokens: Grit & Lysa ---
+  _openScrap() {
+    const s = this._store();
+    const body = el("div", { class: "dh-shop" });
+    const value = (it) => tokenValue(it.rarity, itemBase(it).tier);
+    const render = () => {
+      body.innerHTML = "";
+      body.append(el("div", { class: "dh-talk" }, [el("p", {}, "\"Old blades, bent armour, cracked shields — I melt it all down. You get Dragon Tokens. Spend 'em at Lysa's stall, or have Bram reforge your gear.\"")]));
+      body.append(el("div", { class: "dh-gold" }, `✪ ${s.tokens} Dragon Tokens`));
+      const cheap = s.bag.filter(it => it.rarity === "common" || it.rarity === "rare");
+      if (cheap.length > 1) {
+        const tot = cheap.reduce((a, it) => a + value(it), 0);
+        body.append(el("button", { class: "btn btn-ghost btn-sm", onClick: () => { s.tokens += tot; s.bag = s.bag.filter(it => !cheap.includes(it)); audioManager.play("coin"); this._save(); this._hud(); render(); } }, `Trade all Common & Rare (${cheap.length}) for ✪ ${tot}`));
+      }
+      if (!s.bag.length) body.append(el("p", { class: "dh-empty" }, "Your bag is empty. Grit only takes gear you're not wearing."));
+      s.bag.forEach((it, i) => {
+        const v = value(it);
+        body.append(el("div", { class: "dh-row" }, [
+          el("span", { class: "dh-ic", style: `--c:${RARITY[it.rarity].color}` }, it.kind === "weapon" ? "⚔" : "🛡"),
+          el("div", { class: "dh-info" }, [el("b", { style: `color:${RARITY[it.rarity].color}` }, itemName(it)), el("span", {}, it.kind === "weapon" ? `Attack +${itemPower(it).atk}` : `Defence ${itemPower(it).def} · Health +${itemPower(it).hp}`)]),
+          el("button", { class: "btn btn-primary btn-sm", onClick: () => { s.tokens += v; s.bag.splice(i, 1); audioManager.play("coin"); this._save(); this._hud(); render(); } }, `Trade ✪ ${v}`),
+        ]));
+      });
+    };
+    render();
+    this._modal("Grit's Scrap & Tokens", body);
+  }
+
+  _openTailor() {
+    const s = this._store();
+    const body = el("div", { class: "dh-shop" });
+    const render = () => {
+      body.innerHTML = "";
+      body.append(el("div", { class: "dh-talk" }, [el("p", {}, "\"Darling, that cape is a crime. I only take Dragon Tokens — Grit will give you some for your old gear.\"")]));
+      body.append(el("div", { class: "dh-gold" }, `✪ ${s.tokens} Dragon Tokens`));
+      body.append(el("h4", { class: "dock-h" }, "Fashion"));
+      for (const [id, c] of Object.entries(COSMETICS)) {
+        if (!c.price) continue;
+        const owned = s.cos.owned.includes(id), worn = s.cos[c.slot] === id;
+        const slot = COS_SLOTS.find(sl => sl.id === c.slot);
+        body.append(el("div", { class: `dh-row${worn ? " eq" : ""}` }, [
+          el("span", { class: "dh-ic", style: `--c:${c.color}` }, slot.icon),
+          el("div", { class: "dh-info" }, [el("b", {}, c.name), el("span", {}, slot.name)]),
+          owned
+            ? (worn ? el("em", { class: "up" }, "Wearing") : el("button", { class: "btn btn-ghost btn-sm", onClick: () => { s.cos[c.slot] = id; audioManager.play("select"); this._save(); render(); } }, "Wear"))
+            : el("button", { class: "btn btn-primary btn-sm", disabled: s.tokens < c.price || undefined, onClick: () => { s.tokens -= c.price; this._giveCos(id); audioManager.play("achievement"); this._save(); this._hud(); render(); } }, `✪ ${c.price}`),
+        ]));
+      }
+      body.append(el("h4", { class: "dock-h" }, "Goods"));
+      for (const g of TOKEN_GOODS) {
+        const full = g.id === "potions3" && s.potions >= MAX_POTIONS;
+        body.append(el("div", { class: "dh-row" }, [
+          el("span", { class: "dh-ic", style: "--c:#ffe9a0" }, g.icon),
+          el("div", { class: "dh-info" }, [el("b", {}, g.name), el("span", {}, g.desc)]),
+          el("button", { class: "btn btn-primary btn-sm", disabled: s.tokens < g.price || full || undefined, onClick: () => { s.tokens -= g.price; this._buyGood(g.id); this._hud(); render(); } }, `✪ ${g.price}`),
+        ]));
+      }
+    };
+    render();
+    this._modal("Lysa's Tailoring", body);
+  }
+
+  _buyGood(id) {
+    const s = this._store();
+    if (id === "potions3") s.potions = Math.min(MAX_POTIONS, s.potions + 3);
+    else if (id === "elixir") this._gainXp(xpFor(s.lv));
+    else if (id === "chest") {
+      const it = this._rollGear(true, 1);
+      if (it.rarity === "common" || it.rarity === "rare") it.rarity = "epic";
+      it.id = (it.kind === "weapon" ? WEAPONS : ARMORS).find(x => x.tier === clamp(Math.max(s.unlocked, this.ri) + 1, 1, MAX_TIER)).id;
+      this._takeGear(it);
+    }
+    audioManager.play("achievement");
+    this._save();
+  }
+
+  _reforgeRows(render) {
+    const s = this._store();
+    const rows = [el("h4", { class: "dock-h" }, "Reforge with Dragon Tokens"), el("div", { class: "dh-gold" }, `✪ ${s.tokens} tokens · ◈ ${formatNumber(s.gold)} gold`)];
+    for (const slot of ["weapon", "armor"]) {
+      const it = s[slot], R = REFORGE[it.rarity];
+      rows.push(el("div", { class: "dh-row" }, [
+        el("span", { class: "dh-ic", style: `--c:${RARITY[it.rarity].color}` }, slot === "weapon" ? "⚔" : "🛡"),
+        el("div", { class: "dh-info" }, [el("b", { style: `color:${RARITY[it.rarity].color}` }, itemName(it)), el("span", {}, R ? `Reforge to ${RARITY[R.to].name}: ×${RARITY[R.to].mult} power` : "Already legendary — it can't get better.")]),
+        R ? el("button", { class: "btn btn-primary btn-sm", disabled: s.tokens < R.tokens || s.gold < R.gold || undefined, onClick: () => {
+          s.tokens -= R.tokens; s.gold -= R.gold; it.rarity = R.to;
+          this._burst(this.hero.x, this.hero.y - 20, RARITY[R.to].color, 24, true);
+          this.hero.hp = Math.min(this.hero.hp, this.maxHp);
+          audioManager.play("levelup"); this._save(); this._hud(); render();
+        } }, `✪ ${R.tokens} · ◈ ${formatNumber(R.gold)}`) : null,
+      ]));
+    }
+    return rows;
+  }
+
+  // -------------------------------------------------- village life, pet --
+  _stepLife(dt) {
+    const W = this.world, h = this.hero;
+    for (const n of W.walkers) {
+      n.sayT = Math.max(0, n.sayT - dt);
+      n.st -= dt;
+      if (n.st <= 0) {
+        n.st = rand(2, 5);
+        if (Math.random() < 0.35) { n.tx = n.x; n.ty = n.y; }
+        else { const a = rand(0, TAU), d = rand(20, 110); n.tx = n.hx + Math.cos(a) * d; n.ty = n.hy + Math.sin(a) * d * 0.5; }
+        if (n.sayT <= 0 && hyp(h.x - n.x, h.y - n.y) < 100 && Math.random() < 0.4) { n.say = n.lines[(Math.random() * n.lines.length) | 0]; n.sayT = 2.8; }
+      }
+      const dx = n.tx - n.x, dy = n.ty - n.y, d = hyp(dx, dy);
+      n.moving = d > 4 && n.sayT <= 0;
+      if (n.moving) {
+        const p = W.slide(n.x, n.y, n.x + dx / d * 34 * dt, n.y + dy / d * 34 * dt, 7);
+        if (hyp(p.x - n.x, p.y - n.y) < 0.01) n.st = 0;
+        n.x = p.x; n.y = p.y; n.walk += dt * 4; n.face = dx < 0 ? -1 : 1;
+      }
+    }
+    for (const c of W.critters) {
+      c.st -= dt; c.peck = Math.max(0, (c.peck || 0) - dt);
+      if (c.st <= 0) {
+        c.st = rand(0.8, 3);
+        const a = rand(0, TAU), d = rand(0, c.range);
+        c.tx = c.hx + Math.cos(a) * d; c.ty = c.hy + Math.sin(a) * d * 0.6;
+        if (c.kind === "chicken" && Math.random() < 0.4) { c.peck = 0.6; c.tx = c.x; c.ty = c.y; }
+      }
+      const hd = hyp(h.x - c.x, h.y - c.y);
+      const scared = hd < 40 && hd > 0.1;
+      if (scared) { c.tx = c.x + (c.x - h.x) / hd * 60; c.ty = c.y + (c.y - h.y) / hd * 60; }
+      const dx = (c.tx ?? c.x) - c.x, dy = (c.ty ?? c.y) - c.y, d = hyp(dx, dy);
+      if (d > 3) {
+        const sp = scared ? 95 : c.kind === "cat" ? 45 : 38;
+        const p = W.slide(c.x, c.y, c.x + dx / d * sp * dt, c.y + dy / d * sp * dt, 5);
+        c.x = p.x; c.y = p.y; c.face = dx < 0 ? -1 : 1;
+        c.hop = c.kind === "chicken" ? Math.abs(Math.sin(this.t * 14 + c.hx)) * 2 : 0;
+      } else c.hop = 0;
+    }
+    // The pet trots along behind you.
+    const pt = this.pet;
+    const tx = h.x - Math.cos(h.ang) * 14 - Math.sin(h.ang) * 20, ty = h.y - Math.sin(h.ang) * 8 + Math.cos(h.ang) * 6 + 8;
+    const dx = tx - pt.x, dy = ty - pt.y, d = hyp(dx, dy);
+    if (d > 320) { pt.x = tx; pt.y = ty; }
+    const k = Math.min(1, dt * (d > 60 ? 6 : 3.5));
+    pt.x += dx * k; pt.y += dy * k;
+    pt.moving = d > 6;
+    if (pt.moving) { pt.walk += dt * 5; pt.ang = Math.atan2(dy, dx); } else pt.ang = h.ang;
+  }
+
+  _drawQIcon(ctx, it, x, y, scale = 1, beacon = false) {
+    if (beacon) {
+      const a = 0.35 + Math.sin(this.t * 4) * 0.15;
+      const g = ctx.createLinearGradient(0, y - 70, 0, y + 8);
+      g.addColorStop(0, "rgba(255,138,240,0)"); g.addColorStop(1, `rgba(255,138,240,${a})`);
+      ctx.fillStyle = g; ctx.fillRect(x - 3, y - 70, 6, 78);
+    }
+    const g2 = ctx.createRadialGradient(x, y, 0, x, y, 18 * scale);
+    g2.addColorStop(0, it.color + "aa"); g2.addColorStop(1, it.color + "00");
+    ctx.fillStyle = g2; ctx.beginPath(); ctx.arc(x, y, 18 * scale, 0, TAU); ctx.fill();
+    ctx.font = `${Math.round(13 * scale)}px sans-serif`; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+    ctx.fillText(it.icon, x, y);
+    ctx.textBaseline = "alphabetic";
+    // Twinkle.
+    const tw = Math.abs(Math.sin(this.t * 3 + x));
+    ctx.fillStyle = `rgba(255,255,255,${tw})`;
+    ctx.beginPath(); ctx.moveTo(x + 8, y - 12); ctx.lineTo(x + 9, y - 9); ctx.lineTo(x + 12, y - 8); ctx.lineTo(x + 9, y - 7); ctx.lineTo(x + 8, y - 4); ctx.lineTo(x + 7, y - 7); ctx.lineTo(x + 4, y - 8); ctx.lineTo(x + 7, y - 9); ctx.closePath(); ctx.fill();
   }
 
   // -------------------------------------------------------- death -------
@@ -1341,16 +1783,20 @@ export class DragonheartGame extends GameBase {
     const list = [];
     const inView = (x, y, m = 80) => x > view.x0 - m && x < view.x1 + m && y > view.y0 - m && y < view.y1 + m * 2;
     for (const p of W.props) if (!p.gone && !p.invisible && inView(p.x, p.y)) list.push({ y: p.y, d: () => drawProp(ctx, p, W.region, this.t) });
-    for (const n of W.npcs) if (inView(n.x, n.y)) list.push({ y: n.y, d: () => drawNpc(ctx, n, this.t) });
+    for (const n of W.npcs) if (inView(n.x, n.y)) { n.marker = n.giver ? this._giverMark(n.giver) : null; list.push({ y: n.y, d: () => drawNpc(ctx, n, this.t) }); }
+    for (const n of W.walkers) if (inView(n.x, n.y)) list.push({ y: n.y, d: () => drawNpc(ctx, n, this.t) });
+    for (const c of W.critters) if (inView(c.x, c.y)) list.push({ y: c.y, d: () => drawCritter(ctx, c, this.t) });
+    for (const q of this.qitems) if (inView(q.x, q.y)) list.push({ y: q.y, d: () => this._drawQIcon(ctx, QITEMS[q.q.item], q.x, q.y - 8 + Math.sin(this.t * 3 + q.i) * 2.5, 1.15, true) });
     for (const c of this.chests) if (inView(c.x, c.y)) list.push({ y: c.y, d: () => drawChest(ctx, c, this.t) });
     for (const f of this.foes) if (inView(f.x, f.y)) list.push({ y: f.y, d: () => drawFoe(ctx, f, this.t) });
     for (const d of this.drops) if (inView(d.x, d.y)) list.push({ y: d.y, d: () => this._drawDrop(ctx, d) });
     if (this.boss) list.push({ y: this.boss.y, d: () => drawBoss(ctx, this.boss, this.t) });
     const hh = this.hero;
     const st = this._store(), arm = armorOf(st.armor), wpn = weaponOf(st.weapon);
+    if (st.cos.pet && !this.dead) list.push({ y: this.pet.y, d: () => drawPet(ctx, st.cos.pet, this.pet, this.t) });
     if (!this.dead) list.push({ y: hh.y, d: () => drawHero(ctx, {
-      ...hh, rolling: hh.rollT > 0, armorColor: arm.color, swordColor: wpn.color, tier: arm.tier,
-      capeColor: arm.tier >= 7 ? "#3a1a5a" : arm.tier >= 4 ? "#8a1a2a" : "#2c4f9a",
+      ...hh, rolling: hh.rollT > 0, armorColor: arm.color, swordColor: wpn.color, tier: arm.tier, cos: st.cos,
+      capeColor: st.cos.cape ? COSMETICS[st.cos.cape].color : arm.tier >= 7 ? "#3a1a5a" : arm.tier >= 4 ? "#8a1a2a" : "#2c4f9a",
       trimColor: arm.tier >= 10 ? "#fff3c0" : "#c9a24a", fxColor: wpn.fx ? WEAPON_FX[wpn.fx].color : null,
     }, this.t) });
     // The nightmare altar, once the region's boss is beaten.
@@ -1427,6 +1873,9 @@ export class DragonheartGame extends GameBase {
       else if (["waystone", "starstone", "goldtree"].includes(p.type)) light(p.x, p.y - 20, 100, 0.8, "160,240,255");
       else if (p.type === "fountain") light(p.x, p.y - 10, 110, 0.8, "120,255,200");
       else if (["stormrock", "chimney"].includes(p.type)) light(p.x, p.y - 20, 60, 0.5, "255,230,120");
+      else if (p.type === "campfire") light(p.x, p.y - 8, 150, 0.95, "255,160,70");
+      else if (p.type === "lantern") light(p.x + 7, p.y - 34, 90, 0.8, "255,200,110");
+      else if (p.type === "shrine" && !p.used) light(p.x, p.y - 36, 90, 0.8, "255,138,240");
     }
     // Glowing liquids light their banks.
     if (["lava", "void"].includes(R.water) || R.id === "caverns") {
@@ -1443,6 +1892,7 @@ export class DragonheartGame extends GameBase {
     if (this.portal) light(this.portal.x, this.portal.y - 20, 130, 0.9, "124,240,255");
     for (const c of this.chests) if (!c.opened) light(c.x, c.y - 10, 60, 0.6, "255,215,106");
     for (const d of this.drops) light(d.x, d.y, d.kind === "gear" ? 70 : 34, 0.6, null);
+    for (const q of this.qitems) light(q.x, q.y - 8, 60, 0.7, null);
     ctx.drawImage(this._lightCv, 0, 0, w, h);
     // Warm light spills back over the darkness.
     ctx.save();
@@ -1565,6 +2015,9 @@ export class DragonheartGame extends GameBase {
       ctx.fillStyle = "#ff5470"; ctx.beginPath(); ctx.arc(d.x - 3, y - 2, 3.5, 0, TAU); ctx.arc(d.x + 3, y - 2, 3.5, 0, TAU); ctx.moveTo(d.x - 6.5, y - 1); ctx.lineTo(d.x, y + 6); ctx.lineTo(d.x + 6.5, y - 1); ctx.fill();
     } else if (d.kind === "potion") {
       ctx.fillStyle = "#ff7fa8"; ctx.beginPath(); ctx.arc(d.x, y, 5, 0, TAU); ctx.fill(); ctx.fillStyle = "#c9ccd8"; ctx.fillRect(d.x - 2, y - 10, 4, 5);
+    } else if (d.kind === "quest") {
+      const q = QUESTS.find(qq => qq.id === d.val);
+      this._drawQIcon(ctx, QITEMS[q.item], d.x, y - 4, 1);
     } else {
       const c = RARITY[d.val.rarity].color;
       const g = ctx.createRadialGradient(d.x, y, 0, d.x, y, 26);
@@ -1713,9 +2166,10 @@ export class DragonheartGame extends GameBase {
     ctx.textBaseline = "alphabetic";
     ctx.font = "700 10px Inter, sans-serif"; ctx.textAlign = "left";
     ctx.fillStyle = "#ffd76a"; ctx.fillText(`◈ ${formatNumber(s.gold)}`, x + 8, y + 55);
-    ctx.fillStyle = "#ff9ac0"; ctx.fillText(`⚗ ${s.potions}`, x + 78, y + 55);
+    ctx.fillStyle = "#ff9ac0"; ctx.fillText(`⚗ ${s.potions}`, x + 66, y + 55);
+    ctx.fillStyle = "#ffe9a0"; ctx.fillText(`✪ ${s.tokens}`, x + 92, y + 55);
     const wf = this.weaponFx;
-    if (wf) { ctx.fillStyle = WEAPON_FX[wf].color; ctx.fillText(`⚔ ${WEAPON_FX[wf].name}`, x + 118, y + 55); }
+    if (wf) { ctx.fillStyle = WEAPON_FX[wf].color; ctx.fillText(`⚔ ${WEAPON_FX[wf].name}`, x + 130, y + 55); }
     // Bag button and the skill bar beside it.
     const bb = { x, y: y + 66, w: 34, h: 30 };
     this._bagBtn = bb;
@@ -1755,6 +2209,16 @@ export class DragonheartGame extends GameBase {
     const P = (px, py) => [x + px / (MW * T) * mw, y + py / (MH * T) * mh];
     const dot = (px, py, r, c) => { const [a, b] = P(px, py); ctx.fillStyle = c; ctx.beginPath(); ctx.arc(a, b, r, 0, TAU); ctx.fill(); };
     for (const c of this.chests) if (!c.opened) dot(c.x, c.y, 2, "#ffd76a");
+    for (const q of this.qitems) dot(q.x, q.y, 2.2, Math.sin(this.t * 5) > 0 ? "#ff8af0" : "#ffffff");
+    if (W.shrine && !this.shrineUsed) dot(W.shrine.x, W.shrine.y, 2.2, "#ff8af0");
+    for (const n of W.npcs) {
+      const m = n.giver && this._giverMark(n.giver);
+      if (!m) continue;
+      const [a, b] = P(n.x, n.y);
+      ctx.font = "900 10px Sora, Inter, sans-serif"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+      ctx.lineWidth = 2.5; ctx.strokeStyle = "#1a1424"; ctx.strokeText(m, a, b); ctx.fillStyle = m === "?" ? "#2ee6a6" : "#ffd76a"; ctx.fillText(m, a, b);
+      ctx.textBaseline = "alphabetic";
+    }
     dot(W.stone.x, W.stone.y, 2.5, "#7cf0ff");
     if (W.fountain) dot(W.fountain.x, W.fountain.y, 2.5, "#2ee6a6");
     const done = this._store().bosses[REGIONS[this.ri].boss];
@@ -1767,6 +2231,22 @@ export class DragonheartGame extends GameBase {
     ctx.fillStyle = "rgba(255,215,106,0.85)";
     const goal = done ? (this.ri < REGIONS.length - 1 ? `Portal open → ${REGIONS[this.ri + 1].name}` : "The realm is safe") : `Defeat ${BOSSES[REGIONS[this.ri].boss].name}`;
     ctx.fillText(goal, x + mw, y + mh + 25);
+    // Quest tracker: this region's quests first.
+    const s = this._store();
+    const act = QUESTS.filter(q => s.quests[q.id] && !s.quests[q.id].done).sort((a, b) => (a.r === this.ri ? 0 : 1) - (b.r === this.ri ? 0 : 1));
+    let ly = y + mh + 39;
+    ctx.font = "600 9px Inter, sans-serif";
+    for (const q of act.slice(0, w < 520 ? 2 : 4)) {
+      const ready = this._qReady(q);
+      ctx.fillStyle = ready ? "#2ee6a6" : q.r === this.ri ? "rgba(255,255,255,0.85)" : "rgba(255,255,255,0.5)";
+      ctx.fillText(ready ? `✔ ${q.name} → ${GIVERS[q.giver].name}` : `📜 ${q.name} ${Math.min(this._qProg(q), this._qGoal(q))}/${this._qGoal(q)}`, x + mw, ly);
+      ly += 12;
+    }
+    if (this.bless) {
+      const B = BLESSINGS[this.bless.kind];
+      ctx.fillStyle = B.color; ctx.font = "700 9px Inter, sans-serif";
+      ctx.fillText(`✧ ${B.desc} · ${Math.ceil(this.bless.t)}s`, x + mw, ly + 2);
+    }
   }
 
   _drawBossBar(ctx, w, h) {

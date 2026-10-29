@@ -14,6 +14,7 @@
 // so you walk behind a trunk rather than over it.
 // ==========================================================================
 import { REGIONS } from "./dhData.js";
+import { GIVERS, CAMP_GIVER } from "./dhQuests.js";
 
 export const T = 32;
 export const MW = 72, MH = 46;
@@ -48,6 +49,10 @@ export class World {
     this.spawns = [];
     this.chests = [];
     this.npcs = [];
+    this.walkers = [];
+    this.critters = [];
+    this.safe = [];
+    this.questSpots = [];
     this._generate();
     this._index();
     const hexA = (h, a) => { const v = parseInt(h.slice(1), 16); return `rgba(${(v >> 16) & 255},${(v >> 8) & 255},${v & 255},${a})`; };
@@ -87,6 +92,7 @@ export class World {
       else { dyDrift = rng() < 0.5 ? -1 : 1; }
       if (rng() < 0.35) py = Math.max(6, Math.min(MH - 7, py + dyDrift));
       if (Math.abs(py - midY) > 12) py += py > midY ? -1 : 1;
+      if (R.village && px < 23) py = Math.round(midY);      // straight through the market
     }
     for (const [x, y] of road) {
       for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) this.setG(x + dx, y + dy, G_PATH);
@@ -103,6 +109,9 @@ export class World {
       if (d <= arena.r) this.setG(x, y, G_ARENA);
       else if (d <= arena.r + 1.5 && this.g(x, y) !== G_PATH) this.setG(x, y, G_GRASS);
     }
+
+    // A camp by the road: someone with work for you, a fire and supplies.
+    if (!R.village) this._camp(road[4]);
 
     // Clearings along the road for camps and chests.
     const clearings = [];
@@ -131,6 +140,7 @@ export class World {
     const clearOf = (x, y) => this.g(x, y) === G_GRASS && !occupied.has(y * MW + x)
       && Math.hypot((x + 0.5) * T - this.arena.x, (y + 0.5) * T - this.arena.y) > this.arena.r + T * 1.5
       && !(R.village && x < 24 && Math.abs(y - midY) < 10)
+      && !this.safe.some(z => Math.hypot((x + 0.5) * T - z.x, (y + 0.5) * T - z.y) < z.r)
       && Math.hypot(x - 4, y - road[0][1]) > 4;
     for (let y = 0; y < MH; y++) for (let x = 0; x < MW; x++) {
       const t = this.g(x, y);
@@ -182,22 +192,138 @@ export class World {
       }
     }
     this.props.push(Object.assign(this._prop("waystone", this.stone.x, this.stone.y, true), { waystone: true }));
+    // A shrine in the middle clearing: pray for a blessing.
+    const sc = clearings[3];
+    this.shrine = { x: (sc.tx + 0.5) * T, y: (sc.ty - 0.6) * T };
+    this.props.push(this._prop("shrine", this.shrine.x, this.shrine.y, true));
+    if (R.village) this._villageDecor(rng);
+    this._questSpots(rng);
+  }
+
+  /** Walkable tiles reachable from the entry, for quest items. */
+  _questSpots(rng) {
+    const ok = (t) => t === G_GRASS || t === G_PATH || t === G_PLAZA || t === G_ARENA || (t === G_LIQUID && this.region.water === "ice");
+    const seen = new Uint8Array(MW * MH);
+    const sx = Math.floor(this.entry.x / T), sy = Math.floor(this.entry.y / T);
+    const q = [[sx, sy]]; seen[sy * MW + sx] = 1;
+    while (q.length) {
+      const [x, y] = q.pop();
+      for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+        const nx = x + dx, ny = y + dy;
+        if (nx < 0 || ny < 0 || nx >= MW || ny >= MH || seen[ny * MW + nx] || !ok(this.g(nx, ny))) continue;
+        seen[ny * MW + nx] = 1; q.push([nx, ny]);
+      }
+    }
+    const blockedT = new Set();
+    for (const p of this.props) if (p.solid) blockedT.add(Math.floor(p.x / T) + Math.floor(p.y / T) * MW);
+    const cand = [];
+    for (let y = 3; y < MH - 3; y++) for (let x = 8; x < MW - 3; x++) {
+      if (!seen[y * MW + x] || this.g(x, y) !== G_GRASS || blockedT.has(x + y * MW)) continue;
+      const px = (x + 0.5) * T, py = (y + 0.5) * T;
+      if (Math.hypot(px - this.arena.x, py - this.arena.y) < this.arena.r + 3 * T) continue;
+      if (this.region.village && x < 25 && Math.abs(y - MH / 2) < 10) continue;
+      if (this.safe.some(z => Math.hypot(px - z.x, py - z.y) < z.r)) continue;
+      cand.push([px, py]);
+    }
+    for (let i = cand.length - 1; i > 0; i--) { const j = (rng() * (i + 1)) | 0; [cand[i], cand[j]] = [cand[j], cand[i]]; }
+    for (const minD of [7 * T, 5 * T, 3 * T]) {
+      for (const c of cand) {
+        if (this.questSpots.length >= 16) break;
+        if (this.questSpots.every(s2 => Math.hypot(s2.x - c[0], s2.y - c[1]) > minD)) this.questSpots.push({ x: c[0], y: c[1] });
+      }
+    }
+  }
+
+  _camp(at) {
+    const [rx, ry] = at;
+    const side = ry - 8 >= 3 ? -1 : 1;
+    const cx = rx + 2, cy = ry + side * 5;
+    for (let y = cy - 4; y <= cy + 4; y++) for (let x = cx - 4; x <= cx + 4; x++) {
+      if (Math.hypot(x - cx, y - cy) <= 3.6 && Math.min(x, y, MW - 1 - x, MH - 1 - y) >= 2 && this.g(x, y) !== G_PATH) this.setG(x, y, G_GRASS);
+    }
+    // A short trail from the road to the camp.
+    for (let k = 1; k < 5; k++) { const y = ry + side * k; if (this.g(rx + 1, y) !== G_PATH) { this.setG(rx + 1, y, G_GRASS); this.setG(rx + 2, y, G_GRASS); } }
+    const X = (cx + 0.5) * T, Y = (cy + 0.5) * T;
+    this.camp = { x: X, y: Y };
+    this.safe.push({ x: X, y: Y, r: 5 * T });
+    const id = CAMP_GIVER[this.ri];
+    const G = GIVERS[id];
+    const P = (type, dx, dy, extra) => this.props.push(Object.assign(this._prop(type, X + dx * T, Y + dy * T, true), extra || {}));
+    P("tent", -1.5, -1.2, { color: G.color });
+    P("campfire", 1.3, 0.7);
+    P("crate", 2.3, -0.9, { supplies: true });
+    P("barrel", 2.8, -0.2);
+    P("signpost", -2.2, 1.6);
+    this.supplies = { x: X + 2.3 * T, y: Y - 0.9 * T };
+    this.npcs.push({ id, giver: id, name: G.name, x: X, y: Y - 0.1 * T, color: G.color, hair: G.hair, hat: G.hat });
+    this.props.push({ type: "npcblock", x: X, y: Y - 0.1 * T, r: 11, solid: true, invisible: true });
   }
 
   _village() {
     const cy = Math.round(MH / 2);
-    for (let y = cy - 6; y <= cy + 6; y++) for (let x = 6; x <= 20; x++) {
-      if (Math.min(x, y) >= 2 && this.g(x, y) !== G_PATH) this.setG(x, y, Math.abs(y - cy) <= 3 && x >= 8 && x <= 18 ? G_PLAZA : G_GRASS);
+    for (let y = cy - 7; y <= cy + 8; y++) for (let x = 5; x <= 23; x++) {
+      if (Math.min(x, y) < 2) continue;
+      if (Math.abs(y - cy) <= 3 && x >= 6 && x <= 22) this.setG(x, y, G_PLAZA);
+      else if (this.g(x, y) !== G_PATH) this.setG(x, y, G_GRASS);
     }
     const H = (x, y, roof, kind) => this.props.push(Object.assign(this._prop("house", x * T, y * T, true), { roof, kind }));
     H(9, cy - 4.2, "#c0503a", "home"); H(14, cy - 4.4, "#3a6ac0", "shop"); H(19, cy - 4.2, "#7a4ab0", "home");
     H(10.5, cy + 6.4, "#3a9a5a", "smith"); H(17, cy + 6.4, "#c08a3a", "home");
     this.fountain = { x: 13.5 * T, y: (cy + 0.6) * T };
+    this.safe.push({ x: 14 * T, y: cy * T, r: 9 * T });
     this.props.push(Object.assign(this._prop("fountain", this.fountain.x, this.fountain.y, true), { fountain: true }));
-    this.npcs.push({ id: "shop", name: "Mira the Merchant", x: 14 * T, y: (cy - 2.2) * T, color: "#3a6ac0", hair: "#5a3a20" });
-    this.npcs.push({ id: "smith", name: "Bram the Smith", x: 10.5 * T, y: (cy + 4.3) * T, color: "#3a9a5a", hair: "#2a1a10" });
-    this.npcs.push({ id: "elder", name: "Elder Rowan", x: 17.5 * T, y: (cy + 1.2) * T, color: "#8a6ac0", hair: "#e8e8e8" });
-    for (const n of this.npcs) this.props.push({ type: "npcblock", x: n.x, y: n.y, r: 11, solid: true, invisible: true });
+    // The market: stalls along the plaza's north edge, their keepers behind the counters.
+    const P = (type, x, y, extra) => { const p = Object.assign(this._prop(type, x * T, y * T, true), extra || {}); this.props.push(p); return p; };
+    P("stall", 11.5, cy - 1.9, { variant: "fruit", color: "#d84a3a" });
+    P("stall", 16.6, cy - 1.9, { variant: "cloth", color: "#b03a8a" });
+    P("stall", 21.7, cy - 1.9, { variant: "scrap", color: "#5a6a7a" });
+    P("stall", 7.4, cy + 3.7, { variant: "bread", color: "#d8a03a" });
+    P("stall", 20.6, cy + 3.7, { variant: "fish", color: "#3a8ad8" });
+    const N = (n) => { this.npcs.push(n); this.props.push({ type: "npcblock", x: n.x, y: n.y, r: 11, solid: true, invisible: true }); };
+    N({ id: "shop", role: "shop", name: "Mira the Merchant", x: 14 * T, y: (cy - 2.2) * T, color: "#3a6ac0", hair: "#5a3a20", apron: "#e8d8b8" });
+    N({ id: "smith", role: "smith", name: "Bram the Smith", x: 12.6 * T, y: (cy + 7.1) * T, color: "#3a9a5a", hair: "#2a1a10", apron: "#5a3a1a", beard: true });
+    N({ id: "elder", giver: "elder", name: "Elder Rowan", x: 17.5 * T, y: (cy + 1.6) * T, color: "#8a6ac0", hair: "#e8e8e8", beard: true });
+    N({ id: "granny", giver: "granny", name: "Granny Wen", x: 11.5 * T, y: (cy - 2.45) * T, color: "#c0503a", hair: "#e8e8e8", hat: "strawhat" });
+    N({ id: "tailor", role: "tailor", name: "Lysa the Tailor", x: 16.6 * T, y: (cy - 2.45) * T, color: "#b03a8a", hair: "#ffd76a", hat: "tophat" });
+    N({ id: "scrap", role: "scrap", name: "Grit the Scrapper", x: 21.7 * T, y: (cy - 2.45) * T, color: "#5a6a7a", hair: "#3a2a1a", hat: "goggles", apron: "#4a3a2a", beard: true });
+    N({ id: "farmer", giver: "farmer", name: "Farmer Tom", x: 6.4 * T, y: (cy + 5.6) * T, color: "#6a8a3a", hair: "#8a5a2a", hat: "strawhat" });
+  }
+
+  /** Lanterns, bunting, benches, barrels, a well, a farm corner and people. */
+  _villageDecor(rng) {
+    const cy = Math.round(MH / 2);
+    const P = (type, x, y, extra) => { const p = Object.assign(this._prop(type, x * T, y * T, true), extra || {}); this.props.push(p); return p; };
+    P("lantern", 6.6, cy - 1.7); P("lantern", 19.9, cy - 1.7); P("lantern", 8.9, cy + 2.3); P("lantern", 18.6, cy + 2.3);
+    P("bunting", 6.6, cy - 1.7, { x2: 19.9 * T, y2: (cy - 1.7) * T });
+    P("bunting", 8.9, cy + 2.3, { x2: 18.6 * T, y2: (cy + 2.3) * T });
+    P("board", 5.6, cy - 2.6, { board: true });
+    this.board = { x: 5.6 * T, y: (cy - 2.6) * T };
+    P("well", 22.4, cy - 4.8);
+    P("bench", 12.1, cy + 2.6); P("bench", 15.0, cy + 2.6);
+    P("crate", 12.75, cy - 1.8); P("barrel", 15.25, cy - 1.9); P("crate", 23.1, cy - 1.4); P("barrel", 23.2, cy - 2.4);
+    P("barrel", 13.4, cy + 7.6); P("crate", 8.7, cy + 7.3); P("anvil", 11.9, cy + 7.6);
+    P("planter", 7.2, cy - 3.6); P("planter", 10.8, cy - 3.7); P("planter", 20.6, cy - 3.6); P("planter", 15.6, cy + 5.4); P("planter", 18.4, cy + 5.4);
+    P("hay", 4.6, cy + 6.6); P("hay", 5.5, cy + 7.4); P("cart", 8.2, cy + 7.6);
+    P("signpost", 23.4, cy + 1.9);
+    // Folk wandering the market.
+    const folk = [
+      { name: "Villager", color: "#c06a3a", hair: "#3a2a1a", lines: ["Fresh bread at the bakery!", "Lovely day, isn't it?", "Have you seen my cat?"], carry: "#d84a3a" },
+      { name: "Villager", color: "#3a7ab0", hair: "#e8c46a", lines: ["I heard a dragon roar last night…", "The Slime King is getting bigger!", "Lysa makes the best capes."] },
+      { name: "Kid", color: "#e0a03a", hair: "#6a3a1a", lines: ["Are you a real hero?!", "When I grow up I'll have a dragon helm!", "Race you to the fountain!"], small: true },
+      { name: "Guard", color: "#8a90a4", hair: "#2a1a10", hat: "horned", lines: ["Move along, citizen.", "All quiet in Greenvale.", "Grit pays tokens for old gear."] },
+    ];
+    folk.forEach((f, i) => {
+      const hx = (9 + i * 3.4) * T, hy = (cy + (i % 2 ? 1.3 : -0.6)) * T;
+      this.walkers.push({ ...f, x: hx, y: hy, hx, hy, tx: hx, ty: hy, st: rng() * 3, walk: 0, moving: false, face: 1, sayT: 0, say: "", seed: i });
+    });
+    for (let i = 0; i < 5; i++) this.critters.push({ kind: "chicken", x: (5.5 + rng() * 3) * T, y: (cy + 5.5 + rng() * 2) * T, hx: 6.5 * T, hy: (cy + 6.2) * T, range: 70, st: rng() * 2, face: 1 });
+    this.critters.push({ kind: "cat", x: 13 * T, y: (cy + 2) * T, hx: 13.5 * T, hy: (cy + 1) * T, range: 150, st: 1, face: 1 });
+    // Flowers in the village grass.
+    for (let k = 0; k < 90; k++) {
+      const x = 5 + rng() * 19, y = cy - 7 + rng() * 16;
+      if (this.g(Math.floor(x), Math.floor(y)) !== G_GRASS) continue;
+      this.decor.push(this._prop(rng() < 0.6 ? "flower" : "tuft", x * T, y * T, false));
+    }
   }
 
   _prop(type, x, y, solid) {
@@ -206,10 +332,13 @@ export class World {
       iceshard: 11, obsidian: 13, vent: 12, shrub: 12, pot: 10, bush: 12, snowbush: 12, mushroom: 9,
       palm: 12, cactus: 11, willow: 15, chimney: 13, stormpine: 13, voidspire: 13, goldtree: 15, obelisk: 13,
       coral: 12, gear: 13, pipe: 11, stormrock: 13, crystalcluster: 13, gravestone: 10, voidcrystal: 12, starstone: 12,
+      stall: 30, lantern: 6, well: 22, barrel: 10, crate: 11, planter: 11, bench: 12, cart: 24, hay: 14, board: 12,
+      tent: 30, campfire: 12, shrine: 15, signpost: 6, anvil: 10,
     };
     const tall = ["oak", "pine", "dead", "snowpine", "charred", "crystal", "pillar", "house", "waystone", "iceshard", "obsidian",
       "palm", "cactus", "willow", "chimney", "stormpine", "voidspire", "goldtree", "obelisk", "coral", "pipe", "crystalcluster",
-      "gravestone", "voidcrystal", "starstone", "stormrock", "gear"].includes(type);
+      "gravestone", "voidcrystal", "starstone", "stormrock", "gear", "stall", "lantern", "bunting", "well", "barrel", "crate",
+      "planter", "bench", "cart", "hay", "board", "tent", "campfire", "shrine", "signpost", "anvil"].includes(type);
     const isSolid = solid && big[type] !== undefined;
     return { type, x, y, r: big[type] || 0, solid: isSolid, tall, seed: (x * 31 + y * 17) | 0 };
   }
@@ -711,9 +840,22 @@ export function drawProp(ctx, p, R, time) {
       ctx.fillStyle = "#ffd76a"; ctx.fillRect(x + 5, y - 13, 2, 2);
       ctx.fillStyle = "#9fd8ff"; ctx.fillRect(x - 30, y - 34, 14, 12); ctx.fillRect(x + 16, y - 34, 14, 12);
       ctx.fillStyle = "rgba(255,255,255,0.4)"; ctx.fillRect(x - 30, y - 34, 5, 12); ctx.fillRect(x + 16, y - 34, 5, 12);
+      // Flower boxes under the windows and a step at the door.
+      for (const wx of [-31, 15]) {
+        ctx.fillStyle = "#7a4a22"; ctx.fillRect(x + wx - 1, y - 22, 16, 4);
+        for (let i = 0; i < 4; i++) { ctx.fillStyle = ["#ff7fa8", "#ffd76a", "#ff5470", "#ffffff"][(i + Math.abs(s)) % 4]; ctx.beginPath(); ctx.arc(x + wx + 1.5 + i * 4, y - 23, 2, 0, 7); ctx.fill(); }
+      }
+      ctx.fillStyle = "#9d9a8c"; ctx.fillRect(x - 11, y, 22, 4);
+      // Chimney with smoke.
+      ctx.fillStyle = "#8a5a4a"; ctx.fillRect(x + 18, y - 76, 10, 22);
+      ctx.fillStyle = "#6a3a2a"; ctx.fillRect(x + 16, y - 78, 14, 4);
+      for (let i = 0; i < 3; i++) { const t2 = (time * 0.35 + i / 3 + Math.abs(s) * 0.013) % 1; ctx.fillStyle = `rgba(220,220,230,${0.45 * (1 - t2)})`; ctx.beginPath(); ctx.arc(x + 23 + t2 * 14, y - 82 - t2 * 34, 4 + t2 * 7, 0, 7); ctx.fill(); }
       ctx.fillStyle = p.roof;
       ctx.beginPath(); ctx.moveTo(x - 46, y - 42); ctx.lineTo(x, y - 76); ctx.lineTo(x + 46, y - 42); ctx.closePath(); ctx.fill();
+      ctx.strokeStyle = "rgba(0,0,0,0.16)"; ctx.lineWidth = 1;
+      for (let i = 1; i < 4; i++) { const yy = y - 76 + i * 8.5, half = i * 8.5 * 46 / 34; ctx.beginPath(); ctx.moveTo(x - half, yy); ctx.lineTo(x + half, yy); ctx.stroke(); }
       ctx.fillStyle = "rgba(0,0,0,0.18)"; ctx.beginPath(); ctx.moveTo(x, y - 76); ctx.lineTo(x + 46, y - 42); ctx.lineTo(x, y - 42); ctx.closePath(); ctx.fill();
+      ctx.fillStyle = "rgba(255,255,255,0.12)"; ctx.beginPath(); ctx.moveTo(x - 46, y - 42); ctx.lineTo(x, y - 76); ctx.lineTo(x - 4, y - 76); ctx.lineTo(x - 48, y - 44); ctx.fill();
       if (p.kind === "shop" || p.kind === "smith") {
         ctx.fillStyle = "#3a2a1a"; ctx.fillRect(x - 20, y - 58, 40, 14);
         ctx.fillStyle = "#ffd76a"; ctx.font = "700 9px Sora, Inter, sans-serif"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
@@ -732,6 +874,227 @@ export function drawProp(ctx, p, R, time) {
         ctx.beginPath(); ctx.arc(x + Math.cos(i) * t * 18, y - 28 + t * t * 22 - t * 10, 2, 0, 7); ctx.fill();
       }
       ctx.fillStyle = `rgba(46,230,166,${0.25 + Math.sin(time * 2) * 0.1})`; ctx.beginPath(); ctx.ellipse(x, y - 6, 25, 10, 0, 0, 7); ctx.fill();
+      break;
+    }
+    case "stall": {
+      ctx.fillStyle = "rgba(0,0,0,0.28)"; ctx.fillRect(x - 32, y - 4, 66, 10);
+      // Poles.
+      ctx.fillStyle = "#5a3a1e"; ctx.fillRect(x - 28, y - 50, 3, 50); ctx.fillRect(x + 25, y - 50, 3, 50);
+      // Counter.
+      ctx.fillStyle = "#8a5a2a"; ctx.fillRect(x - 28, y - 18, 56, 18);
+      ctx.strokeStyle = "rgba(0,0,0,0.2)"; ctx.lineWidth = 1;
+      for (let i = 1; i < 4; i++) { ctx.beginPath(); ctx.moveTo(x - 28 + i * 14, y - 18); ctx.lineTo(x - 28 + i * 14, y); ctx.stroke(); }
+      ctx.fillStyle = "#b07a3a"; ctx.fillRect(x - 31, y - 22, 62, 5);
+      ctx.fillStyle = "rgba(255,255,255,0.15)"; ctx.fillRect(x - 31, y - 22, 62, 1.5);
+      // Goods.
+      const v = p.variant;
+      if (v === "fruit") {
+        const cols = ["#d83a3a", "#7ac83a", "#ffc83a", "#ff8a2a"];
+        for (let i = 0; i < 4; i++) {
+          ctx.fillStyle = "#6a4422"; ctx.fillRect(x - 27 + i * 14, y - 30, 12, 8);
+          ctx.fillStyle = cols[i];
+          for (let k = 0; k < 3; k++) { ctx.beginPath(); ctx.arc(x - 24 + i * 14 + k * 3, y - 30 - (k % 2) * 2.5, 2.6, 0, 7); ctx.fill(); }
+        }
+      } else if (v === "cloth") {
+        const cols = ["#c0203a", "#2c4f9a", "#3a9a5a", "#ffd76a", "#7a3ab0"];
+        for (let i = 0; i < 5; i++) { ctx.fillStyle = cols[i]; ctx.fillRect(x - 26 + i * 10.5, y - 27 - (i % 2) * 3, 9, 5 + (i % 2) * 3); }
+        // Hats hanging from the awning.
+        ctx.strokeStyle = "#3a2a1a"; ctx.beginPath(); ctx.moveTo(x - 14, y - 42); ctx.lineTo(x - 14, y - 38); ctx.moveTo(x + 12, y - 42); ctx.lineTo(x + 12, y - 38); ctx.stroke();
+        ctx.fillStyle = "#1a1a24"; ctx.fillRect(x - 18, y - 38, 8, 6); ctx.fillRect(x - 20, y - 33, 12, 2);
+        ctx.fillStyle = "#ffd76a"; ctx.beginPath(); ctx.moveTo(x + 7, y - 31); ctx.lineTo(x + 8.5, y - 37); ctx.lineTo(x + 12, y - 34); ctx.lineTo(x + 15.5, y - 37); ctx.lineTo(x + 17, y - 31); ctx.closePath(); ctx.fill();
+      } else if (v === "scrap") {
+        ctx.fillStyle = "#4a4a54"; ctx.beginPath(); ctx.moveTo(x - 24, y - 22); ctx.lineTo(x - 22, y - 30); ctx.lineTo(x - 8, y - 30); ctx.lineTo(x - 4, y - 26); ctx.lineTo(x - 10, y - 22); ctx.fill();
+        ctx.fillStyle = "#6a6a74"; ctx.fillRect(x - 26, y - 33, 20, 3);
+        ctx.strokeStyle = "#c9ccd8"; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(x + 2, y - 22); ctx.lineTo(x + 14, y - 40); ctx.moveTo(x + 8, y - 22); ctx.lineTo(x + 22, y - 34); ctx.stroke();
+        ctx.fillStyle = "#8a5a2a"; ctx.beginPath(); ctx.arc(x + 20, y - 27, 5, 0, 7); ctx.fill();
+        ctx.fillStyle = "#ffd76a"; ctx.beginPath(); ctx.arc(x + 20, y - 27, 1.8, 0, 7); ctx.fill();
+        // A bowl of glinting tokens.
+        const gl = 0.5 + Math.sin(time * 3 + s) * 0.4;
+        ctx.fillStyle = `rgba(255,215,106,${gl})`; ctx.beginPath(); ctx.arc(x - 15, y - 34, 4, 0, 7); ctx.fill();
+      } else if (v === "bread") {
+        for (let i = 0; i < 4; i++) { ctx.fillStyle = i % 2 ? "#d8a05a" : "#c0803a"; ctx.beginPath(); ctx.ellipse(x - 20 + i * 13, y - 26, 6, 3.6, 0, 0, 7); ctx.fill(); ctx.strokeStyle = "rgba(255,255,255,0.4)"; ctx.beginPath(); ctx.moveTo(x - 23 + i * 13, y - 27); ctx.lineTo(x - 18 + i * 13, y - 26); ctx.stroke(); }
+      } else if (v === "fish") {
+        for (let i = 0; i < 4; i++) {
+          const fx = x - 20 + i * 13, fy = y - 26;
+          ctx.fillStyle = i % 2 ? "#7aa8d8" : "#c9ccd8";
+          ctx.beginPath(); ctx.ellipse(fx, fy, 5.5, 2.6, 0, 0, 7); ctx.fill();
+          ctx.beginPath(); ctx.moveTo(fx + 5, fy); ctx.lineTo(fx + 9, fy - 3); ctx.lineTo(fx + 9, fy + 3); ctx.fill();
+          ctx.fillStyle = "#111"; ctx.fillRect(fx - 3.5, fy - 1, 1, 1);
+        }
+      }
+      // Striped awning with a scalloped edge.
+      const c1 = p.color || "#c0503a";
+      for (let i = 0; i < 8; i++) {
+        ctx.fillStyle = i % 2 ? "#f8f0e0" : c1;
+        ctx.beginPath(); ctx.moveTo(x - 32 + i * 8, y - 56); ctx.lineTo(x - 24 + i * 8, y - 56); ctx.lineTo(x - 24 + i * 8, y - 44); ctx.lineTo(x - 32 + i * 8, y - 44); ctx.fill();
+        ctx.beginPath(); ctx.arc(x - 28 + i * 8, y - 44, 4, 0, Math.PI); ctx.fill();
+      }
+      ctx.fillStyle = "rgba(0,0,0,0.15)"; ctx.fillRect(x - 32, y - 47, 64, 3);
+      ctx.fillStyle = "rgba(255,255,255,0.18)"; ctx.fillRect(x - 32, y - 56, 64, 2);
+      break;
+    }
+    case "lantern": {
+      shadow(6, 2.5);
+      ctx.fillStyle = "#2a2230"; ctx.fillRect(x - 1.5, y - 40, 3, 40); ctx.fillRect(x - 4, y - 2, 8, 3);
+      ctx.fillRect(x - 1, y - 42, 9, 2);
+      const fl = 0.75 + Math.sin(time * 7 + s) * 0.12 + Math.sin(time * 13 + s) * 0.06;
+      const g = ctx.createRadialGradient(x + 7, y - 34, 0, x + 7, y - 34, 26);
+      g.addColorStop(0, `rgba(255,200,100,${0.45 * fl})`); g.addColorStop(1, "rgba(255,200,100,0)");
+      ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x + 7, y - 34, 26, 0, 7); ctx.fill();
+      ctx.fillStyle = "#2a2230"; ctx.fillRect(x + 3, y - 40, 8, 2); ctx.fillRect(x + 3, y - 29, 8, 2);
+      ctx.fillStyle = `rgba(255,220,130,${fl})`; ctx.fillRect(x + 4, y - 38, 6, 9);
+      break;
+    }
+    case "bunting": {
+      const x2 = p.x2, y2 = p.y2, h = 42, sag = 16;
+      const at = (k) => { const u = 1 - k; return [u * u * x + 2 * u * k * (x + x2) / 2 + k * k * x2, u * u * (y - h) + 2 * u * k * ((y + y2) / 2 - h + sag * 2) + k * k * (y2 - h)]; };
+      ctx.strokeStyle = "#5a4a3a"; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(x, y - h); ctx.quadraticCurveTo((x + x2) / 2, (y + y2) / 2 - h + sag * 2, x2, y2 - h); ctx.stroke();
+      const n = Math.max(4, Math.round(Math.abs(x2 - x) / 15));
+      const cols = ["#ff5470", "#ffd76a", "#4aa3ff", "#2ee6a6", "#b06bff"];
+      for (let i = 1; i < n; i++) {
+        const [fx, fy] = at(i / n), sw = Math.sin(time * 3 + i) * 1.5;
+        ctx.fillStyle = cols[i % cols.length];
+        ctx.beginPath(); ctx.moveTo(fx - 4, fy); ctx.lineTo(fx + 4, fy); ctx.lineTo(fx + sw, fy + 9); ctx.closePath(); ctx.fill();
+      }
+      break;
+    }
+    case "well": {
+      shadow(22, 8);
+      ctx.fillStyle = "#8d8a7c"; ctx.beginPath(); ctx.ellipse(x, y - 6, 18, 9, 0, 0, 7); ctx.fill();
+      ctx.fillStyle = "#6f6c60"; ctx.fillRect(x - 18, y - 6, 36, 8); ctx.beginPath(); ctx.ellipse(x, y + 2, 18, 5, 0, 0, Math.PI); ctx.fill();
+      ctx.fillStyle = "#1e3a5a"; ctx.beginPath(); ctx.ellipse(x, y - 7, 13, 6, 0, 0, 7); ctx.fill();
+      ctx.fillStyle = `rgba(160,220,255,${0.3 + Math.sin(time * 2) * 0.1})`; ctx.beginPath(); ctx.ellipse(x - 3, y - 8, 5, 1.6, 0, 0, 7); ctx.fill();
+      ctx.fillStyle = "#5a3a1e"; ctx.fillRect(x - 17, y - 40, 3, 34); ctx.fillRect(x + 14, y - 40, 3, 34);
+      ctx.fillStyle = "#a0503a"; ctx.beginPath(); ctx.moveTo(x - 22, y - 36); ctx.lineTo(x, y - 52); ctx.lineTo(x + 22, y - 36); ctx.closePath(); ctx.fill();
+      ctx.fillStyle = "rgba(0,0,0,0.2)"; ctx.beginPath(); ctx.moveTo(x, y - 52); ctx.lineTo(x + 22, y - 36); ctx.lineTo(x, y - 36); ctx.fill();
+      ctx.strokeStyle = "#3a2a1a"; ctx.beginPath(); ctx.moveTo(x, y - 36); ctx.lineTo(x, y - 22); ctx.stroke();
+      ctx.fillStyle = "#7a5a3a"; ctx.fillRect(x - 3, y - 22, 6, 6);
+      break;
+    }
+    case "barrel": {
+      shadow(10, 4);
+      ctx.fillStyle = "#8a5a2a"; ctx.beginPath(); ctx.ellipse(x, y - 9, 8, 10, 0, 0, 7); ctx.fill();
+      ctx.fillStyle = "#6a4422"; ctx.beginPath(); ctx.ellipse(x, y - 18, 7, 2.6, 0, 0, 7); ctx.fill();
+      ctx.fillStyle = "#4a4a54"; ctx.fillRect(x - 8, y - 14, 16, 1.6); ctx.fillRect(x - 8, y - 5, 16, 1.6);
+      ctx.fillStyle = "rgba(255,255,255,0.12)"; ctx.fillRect(x - 5, y - 16, 2, 13);
+      break;
+    }
+    case "crate": {
+      shadow(11, 4);
+      ctx.fillStyle = "#a0703a"; ctx.fillRect(x - 10, y - 18, 20, 18);
+      ctx.fillStyle = "#c08a4a"; ctx.beginPath(); ctx.moveTo(x - 10, y - 18); ctx.lineTo(x - 6, y - 22); ctx.lineTo(x + 14, y - 22); ctx.lineTo(x + 10, y - 18); ctx.fill();
+      ctx.fillStyle = "#7a4a22"; ctx.beginPath(); ctx.moveTo(x + 10, y - 18); ctx.lineTo(x + 14, y - 22); ctx.lineTo(x + 14, y - 4); ctx.lineTo(x + 10, y); ctx.fill();
+      ctx.strokeStyle = "#6a4422"; ctx.lineWidth = 1.5; ctx.strokeRect(x - 9, y - 17, 18, 16); ctx.beginPath(); ctx.moveTo(x - 9, y - 17); ctx.lineTo(x + 9, y - 1); ctx.stroke();
+      if (p.supplies) { ctx.fillStyle = "#ff7fa8"; ctx.beginPath(); ctx.arc(x - 2, y - 25, 3.5, 0, 7); ctx.arc(x + 6, y - 24, 3.5, 0, 7); ctx.fill(); ctx.fillStyle = "#c9ccd8"; ctx.fillRect(x - 3, y - 31, 2, 3); ctx.fillRect(x + 5, y - 30, 2, 3); }
+      break;
+    }
+    case "planter": {
+      shadow(12, 4);
+      ctx.fillStyle = "#7a4a22"; ctx.fillRect(x - 12, y - 9, 24, 9);
+      ctx.fillStyle = "#5a3a1a"; ctx.fillRect(x - 12, y - 9, 24, 2);
+      const cols = ["#ff7fa8", "#ffd76a", "#ff5470", "#ffffff", "#9ad0ff"];
+      ctx.fillStyle = "#3a8a3a"; ctx.beginPath(); ctx.ellipse(x, y - 11, 11, 4, 0, 0, 7); ctx.fill();
+      for (let i = 0; i < 5; i++) { ctx.fillStyle = cols[(i + Math.abs(s)) % 5]; ctx.beginPath(); ctx.arc(x - 9 + i * 4.5, y - 13 - (i % 2) * 2 + Math.sin(time * 2 + i) * 0.4, 2.2, 0, 7); ctx.fill(); }
+      break;
+    }
+    case "bench": {
+      shadow(14, 4);
+      ctx.fillStyle = "#5a3a1e"; ctx.fillRect(x - 12, y - 6, 2.5, 6); ctx.fillRect(x + 9.5, y - 6, 2.5, 6);
+      ctx.fillStyle = "#a0703a"; ctx.fillRect(x - 14, y - 9, 28, 4);
+      ctx.fillStyle = "#8a5a2a"; ctx.fillRect(x - 14, y - 17, 28, 3); ctx.fillRect(x - 12, y - 15, 2, 6); ctx.fillRect(x + 10, y - 15, 2, 6);
+      break;
+    }
+    case "cart": {
+      shadow(24, 6);
+      ctx.fillStyle = "#e8c46a"; ctx.beginPath(); ctx.ellipse(x, y - 26, 20, 8, 0, Math.PI, 0); ctx.fill();
+      ctx.fillStyle = "#a0703a"; ctx.fillRect(x - 22, y - 26, 44, 12);
+      ctx.strokeStyle = "#6a4422"; ctx.lineWidth = 1; for (let i = 1; i < 4; i++) { ctx.beginPath(); ctx.moveTo(x - 22 + i * 11, y - 26); ctx.lineTo(x - 22 + i * 11, y - 14); ctx.stroke(); }
+      ctx.fillStyle = "#6a4422"; ctx.fillRect(x + 20, y - 18, 16, 2.5);
+      for (const wx of [-13, 13]) { ctx.fillStyle = "#4a2e18"; ctx.beginPath(); ctx.arc(x + wx, y - 8, 8, 0, 7); ctx.fill(); ctx.fillStyle = "#a0703a"; ctx.beginPath(); ctx.arc(x + wx, y - 8, 2.5, 0, 7); ctx.fill(); ctx.strokeStyle = "#a0703a"; ctx.lineWidth = 1.2; ctx.beginPath(); ctx.moveTo(x + wx - 6, y - 8); ctx.lineTo(x + wx + 6, y - 8); ctx.moveTo(x + wx, y - 14); ctx.lineTo(x + wx, y - 2); ctx.stroke(); }
+      break;
+    }
+    case "hay": {
+      shadow(14, 5);
+      ctx.fillStyle = "#d8b45a"; ctx.fillRect(x - 13, y - 16, 26, 16);
+      ctx.fillStyle = "#e8c86a"; ctx.beginPath(); ctx.ellipse(x, y - 16, 13, 4, 0, 0, 7); ctx.fill();
+      ctx.strokeStyle = "rgba(120,80,20,0.45)"; ctx.lineWidth = 1;
+      for (let i = 0; i < 5; i++) { ctx.beginPath(); ctx.moveTo(x - 11 + i * 5, y - 13); ctx.lineTo(x - 12 + i * 5, y - 2); ctx.stroke(); }
+      ctx.strokeStyle = "#8a5a2a"; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.moveTo(x - 13, y - 8); ctx.lineTo(x + 13, y - 8); ctx.stroke();
+      break;
+    }
+    case "board": {
+      shadow(14, 4);
+      ctx.fillStyle = "#5a3a1e"; ctx.fillRect(x - 13, y - 34, 3, 34); ctx.fillRect(x + 10, y - 34, 3, 34);
+      ctx.fillStyle = "#8a5a2a"; ctx.fillRect(x - 15, y - 38, 30, 22);
+      ctx.fillStyle = "#6a4422"; ctx.fillRect(x - 16, y - 40, 32, 3);
+      const papers = [[-12, -35, "#f4ecd8"], [-2, -36, "#ffe9a0"], [6, -33, "#f4ecd8"], [-9, -26, "#e8f0ff"]];
+      for (const [px, py, c] of papers) { ctx.fillStyle = c; ctx.fillRect(x + px, y + py, 7, 8); ctx.fillStyle = "rgba(0,0,0,0.3)"; ctx.fillRect(x + px + 1, y + py + 2, 5, 0.8); ctx.fillRect(x + px + 1, y + py + 4, 4, 0.8); ctx.fillStyle = "#c0203a"; ctx.fillRect(x + px + 3, y + py - 0.5, 1.2, 1.2); }
+      break;
+    }
+    case "tent": {
+      ctx.fillStyle = "rgba(0,0,0,0.3)"; ctx.beginPath(); ctx.ellipse(x + 3, y + 1, 32, 8, 0, 0, 7); ctx.fill();
+      const c = p.color || "#8a6a4a";
+      ctx.fillStyle = shadeCol(c, -0.25); ctx.beginPath(); ctx.moveTo(x, y - 44); ctx.lineTo(x + 30, y); ctx.lineTo(x + 6, y); ctx.closePath(); ctx.fill();
+      ctx.fillStyle = c; ctx.beginPath(); ctx.moveTo(x, y - 44); ctx.lineTo(x - 30, y); ctx.lineTo(x + 6, y); ctx.closePath(); ctx.fill();
+      ctx.fillStyle = "#1a1210"; ctx.beginPath(); ctx.moveTo(x - 2, y - 28); ctx.lineTo(x - 12, y); ctx.lineTo(x + 6, y); ctx.closePath(); ctx.fill();
+      ctx.strokeStyle = "rgba(255,255,255,0.25)"; ctx.lineWidth = 1.5;
+      ctx.beginPath(); ctx.moveTo(x - 15, y - 22); ctx.lineTo(x + 15, y - 22); ctx.stroke();
+      ctx.fillStyle = "#5a3a1e"; ctx.fillRect(x - 1, y - 52, 2, 9);
+      ctx.fillStyle = "#ffd76a"; ctx.beginPath(); ctx.moveTo(x + 1, y - 52); ctx.lineTo(x + 10 + Math.sin(time * 3) * 1.5, y - 49); ctx.lineTo(x + 1, y - 46); ctx.fill();
+      break;
+    }
+    case "campfire": {
+      ctx.fillStyle = "#6a6a72";
+      for (let i = 0; i < 8; i++) { const a = i / 8 * Math.PI * 2; ctx.beginPath(); ctx.ellipse(x + Math.cos(a) * 11, y - 2 + Math.sin(a) * 5, 3.5, 2.5, 0, 0, 7); ctx.fill(); }
+      ctx.strokeStyle = "#4a2e18"; ctx.lineWidth = 3; ctx.lineCap = "round";
+      ctx.beginPath(); ctx.moveTo(x - 8, y); ctx.lineTo(x + 6, y - 6); ctx.moveTo(x + 8, y); ctx.lineTo(x - 6, y - 6); ctx.stroke();
+      const g = ctx.createRadialGradient(x, y - 8, 0, x, y - 8, 30);
+      g.addColorStop(0, "rgba(255,170,60,0.4)"); g.addColorStop(1, "rgba(255,120,40,0)");
+      ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y - 8, 30, 0, 7); ctx.fill();
+      for (let i = 0; i < 4; i++) {
+        const h = 10 + Math.sin(time * 10 + i * 1.9) * 4 + (i === 1 ? 5 : 0), fx = x - 5 + i * 3.3;
+        const fg = ctx.createLinearGradient(0, y - 4 - h, 0, y - 3); fg.addColorStop(0, "rgba(255,240,140,0.9)"); fg.addColorStop(1, "#ff5a1a");
+        ctx.fillStyle = fg; ctx.beginPath(); ctx.moveTo(fx - 3, y - 3); ctx.quadraticCurveTo(fx - 2, y - 3 - h * 0.6, fx + Math.sin(time * 8 + i) * 1.2, y - 3 - h); ctx.quadraticCurveTo(fx + 2, y - 3 - h * 0.6, fx + 3, y - 3); ctx.fill();
+      }
+      for (let i = 0; i < 3; i++) { const ph = (time * 0.9 + i / 3) % 1; ctx.fillStyle = `rgba(255,200,90,${1 - ph})`; ctx.fillRect(x + Math.sin(i * 4 + time * 3) * 6, y - 14 - ph * 30, 1.5, 1.5); }
+      break;
+    }
+    case "shrine": {
+      shadow(16, 6);
+      const used = p.used;
+      ctx.fillStyle = "#8d8a7c"; ctx.fillRect(x - 15, y - 8, 30, 8);
+      ctx.fillStyle = "#a9a698"; ctx.fillRect(x - 11, y - 24, 22, 16);
+      ctx.fillStyle = "#c9c6b8"; ctx.fillRect(x - 14, y - 27, 28, 4);
+      ctx.strokeStyle = used ? "rgba(255,255,255,0.15)" : `rgba(255,138,240,${0.5 + Math.sin(time * 3) * 0.3})`; ctx.lineWidth = 1.2;
+      ctx.beginPath(); ctx.moveTo(x - 6, y - 12); ctx.lineTo(x, y - 20); ctx.lineTo(x + 6, y - 12); ctx.moveTo(x - 3, y - 14); ctx.lineTo(x + 3, y - 14); ctx.stroke();
+      const oy = y - 36 + Math.sin(time * 2 + s) * 2.5;
+      if (!used) {
+        const g = ctx.createRadialGradient(x, oy, 0, x, oy, 26);
+        g.addColorStop(0, "rgba(255,170,250,0.55)"); g.addColorStop(1, "rgba(255,138,240,0)");
+        ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, oy, 26, 0, 7); ctx.fill();
+      }
+      const og = ctx.createRadialGradient(x - 2, oy - 2, 1, x, oy, 7);
+      og.addColorStop(0, used ? "#d0d0d8" : "#ffffff"); og.addColorStop(1, used ? "#6a6a72" : "#ff6ae6");
+      ctx.fillStyle = og; ctx.beginPath(); ctx.arc(x, oy, 6.5, 0, 7); ctx.fill();
+      break;
+    }
+    case "anvil": {
+      shadow(12, 4);
+      ctx.fillStyle = "#3a3a44"; ctx.fillRect(x - 5, y - 10, 10, 10); ctx.fillRect(x - 8, y - 2, 16, 3);
+      ctx.fillStyle = "#5a5a66"; ctx.beginPath(); ctx.moveTo(x - 12, y - 16); ctx.lineTo(x + 9, y - 16); ctx.lineTo(x + 14, y - 13); ctx.lineTo(x + 9, y - 10); ctx.lineTo(x - 9, y - 10); ctx.closePath(); ctx.fill();
+      ctx.fillStyle = "rgba(255,255,255,0.25)"; ctx.fillRect(x - 11, y - 16, 19, 1.5);
+      const hot = 0.5 + Math.sin(time * 4) * 0.3;
+      ctx.fillStyle = `rgba(255,120,40,${hot})`; ctx.fillRect(x - 4, y - 18, 8, 2);
+      break;
+    }
+    case "signpost": {
+      shadow(6, 2.5);
+      ctx.fillStyle = "#5a3a1e"; ctx.fillRect(x - 1.5, y - 32, 3, 32);
+      ctx.fillStyle = "#a0703a";
+      ctx.beginPath(); ctx.moveTo(x - 2, y - 30); ctx.lineTo(x + 14, y - 30); ctx.lineTo(x + 18, y - 26.5); ctx.lineTo(x + 14, y - 23); ctx.lineTo(x - 2, y - 23); ctx.fill();
+      ctx.beginPath(); ctx.moveTo(x + 2, y - 21); ctx.lineTo(x - 14, y - 21); ctx.lineTo(x - 18, y - 17.5); ctx.lineTo(x - 14, y - 14); ctx.lineTo(x + 2, y - 14); ctx.fill();
+      ctx.fillStyle = "rgba(0,0,0,0.35)"; ctx.fillRect(x + 1, y - 27.5, 11, 1); ctx.fillRect(x - 13, y - 18.5, 11, 1);
       break;
     }
     case "waystone": {
