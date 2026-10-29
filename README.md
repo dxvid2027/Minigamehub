@@ -261,6 +261,19 @@ League (league phase → play-off → knockouts), quick matches, penalty
 shoot-outs, live tables and a knockout bracket. Every fixture can be played
 or simulated, and the run is saved after each match.
 
+**Gridiron Kings** (🏈 American football, code `MAXIHILLSIGMA`) is built
+for touchscreens: a stick for the left thumb, SNAP / SPRINT / move buttons for
+the right, pass buttons (A, B, X, Y, RB) riding above the receivers — tap for
+a quick pass, hold for a lob, touch or bullet throw with an aim marker — and a
+playbook of scrollable route cards with formations and hot routes. Runners can
+juke, spin, stiff-arm, hurdle, dive, cut and protect the ball; on defence you
+tap a defender to control him and tackle, intercept or swat. 32 teams by city
+with their real star players, quick games and a season with standings and an
+eight-team playoff. Settings set the controls' size, height, opacity, a
+left-handed layout and a floating stick. Files: `js/games/gridiron.js` (menus,
+season, playbook, settings), `gridironMatch.js` (simulation), `gridironDraw.js`,
+`gridironControls.js`, `gridironSeason.js` and `gridironData.js`.
+
 **Dragonheart** (🐉 action RPG, its own longer code) runs across sixteen
 regions, from the village of Greenvale past Dragon's Spire, the Coral Coast,
 the Clockwork Citadel and the Abyssal Rift to the Throne of Eternity: sword

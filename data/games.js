@@ -75,6 +75,7 @@ export const SECRET_GAMES = [
 ];
 
 SECRET_GAMES.push(
+  { id: "gridiron", title: "Gridiron Kings", category: "Sports", emoji: "\ud83c\udfc8", grad: ["#7a1020", "#1d3a8a"], desc: "American football built for two thumbs: 32 teams with their real stars, a playbook of route cards, pass buttons over every receiver, jukes, spins and stiff arms — and a full season with playoffs.", tags: ["football", "nfl", "sports", "season", "secret"], ratio: "16/10", wide: true, controls: "both", module: "../../games/gridiron.js", exportName: "GridironGame", secret: true },
   { id: "dragonheart", title: "Dragonheart", category: "Action", emoji: "\ud83d\udc09", grad: ["#ff6b28", "#2c4f9a"], desc: "An action RPG across six regions: sword combos, dodge rolls, spells, loot in four rarities, a village to come home to and six bosses between you and Ashvane, the Elder Dragon.", tags: ["rpg", "adventure", "bosses", "loot", "secret"], ratio: "16/10", wide: true, controls: "both", module: "../../games/dragonheart.js", exportName: "DragonheartGame", secret: true },
 );
 
