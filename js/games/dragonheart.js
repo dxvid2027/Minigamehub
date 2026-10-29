@@ -23,10 +23,10 @@ import { audioManager } from "../systems/audioManager.js";
 import { saveManager } from "../systems/saveManager.js";
 import { openModal, closeModal } from "../ui/modal.js";
 import { el, formatNumber } from "../core/utils.js";
-import { REGIONS, FOES, BOSSES, RARITY, WEAPONS, ARMORS, SKILLS, POTION_COST, xpFor, WEAPON_FX, MAX_TIER } from "./dhData.js";
-import { World, T, MW, MH, drawProp } from "./dhWorld.js";
+import { REGIONS, FOES, BOSSES, RARITY, WEAPONS, ARMORS, SKILLS, POTION_COST, xpFor, WEAPON_FX, MAX_TIER, WEAPON_TYPES, ENCHANTS } from "./dhData.js";
+import { World, T, drawProp } from "./dhWorld.js";
 import { drawHero, drawFoe, drawBoss, drawNpc, drawChest, drawCritter } from "./dhArt.js";
-import { QUESTS, QITEMS, GIVERS, COSMETICS, COS_SLOTS, tokenValue, REFORGE, TOKEN_GOODS } from "./dhQuests.js";
+import { QUESTS, QITEMS, GIVERS, COSMETICS, COS_SLOTS, tokenValue, REFORGE, TOKEN_GOODS, ENCHANT_NAMES } from "./dhQuests.js";
 import { drawPet } from "./dhCosmetics.js";
 
 const TAU = Math.PI * 2;
@@ -40,7 +40,7 @@ const DIFF = {
   Hero:   { taken: 1,   foeHp: 1 },
   Legend: { taken: 1.4, foeHp: 1.3 },
 };
-const REGION_POW = [1, 1, 1, 1, 1, 1.6, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1.25];
+const REGION_POW = [1, 1, 1, 1, 1, 1.6, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1.25, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1.15];
 // Nightmare bosses: the same fight, much nastier, for legendary loot.
 const NIGHTMARE = { hp: 2.6, atk: 1.6 };
 const HERO_SPEED = 138;
@@ -56,6 +56,17 @@ const weaponOf = (it) => WEAPONS.find(w => w.id === it.id) || WEAPONS[0];
 const armorOf = (it) => ARMORS.find(a => a.id === it.id) || ARMORS[0];
 const itemBase = (it) => (it.kind === "weapon" ? weaponOf(it) : armorOf(it));
 const itemName = (it) => `${RARITY[it.rarity].name === "Common" ? "" : RARITY[it.rarity].name + " "}${itemBase(it).name}`;
+const itemIcon = (it) => (it.kind === "weapon" ? WEAPON_TYPES[weaponOf(it).type || "sword"].icon : "🛡");
+// How each weapon type fights: swing time, cooldown, reach, arc, damage, knockback.
+const WSTYLE = {
+  sword:   { swing: 0.22, cd: 0.27, cd3: 0.46, range: 42, arc: 1.15, kb: 150, combo: true },
+  axe:     { swing: 0.32, cd: 0.5,  range: 48, arc: 1.7,  kb: 300 },
+  spear:   { swing: 0.2,  cd: 0.34, range: 74, arc: 0.42, kb: 170 },
+  hammer:  { swing: 0.42, cd: 0.78, range: 62, arc: 9,    kb: 340, slam: true },
+  daggers: { swing: 0.13, cd: 0.15, range: 34, arc: 1.0,  kb: 60, combo: true, crit: 0.15 },
+  bow:     { swing: 0.25, cd: 0.42, ranged: "arrow" },
+  staff:   { swing: 0.3,  cd: 0.52, ranged: "magic" },
+};
 const itemFx = (it) => (it.kind === "weapon" ? WEAPON_FX[weaponOf(it).fx] : null);
 const itemPower = (it) => {
   const b = itemBase(it), m = RARITY[it.rarity].mult;
@@ -67,17 +78,19 @@ export class DragonheartGame extends GameBase {
   getDifficulties() { return ["Story", "Hero", "Legend"]; }
   getInstructions() {
     return [
-      "Travel east from Greenvale through six regions. A boss waits in the stone arena at the end of each one.",
+      "Travel east from Greenvale through twenty-six lands. A boss waits in the stone arena at the end of each one.",
       "Beating a boss opens a portal onward and gives you a new skill or a named weapon.",
       "Attack in a three-hit combo. Roll to dodge — you are untouchable for a moment, but it costs stamina.",
       "Every attack shows a wind-up first: a flash, a shake, a glowing circle on the ground. Read it, then roll.",
       "Monsters drop gold, hearts and gear in four rarities. Open your bag to equip or sell.",
       "In the village: Mira sells potions and weapons, Bram the smith sells armour, the fountain heals. Waystones take you back.",
-      "Sixteen regions in all. Named weapons burn, freeze, shock or drain. Bosses grow a third, desperate phase below a quarter of their health.",
+      "Twenty-six lands in all; the ten beyond the Throne of Eternity are twice the size. Bosses grow a third, desperate phase below a quarter of their health.",
       "Beaten a boss? Its altar in the arena summons its Nightmare form — far stronger, and it always drops legendary gear.",
       "Every region has a camp with a quest giver (look for the ! above their head). Quests give gold and cosmetics: helmets, capes, wings, auras and pets — even a Dragon Helm.",
       "Grit the Scrapper on the market trades your old gear for Dragon Tokens ✪. Spend them at Lysa the Tailor, or let Bram reforge your gear to a higher rarity.",
       "Shrines give a blessing once per visit. Your bag has a Wardrobe and a Quest log.",
+      "Weapons come in seven kinds: sword, axe, spear, warhammer, daggers, bow and staff. Enchantress Vela in Greenvale teaches your weapon fire, lightning, ice and more — switch between them in your bag.",
+      "Watch the roads: bandits ambush travellers, and sometimes they raid Greenvale itself. Ten more lands lie beyond the Throne of Eternity.",
     ];
   }
   getKeyboardHint() { return "WASD / arrows move · J or Space attack & talk · K or Shift roll · L skill (Q or 1–9 switch) · H potion · I bag."; }
@@ -99,6 +112,7 @@ export class DragonheartGame extends GameBase {
       armor: { kind: "armor", id: "tunic", rarity: "common" },
       bag: [], skills: [], skill: null, region: 0, unlocked: 0, bosses: {}, chests: {}, kills: 0, deaths: 0, won: false,
       quests: {}, tokens: 0, cos: { owned: [], helm: null, cape: null, aura: null, pet: null },
+      enchants: [], enchant: null, raids: 0,
     };
     for (const [k, v] of Object.entries(def)) if (s[k] === undefined) s[k] = JSON.parse(JSON.stringify(v));
     if (!s.nightmares) s.nightmares = {};
@@ -106,6 +120,11 @@ export class DragonheartGame extends GameBase {
     if (s.bosses.dragon && s.unlocked < 6) {
       s.unlocked = 6;
       if (!s.skills.includes("chain")) s.skills.push("chain");
+    }
+    // Saves from before the lands beyond Eternity: Nyxara used to be the end.
+    if (!s.v3) {
+      s.v3 = true;
+      if (s.bosses.eternal) { s.unlocked = Math.max(s.unlocked, 16); s.won = false; }
     }
     return s;
   }
@@ -121,7 +140,7 @@ export class DragonheartGame extends GameBase {
       Object.keys(s.nightmares).length ? el("span", {}, `☠ Nightmares ${Object.keys(s.nightmares).length}`) : null,
       el("span", {}, `📜 Quests ${QUESTS.filter(q => s.quests[q.id]?.done).length}/${QUESTS.length}`),
       el("span", {}, `◈ ${formatNumber(s.gold)} gold`),
-      s.won ? el("span", {}, "🐉 Ashvane defeated") : null,
+      s.won ? el("span", {}, "🐉 Aurelith defeated") : null,
     ]);
   }
 
@@ -143,6 +162,7 @@ export class DragonheartGame extends GameBase {
   // ------------------------------------------------------------- stats ---
   get maxHp() { const s = this._store(); return Math.round(100 + (s.lv - 1) * 18 + (itemPower(s.armor).hp || 0)); }
   get atk() { const s = this._store(); return Math.round((8 + (s.lv - 1) * 3 + (itemPower(s.weapon).atk || 0)) * (this.bless?.kind === "might" ? 1.25 : 1)); }
+  get wtype() { return weaponOf(this._store().weapon).type || "sword"; }
   get def() { return itemPower(this._store().armor).def || 0; }
   get maxMana() { return 60 + this._store().lv * 4; }
 
@@ -218,14 +238,17 @@ export class DragonheartGame extends GameBase {
     this.portal = s.bosses[R.boss] ? { x: W.arena.x, y: W.arena.y } : null;
     this.banner = { title: R.name, sub: R.sub, t: 0 };
     this.shrineUsed = false;
+    this.raid = null;
+    this.ambushT = rand(50, 110);
+    this.villageRaidT = ri === 0 && s.unlocked >= 2 && Math.random() < 0.35 ? rand(10, 20) : 0;
     this.pet = { x: h.x - 20, y: h.y + 6, ang: 0, moving: false, walk: 0 };
     this._buildQItems();
     this._save();
     this._hud();
   }
 
-  _makeFoe(type, x, y, elite = false) {
-    const F = FOES[type];
+  _makeFoe(type, x, y, elite = false, over = null) {
+    const F = over ? { ...FOES[type], ...over } : FOES[type];
     const d = DIFF[this.difficulty] || DIFF.Hero;
     const pow = REGION_POW[this.ri] || 1;
     const hp = Math.round(F.hp * d.foeHp * pow * (elite ? 2.4 : 1));
@@ -234,7 +257,76 @@ export class DragonheartGame extends GameBase {
       r: F.r * (elite ? 1.25 : 1), xp: Math.round(F.xp * (elite ? 3 : 1)), gold: Math.round(F.gold * (elite ? 3 : 1)),
       state: "idle", st: rand(0, 2), wind: 0, flash: 0, kx: 0, ky: 0, ang: 0, seed: Math.random() * 10,
       hitBy: -1, contactCd: 0, wx: x, wy: y,
+      ...(F.art === "human" ? {
+        helm: [null, "hood", "horned", "skullhelm", "piratehat", "bandana", null][(Math.random() * 7) | 0],
+        mask: ["#8a1a1a", "#1a1a1a", "#3a2a5a", "#5a3a1a"][(Math.random() * 4) | 0], walk: 0,
+      } : {}),
     };
+  }
+
+  /** A bandit pitched at this region's strength, for ambushes and raids. */
+  _makeBandit(kind, x, y, elite = false) {
+    const R = REGIONS[this.ri];
+    const fs = Object.keys(R.foes).map(k => FOES[k]);
+    const avg = (k) => fs.reduce((a, f) => a + f[k], 0) / fs.length;
+    const m = { bandit: [1, 1], banditarcher: [0.8, 0.95], banditbrute: [1.7, 1.15], banditlancer: [1.05, 1.05] }[kind];
+    const f = this._makeFoe(kind, x, y, elite, { hp: Math.round(avg("hp") * m[0] * 1.1), atk: avg("atk") * m[1], xp: Math.round(avg("xp") * 1.2), gold: Math.round(avg("gold") * 1.3) });
+    if (elite) f.name = "Bandit Captain";
+    return f;
+  }
+
+  /** Bandits jump the hero on the road — or storm Greenvale. */
+  _ambush(village) {
+    const h = this.hero, W = this.world;
+    const n = (village ? 5 : 3) + Math.min(4, Math.floor(this.ri / 4)) + (Math.random() < 0.5 ? 1 : 0);
+    const kinds = ["bandit", "bandit", "bandit", "banditarcher", "banditarcher", "banditlancer", "banditlancer", "banditbrute"];
+    const cy = W.mh / 2 * T;
+    for (let i = 0; i < n; i++) {
+      let px, py;
+      if (village) { const east = i % 2 === 0; px = (east ? 45 : 3) * T; py = cy + rand(-60, 60); }
+      else { const a = (i / n) * TAU + rand(-0.3, 0.3), d = rand(260, 330); px = h.x + Math.cos(a) * d; py = h.y + Math.sin(a) * d; }
+      const p = W.walkableNear(clamp(px, 3 * T, (W.mw - 3) * T), clamp(py, 3 * T, (W.mh - 3) * T));
+      const f = this._makeBandit(kinds[(Math.random() * kinds.length) | 0], p.x, p.y, i === 0 && (village || this.ri >= 3));
+      f.raid = true; f.raider = village; f.state = "chase";
+      this.foes.push(f);
+    }
+    this.raid = { village, t: 0, n };
+    this.banner = village
+      ? { title: "RAID ON GREENVALE!", sub: "Bandits storm the village — drive them out!", t: 0.2, boss: true }
+      : { title: "AMBUSH!", sub: `Bandits of ${REGIONS[this.ri].name}`, t: 0.2, boss: true };
+    this.shake = 0.6; this.flashScreen = { t: 0, color: "255,60,40" };
+    audioManager.play("explosion");
+    if (village) for (const w of W.walkers) { w.scared = true; w.say = ["Raiders!", "Help!", "Run!", "To the chapel!"][(Math.random() * 4) | 0]; w.sayT = 2.5; }
+  }
+
+  _stepRaids(dt) {
+    const W = this.world, h = this.hero, s = this._store();
+    if (this.raid) {
+      this.raid.t += dt;
+      if (!this.foes.some(f => f.raid && f.hp > 0)) {
+        const r = this.raid;
+        this.raid = null;
+        s.raids = (s.raids || 0) + 1;
+        const gold = Math.round(rand(40, 70) * (this.ri + 2) * (this.ri + 2) * (r.village ? 1.5 : 1));
+        this._drop("gold", h.x + 20, h.y, gold);
+        if (Math.random() < 0.6 || r.village) this._drop("gear", h.x - 20, h.y, this._rollGear(true));
+        s.tokens += r.village ? 5 : 2;
+        this.banner = { title: r.village ? "GREENVALE IS SAFE!" : "AMBUSH REPELLED", sub: `+${r.village ? 5 : 2} ✪ Dragon Tokens and the bandits' loot`, t: 0.3, gold: true };
+        audioManager.play("win");
+        for (const w of W.walkers) { w.scared = false; w.say = "Hooray!"; w.sayT = 2; }
+        if (r.village) for (const q of QUESTS) { const st = s.quests[q.id]; if (q.type === "raid" && st && !st.done && !this._qReady(q)) { st.n = (st.n || 0) + 1; this._questTick(q, "Raid repelled"); } }
+        this.ambushT = rand(70, 140);
+        this._save(); this._hud();
+      }
+      return;
+    }
+    if (this.boss || this.dead) return;
+    if (this.villageRaidT > 0) { this.villageRaidT -= dt; if (this.villageRaidT <= 0) this._ambush(true); return; }
+    if (this.ri === 0) return;
+    // Ambushes only happen out on the road, never at a camp.
+    if (W.safe.some(z => hyp(h.x - z.x, h.y - z.y) < z.r + 80)) return;
+    this.ambushT -= dt;
+    if (this.ambushT <= 0) this._ambush(false);
   }
 
   // ------------------------------------------------------------- input ---
@@ -279,6 +371,7 @@ export class DragonheartGame extends GameBase {
     this._stepDrops(dt);
     this._stepQItems();
     this._stepLife(dt);
+    this._stepRaids(dt);
     if (this.bless) { this.bless.t -= dt; if (this.bless.t <= 0) { this.bless = null; this._text(this.hero.x, this.hero.y - 44, "The blessing fades", "#c9ccd8"); } }
     this._checkArena();
     this.shake = Math.max(0, this.shake - dt * 3);
@@ -339,34 +432,80 @@ export class DragonheartGame extends GameBase {
 
     // Attack — or talk, when there is someone to talk to.
     if (atk.pressed && this._interact(true)) return;
+    const style = WSTYLE[this.wtype] || WSTYLE.sword;
     if ((atk.pressed || atk.held) && h.atkCd <= 0 && h.rollT <= 0) {
-      h.combo = this.t - h.lastSwing < 0.55 && h.combo < 2 ? h.combo + 1 : 0;
+      h.combo = style.combo && this.t - h.lastSwing < 0.55 && h.combo < 2 ? h.combo + 1 : style.combo ? 0 : (h.combo + 1) % 2;
       h.lastSwing = this.t;
-      h.swing = 0; h.swingDir = h.ang; h.hitDone = false;
-      h.atkCd = h.combo === 2 ? 0.46 : 0.27;
+      h.swing = 0; h.hitDone = false;
+      // Ranged weapons help with the aim: the nearest enemy roughly ahead.
+      h.swingDir = style.ranged ? this._autoAim(h.ang) : h.ang;
+      h.atkCd = style.cd3 && h.combo === 2 ? style.cd3 : style.cd;
       audioManager.play("swoosh");
     }
     if (h.swing >= 0) {
-      h.swing += dt / 0.22;
-      if (!h.hitDone && h.swing > 0.35) { h.hitDone = true; this._swingHit(); }
+      h.swing += dt / style.swing;
+      if (!h.hitDone && h.swing > (style.ranged ? 0.55 : style.slam ? 0.7 : 0.35)) { h.hitDone = true; this._swingHit(); }
       if (h.swing >= 1) h.swing = -1;
     }
     if (skill.pressed) this._castSkill();
   }
 
+  /** Nearest enemy within ~35° of where the hero faces, for bows and staves. */
+  _autoAim(a) {
+    const h = this.hero;
+    let best = null, bs = 1e9;
+    const cands = this.foes.filter(f => f.hp > 0).map(f => ({ x: f.x, y: f.y - f.r })).concat(this.boss && this.boss.hp > 0 ? [{ x: this.boss.x, y: this.boss.y - this.boss.r * 0.8 }] : []);
+    for (const c of cands) {
+      const d = hyp(c.x - h.x, c.y - (h.y - 12));
+      if (d > 460) continue;
+      const da = angDiff(Math.atan2(c.y - (h.y - 12), c.x - h.x), a);
+      if (da > 0.62) continue;
+      const sc = d * (1 + da * 2);
+      if (sc < bs) { bs = sc; best = c; }
+    }
+    return best ? Math.atan2(best.y - (h.y - 12), best.x - h.x) : a;
+  }
+
   _swingHit() {
     const h = this.hero;
-    const range = h.combo === 2 ? 50 : 42;
-    const arc = h.combo === 2 ? 1.5 : 1.15;
-    const mult = h.combo === 2 ? 1.7 : 1;
-    const hx = h.x, hy = h.y - 10;
+    const type = this.wtype, st = WSTYLE[type] || WSTYLE.sword;
+    if (st.ranged) {
+      // Bow: a fast arrow. Staff: a slower orb that passes through enemies.
+      const a = h.swingDir, arrow = st.ranged === "arrow";
+      const sp = arrow ? 560 : 380;
+      this.shots.push({ x: h.x + Math.cos(a) * 16, y: h.y - 14 + Math.sin(a) * 10, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, r: arrow ? 5 : 9, dmg: this.atk, owner: "hero", kind: arrow ? "harrow" : "hmagic", life: arrow ? 0.85 : 1.1, splash: 0, pierce: !arrow, hitSet: new Set(), wfx: true, color: this.weaponFx ? WEAPON_FX[this.weaponFx].color : "#b06bff" });
+      audioManager.play(arrow ? "swoosh" : "pop");
+      return;
+    }
+    const combo3 = st.combo && h.combo === 2;
+    const range = st.range + (combo3 ? 8 : 0);
+    const arc = st.arc + (combo3 ? 0.35 : 0);
+    const mult = combo3 ? 1.7 : 1;
+    const kb = st.kb + (combo3 ? 110 : 0);
+    // A hammer slams the ground in front of the hero and hits all round that spot.
+    const hx = st.slam ? h.x + Math.cos(h.swingDir) * 34 : h.x, hy = st.slam ? h.y - 10 + Math.sin(h.swingDir) * 24 : h.y - 10;
+    if (st.slam) {
+      this.fx.push({ ring: true, x: hx, y: hy + 10, r0: 8, r1: range, life: 0.35, t: 0, color: this.weaponFx ? WEAPON_FX[this.weaponFx].color : "#e8e2d0" });
+      this._dust(hx, hy + 10, 14);
+      this.shake = Math.max(this.shake, 0.4);
+    }
     let hit = false;
     for (const f of this.foes) {
       if (f.hp <= 0) continue;
       const fy = f.y - (f.ai === "float" ? f.r * 1.8 : f.r * 0.8);
       const d = hyp(f.x - hx, fy - hy);
       if (d > range + f.r || angDiff(Math.atan2(fy - hy, f.x - hx), h.swingDir) > arc) continue;
-      this._hurtFoe(f, this.atk * mult, h.swingDir, h.combo === 2 ? 260 : 150, true);
+      this._hurtFoe(f, this.atk * mult, st.slam ? Math.atan2(f.y - hy, f.x - hx) : h.swingDir, kb, true);
+      hit = true;
+    }
+    // Training dummies take hits and show what you deal.
+    for (const p of this.world.props) {
+      if (!p.dummy) continue;
+      const d = hyp(p.x - hx, p.y - 24 - hy);
+      if (d > range + 12 || (!st.slam && angDiff(Math.atan2(p.y - 24 - hy, p.x - hx), h.swingDir) > arc && d > 20)) continue;
+      const { dmg, crit } = this._crit(this.atk * mult, true);
+      p.hitT = 0.5;
+      this._text(p.x + rand(-6, 6), p.y - 50, String(dmg), crit ? "#ffd76a" : "#ffffff", crit);
       hit = true;
     }
     const b = this.boss;
@@ -389,11 +528,12 @@ export class DragonheartGame extends GameBase {
     if (hit) { this.hitStop = 0.045; this.shake = Math.max(this.shake, 0.18); audioManager.play("hit"); }
   }
 
-  get weaponFx() { return weaponOf(this._store().weapon).fx || null; }
+  /** The chosen enchantment wins; otherwise the weapon's own effect. */
+  get weaponFx() { const s = this._store(); return s.enchant || weaponOf(s.weapon).fx || null; }
 
   _crit(dmg, sword = false) {
     const keen = sword && (this.weaponFx === "crit");
-    const c = Math.random() < (keen ? 0.27 : 0.12);
+    const c = Math.random() < (keen ? 0.27 : 0.12) + (sword && this.wtype === "daggers" ? 0.15 : 0);
     return { dmg: Math.round(dmg * rand(0.9, 1.1) * (c ? (keen ? 2.1 : 1.8) : 1)), crit: c };
   }
 
@@ -403,6 +543,7 @@ export class DragonheartGame extends GameBase {
     if (!fx) return;
     if (fx === "burn" || fx === "storm") { target.burn = 3; target.burnDps = this.atk * 0.18; }
     if (fx === "chill") target.chill = 2;
+    if (fx === "poison") { target.poison = Math.min(6, (target.poison || 0) + 1); target.poisonT = 4; target.poisonDps = this.atk * 0.07; }
     if (fx === "leech") { const h = this.hero, heal = Math.max(1, Math.round(dmg * 0.06)); h.hp = Math.min(this.maxHp, h.hp + heal); }
     if ((fx === "shock" || fx === "storm") && Math.random() < 0.3) {
       let from = target;
@@ -428,6 +569,7 @@ export class DragonheartGame extends GameBase {
   }
 
   _hurtFoe(f, raw, ang, kb, sword = false) {
+    if (sword && this.weaponFx === "holy" && (["skeleton", "archer", "ghost", "bonehound", "boneknight", "bonemage", "mummy", "ghoul", "wraith", "ashwraith", "icewraith", "vampire"].includes(f.type))) raw *= 1.3;
     const { dmg, crit } = this._crit(raw, sword);
     f.hp -= dmg; f.flash = 0.1;
     if (sword && f.hp > 0) this._onHitFx(f, dmg, false);
@@ -441,6 +583,8 @@ export class DragonheartGame extends GameBase {
   _killFoe(f) {
     const s = this._store();
     s.kills++;
+    // The body lingers for a moment, then fades and sinks.
+    this.fx.push({ corpse: { ...f, flash: 0.2, wind: 0, hp: 0, maxHp: 1 }, x: f.x, y: f.y, vx: 0, vy: 0, g: 0, life: 0.45, t: 0 });
     this._burst(f.x, f.y - f.r, f.color, 16, true);
     audioManager.play("pop");
     this._gainXp(f.xp);
@@ -455,6 +599,7 @@ export class DragonheartGame extends GameBase {
   _hurtBoss(raw, sword = false) {
     const b = this.boss;
     if (!b) return;
+    if (sword && this.weaponFx === "holy") raw *= 1.3;
     const { dmg, crit } = this._crit(raw, sword);
     b.hp -= dmg; b.flash = 0.1;
     if (sword) this._onHitFx(b, dmg, true);
@@ -522,8 +667,11 @@ export class DragonheartGame extends GameBase {
     const rarity = r < (good ? 0.12 : 0.025) ? "legendary" : r < (good ? 0.4 : 0.11) ? "epic" : r < (good ? 0.75 : 0.38) ? "rare" : "common";
     const tier = clamp(this.ri + 1 + tierBias - (Math.random() < 0.35 ? 1 : 0), 1, MAX_TIER);
     const kind = Math.random() < 0.5 ? "weapon" : "armor";
-    const list = kind === "weapon" ? WEAPONS : ARMORS;
-    return { kind, id: list.find(x => x.tier === tier).id, rarity };
+    if (kind === "armor") return { kind, id: ARMORS.find(x => x.tier === tier).id, rarity };
+    // Mostly your own kind of weapon, sometimes something new to try.
+    const types = Object.keys(WEAPON_TYPES);
+    const type = Math.random() < 0.45 ? this.wtype : types[(Math.random() * types.length) | 0];
+    return { kind, id: (WEAPONS.find(x => x.tier === tier && x.type === type && !x.named) || WEAPONS.find(x => x.tier === tier)).id, rarity };
   }
 
   // ---------------------------------------------------------- skills -----
@@ -663,6 +811,7 @@ export class DragonheartGame extends GameBase {
       f.flash = Math.max(0, f.flash - dt);
       f.contactCd = Math.max(0, f.contactCd - dt);
       if (f.burn > 0) { f.burn -= dt; f.burnAcc = (f.burnAcc || 0) + f.burnDps * dt; if (f.burnAcc >= 1) { const n = Math.floor(f.burnAcc); f.burnAcc -= n; f.hp -= n; if (f.hp <= 0) { this._killFoe(f); continue; } } }
+      if (f.poisonT > 0) { f.poisonT -= dt; f.poisonAcc = (f.poisonAcc || 0) + f.poison * f.poisonDps * dt; if (f.poisonAcc >= 1) { const n = Math.floor(f.poisonAcc); f.poisonAcc -= n; f.hp -= n; if (f.hp <= 0) { this._killFoe(f); continue; } } if (f.poisonT <= 0) f.poison = 0; }
       if (f.chill > 0) f.chill -= dt;
       if (f.frozen > 0) { f.frozen -= dt; continue; }
       const dx = h.x - f.x, dy = h.y - f.y, d = hyp(dx, dy);
@@ -673,8 +822,8 @@ export class DragonheartGame extends GameBase {
       f.st -= dt;
       // Knockback decays.
       if (f.kx || f.ky) { f.kx *= Math.pow(0.002, dt); f.ky *= Math.pow(0.002, dt); if (Math.abs(f.kx) + Math.abs(f.ky) < 4) f.kx = f.ky = 0; }
-      if (heroSafe && f.state === "chase") f.state = "idle";
-      const aggro = !(heroSafe && f.state === "idle") && (d < 240 || f.state === "chase" || f.state === "wind" || f.state === "act" || f.state === "recover");
+      if (heroSafe && f.state === "chase" && !f.raider) f.state = "idle";
+      const aggro = f.raid || !(heroSafe && f.state === "idle") && (d < 240 || f.state === "chase" || f.state === "wind" || f.state === "act" || f.state === "recover");
       if (!aggro) {
         // Wander near home.
         if (f.st <= 0) { f.st = rand(1.5, 3.5); const a = rand(0, TAU); f.wx = f.hx + Math.cos(a) * 60; f.wy = f.hy + Math.sin(a) * 60; }
@@ -683,7 +832,7 @@ export class DragonheartGame extends GameBase {
       } else {
         if (f.state === "idle") f.state = "chase";
         // Leash: give up if dragged too far from home.
-        if (hyp(f.x - f.hx, f.y - f.hy) > 620 && d > 200) { f.state = "idle"; f.hx = f.x; f.hy = f.y; }
+        if (!f.raid && hyp(f.x - f.hx, f.y - f.hy) > 620 && d > 200) { f.state = "idle"; f.hx = f.x; f.hy = f.y; }
         if (f.state === "chase") {
           f.ang = toHero;
           if (f.ai === "ranged") {
@@ -703,6 +852,7 @@ export class DragonheartGame extends GameBase {
           if (f.ai === "tank" && !f.marked) { f.marked = true; this.hazards.push({ kind: "circle", x: f.x, y: f.y, r: 70, delay: 0.8, t: 0, dmg: f.atk, owner: f }); }
           if (f.st <= 0) {
             f.wind = 0; f.marked = false;
+            f.atkAnimT = this.t; f.combo = (f.combo || 0) + 1;
             if (f.ai === "ranged") { this._foeShoot(f, toHero); f.state = "recover"; f.st = rand(1.2, 2); }
             else if (f.ai === "lunge" || f.ai === "float") { f.state = "act"; f.st = f.ai === "float" ? 0.5 : 0.36; f.dashA = Math.atan2(f.ty - f.y, f.tx - f.x) || toHero; }
             else if (f.ai === "melee") {
@@ -723,11 +873,13 @@ export class DragonheartGame extends GameBase {
       if ((f.ai === "lunge" || f.ai === "float" || f.state === "act") && f.contactCd <= 0 && d < f.r + 12) {
         if (f.state === "act" || f.ai === "float") { this._hurtHero(f.atk, f.x, f.y); f.contactCd = 0.8; }
       }
+      f.moving = hyp(mvx, mvy) > 8;
+      if (f.moving) f.walk = (f.walk || 0) + dt * 6;
       const slowK = f.chill > 0 ? 0.5 : 1;
       const nx = f.x + (mvx * slowK + f.kx) * dt, ny = f.y + (mvy * slowK + f.ky) * dt;
       const p = W.slide(f.x, f.y, nx, ny, Math.min(12, f.r * 0.8), flying);
       f.x = p.x; f.y = p.y;
-      const z = !f.summoned && inSafe(f.x, f.y);
+      const z = !f.summoned && !f.raider && inSafe(f.x, f.y);
       if (z) { const a = Math.atan2(f.y - z.y, f.x - z.x), q = W.slide(f.x, f.y, z.x + Math.cos(a) * (z.r + 2), z.y + Math.sin(a) * (z.r + 2), Math.min(12, f.r * 0.8), true); f.x = q.x; f.y = q.y; }
       // Monsters never follow you into a boss fight.
       if (this.boss?.locked && hyp(f.x - W.arena.x, f.y - W.arena.y) < W.arena.r + 10 && !f.summoned) {
@@ -791,6 +943,7 @@ export class DragonheartGame extends GameBase {
     b.flash = Math.max(0, b.flash - dt);
     b.contactCd = Math.max(0, b.contactCd - dt);
     if (b.burn > 0) { b.burn -= dt; b.burnAcc = (b.burnAcc || 0) + b.burnDps * dt; if (b.burnAcc >= 1) { const n = Math.floor(b.burnAcc); b.burnAcc -= n; b.hp -= n; } }
+    if (b.poisonT > 0) { b.poisonT -= dt; b.poisonAcc = (b.poisonAcc || 0) + b.poison * b.poisonDps * dt; if (b.poisonAcc >= 1) { const n = Math.floor(b.poisonAcc); b.poisonAcc -= n; b.hp -= n; } }
     const slowB = b.chill > 0 ? 0.6 : 1;
     if (b.chill > 0) b.chill -= dt;
     b.st -= dt * (b.desperate ? 1.6 : b.enraged ? 1.3 : 1) * slowB;
@@ -862,6 +1015,7 @@ export class DragonheartGame extends GameBase {
   }
 
   _bossAct(b, first, dt = 0) {
+    if (first) b.atkAnimT = this.t;
     const h = this.hero;
     const toHero = Math.atan2(h.y - b.y, h.x - b.x);
     const shot = (a, spd, r = 9, kind = "orb") => this.shots.push({ x: b.x, y: b.y - b.r * 0.9, vx: Math.cos(a) * spd, vy: Math.sin(a) * spd, r, dmg: b.atk * 0.8, owner: "foe", kind, life: 3.4, color: b.color });
@@ -989,7 +1143,7 @@ export class DragonheartGame extends GameBase {
       s.won = true;
       this._save();
       this.victory = { t: 0 };
-      this.banner = { title: "NYXARA FALLS", sub: "Every road is safe. You are the Dragonheart.", t: 0, gold: true };
+      this.banner = { title: "AURELITH FALLS", sub: "Every road, old and new, is safe. You are the Dragonheart.", t: 0, gold: true };
       return;
     }
     this.portal = { x: W.arena.x, y: W.arena.y };
@@ -1001,7 +1155,7 @@ export class DragonheartGame extends GameBase {
   }
 
   _win() {
-    this.endGame({ result: "win", score: this._score(), message: "Nyxara, the World Eater, is defeated — all sixteen regions are free. Your save keeps everything: come back for the Nightmare bosses.", extraStats: this._endStats() });
+    this.endGame({ result: "win", score: this._score(), message: "Aurelith, the First Dragon, is defeated — all twenty-six lands are free. Your save keeps everything: come back for the Nightmare bosses.", extraStats: this._endStats() });
   }
 
   // ------------------------------------------------- shots and hazards ---
@@ -1017,7 +1171,7 @@ export class DragonheartGame extends GameBase {
         p.vx = Math.cos(na) * sp; p.vy = Math.sin(na) * sp;
       }
       p.x += p.vx * dt; p.y += p.vy * dt;
-      if (!["void", "orb", "homing", "blade"].includes(p.kind) && W.blocked(p.x, p.y + 10, true)) p.life = 0;
+      if (!["void", "orb", "homing", "blade", "hmagic"].includes(p.kind) && W.blocked(p.x, p.y + 10, true)) p.life = 0;
       if (p.owner === "foe") {
         if (hyp(p.x - h.x, p.y - (h.y - 12)) < p.r + 9 && h.iT <= 0) {
           this._hurtHero(p.dmg, p.x - p.vx, p.y - p.vy);
@@ -1028,9 +1182,18 @@ export class DragonheartGame extends GameBase {
         const b = this.boss;
         if (p.pierce) {
           // Spectral blades pass through, hitting each enemy once.
-          for (const f of this.foes) if (f.hp > 0 && !p.hitSet.has(f) && hyp(p.x - f.x, p.y - (f.y - f.r)) < p.r + f.r) { p.hitSet.add(f); this._hurtFoe(f, p.dmg, Math.atan2(p.vy, p.vx), 90); }
-          if (b && b.hp > 0 && !p.hitSet.has(b) && hyp(p.x - b.x, p.y - (b.y - b.r)) < p.r + b.r) { p.hitSet.add(b); this._hurtBoss(p.dmg); }
-          if (Math.random() < 0.5) this.fx.push({ x: p.x, y: p.y, vx: 0, vy: 0, g: 0, life: 0.2, t: 0, color: "#fff3c0", size: 3 });
+          for (const f of this.foes) if (f.hp > 0 && !p.hitSet.has(f) && hyp(p.x - f.x, p.y - (f.y - f.r)) < p.r + f.r) { p.hitSet.add(f); this._hurtFoe(f, p.dmg, Math.atan2(p.vy, p.vx), 90, !!p.wfx); }
+          if (b && b.hp > 0 && !p.hitSet.has(b) && hyp(p.x - b.x, p.y - (b.y - b.r)) < p.r + b.r) { p.hitSet.add(b); this._hurtBoss(p.dmg, !!p.wfx); }
+          if (Math.random() < 0.5) this.fx.push({ x: p.x, y: p.y, vx: 0, vy: 0, g: 0, life: 0.2, t: 0, color: p.kind === "hmagic" ? p.color : "#fff3c0", size: 3 });
+          continue;
+        }
+        if (p.kind === "harrow") {
+          // An arrow: one target, no blast.
+          let tgt = null;
+          for (const f of this.foes) if (f.hp > 0 && hyp(p.x - f.x, p.y - (f.y - f.r)) < p.r + f.r) { tgt = f; break; }
+          if (tgt) { this._hurtFoe(tgt, p.dmg, Math.atan2(p.vy, p.vx), 120, true); p.life = 0; }
+          else if (b && b.hp > 0 && hyp(p.x - b.x, p.y - (b.y - b.r)) < p.r + b.r) { this._hurtBoss(p.dmg, true); p.life = 0; }
+          for (const d of W.props) if (d.dummy && p.life > 0 && hyp(p.x - d.x, p.y - (d.y - 24)) < 16) { const { dmg, crit } = this._crit(p.dmg, true); d.hitT = 0.5; this._text(d.x, d.y - 50, String(dmg), crit ? "#ffd76a" : "#fff", crit); p.life = 0; }
           continue;
         }
         let hit = null;
@@ -1053,7 +1216,7 @@ export class DragonheartGame extends GameBase {
   }
 
   _shotColor(p) {
-    return { arrow: "#e8e2d0", spore: "#d96a8a", ice: "#9fe8ff", fire: "#ff7a2a", fireball: "#ffb347", void: "#d77bff", bolt: "#ffef6a", blade: "#fff3c0", orb: p.color || "#ff5470", homing: p.color || "#ff5470" }[p.kind] || "#fff";
+    return { harrow: "#e8e2d0", hmagic: p.color || "#b06bff", arrow: "#e8e2d0", spore: "#d96a8a", ice: "#9fe8ff", fire: "#ff7a2a", fireball: "#ffb347", void: "#d77bff", bolt: "#ffef6a", blade: "#fff3c0", orb: p.color || "#ff5470", homing: p.color || "#ff5470" }[p.kind] || "#fff";
   }
 
   _stepHazards(dt) {
@@ -1161,7 +1324,9 @@ export class DragonheartGame extends GameBase {
     const s = this._store(), h = this.hero;
     if (it.kind === "npc") {
       const r = it.n.role;
-      if (r === "shop") this._openShop("weapon");
+      if (it.n.giver && r && this._giverMark(it.n.giver) === "?") this._openQuests(it.n.giver);
+      else if (r === "enchant") this._openEnchant();
+      else if (r === "shop") this._openShop("weapon");
       else if (r === "smith") this._openShop("armor");
       else if (r === "tailor") this._openTailor();
       else if (r === "scrap") this._openScrap();
@@ -1208,6 +1373,7 @@ export class DragonheartGame extends GameBase {
   _openShop(kind) {
     const s = this._store();
     const body = el("div", { class: "dh-shop" });
+    let wt = this.wtype;
     const render = () => {
       body.innerHTML = "";
       if (kind === "armor") { body.append(...this._reforgeRows(render)); body.append(el("h4", { class: "dock-h" }, "Armour for sale")); }
@@ -1219,16 +1385,20 @@ export class DragonheartGame extends GameBase {
           el("button", { class: "btn btn-primary btn-sm", disabled: s.gold < POTION_COST || s.potions >= MAX_POTIONS || undefined, onClick: () => { s.gold -= POTION_COST; s.potions++; audioManager.play("coin"); this._save(); render(); } }, `◈ ${POTION_COST}`),
         ]));
       }
-      const list = kind === "weapon" ? WEAPONS : ARMORS;
+      if (kind === "weapon") {
+        body.append(el("div", { class: "dh-tabs" }, Object.entries(WEAPON_TYPES).map(([id, T]) => el("button", { class: `btn btn-sm ${wt === id ? "btn-primary" : "btn-ghost"}`, onClick: () => { wt = id; audioManager.play("select"); render(); } }, `${T.icon} ${T.name}`))));
+        body.append(el("p", { class: "dh-empty", style: "margin:2px 0" }, WEAPON_TYPES[wt].desc));
+      }
+      const list = kind === "weapon" ? WEAPONS.filter(w => w.type === wt && !w.named) : ARMORS;
       const maxTier = Math.min(MAX_TIER, s.unlocked + 2);
       for (const g of list) {
-        if (g.tier < 1 || g.tier > maxTier) continue;
+        if (g.tier < 1 || g.tier > maxTier || g.tier < maxTier - 5) continue;
         const it = { kind, id: g.id, rarity: "common" };
         const price = itemPrice(it);
         const pw = itemPower(it), cur = itemPower(kind === "weapon" ? s.weapon : s.armor);
         const diff = kind === "weapon" ? pw.atk - cur.atk : pw.def - cur.def;
         body.append(el("div", { class: "dh-row" }, [
-          el("span", { class: "dh-ic", style: `--c:${g.color}` }, kind === "weapon" ? "⚔" : "🛡"),
+          el("span", { class: "dh-ic", style: `--c:${g.color}` }, itemIcon(it)),
           el("div", { class: "dh-info" }, [el("b", {}, g.name), el("span", {}, kind === "weapon" ? `Attack ${pw.atk}` : `Defence ${pw.def} · Health +${pw.hp}`), el("em", { class: diff > 0 ? "up" : "down" }, diff > 0 ? `+${diff} better than yours` : diff === 0 ? "same as yours" : `${diff} vs yours`)]),
           el("button", { class: "btn btn-primary btn-sm", disabled: s.gold < price || undefined, onClick: () => { s.gold -= price; this._takeGear(it); render(); } }, `◈ ${formatNumber(price)}`),
         ]));
@@ -1269,10 +1439,11 @@ export class DragonheartGame extends GameBase {
         el("span", {}, `◈ ${formatNumber(s.gold)}`), el("span", {}, `✪ ${s.tokens}`), el("span", {}, `Potions ${s.potions}`),
       ]));
       const slot = (it, label) => el("div", { class: "dh-row eq" }, [
-        el("span", { class: "dh-ic", style: `--c:${RARITY[it.rarity].color}` }, it.kind === "weapon" ? "⚔" : "🛡"),
+        el("span", { class: "dh-ic", style: `--c:${RARITY[it.rarity].color}` }, itemIcon(it)),
         el("div", { class: "dh-info" }, [el("b", { style: `color:${RARITY[it.rarity].color}` }, itemName(it)), el("span", {}, `${label} · ${it.kind === "weapon" ? `Attack +${itemPower(it).atk}` : `Defence ${itemPower(it).def} · Health +${itemPower(it).hp}`}`)]),
       ]);
-      body.append(el("h4", { class: "dock-h" }, "Equipped"), slot(s.weapon, "Weapon"), slot(s.armor, "Armour"));
+      body.append(el("h4", { class: "dock-h" }, "Equipped"), slot(s.weapon, `${WEAPON_TYPES[this.wtype].name}`), slot(s.armor, "Armour"));
+      body.append(this._enchantPicker(render));
       if (s.skills.length) {
         body.append(el("h4", { class: "dock-h" }, "Skills"));
         for (const id of s.skills) {
@@ -1290,7 +1461,7 @@ export class DragonheartGame extends GameBase {
         const pw = itemPower(it), cur = itemPower(it.kind === "weapon" ? s.weapon : s.armor);
         const diff = it.kind === "weapon" ? pw.atk - cur.atk : pw.def - cur.def;
         body.append(el("div", { class: "dh-row" }, [
-          el("span", { class: "dh-ic", style: `--c:${RARITY[it.rarity].color}` }, it.kind === "weapon" ? "⚔" : "🛡"),
+          el("span", { class: "dh-ic", style: `--c:${RARITY[it.rarity].color}` }, itemIcon(it)),
           el("div", { class: "dh-info" }, [el("b", { style: `color:${RARITY[it.rarity].color}` }, itemName(it)), el("span", {}, it.kind === "weapon" ? `Attack +${pw.atk}` : `Defence ${pw.def} · Health +${pw.hp}`), el("em", { class: diff > 0 ? "up" : "down" }, diff > 0 ? `+${diff}` : String(diff))]),
           el("button", { class: "btn btn-primary btn-sm", onClick: () => { const cur2 = it.kind === "weapon" ? s.weapon : s.armor; if (it.kind === "weapon") s.weapon = it; else s.armor = it; s.bag[i] = cur2; this.hero.hp = Math.min(this.hero.hp, this.maxHp); audioManager.play("select"); this._save(); render(); } }, "Equip"),
           el("button", { class: "btn btn-ghost btn-sm", onClick: () => { s.gold += Math.round(itemPrice(it) * 0.3); s.bag.splice(i, 1); audioManager.play("coin"); this._save(); render(); } }, `Sell ◈${Math.round(itemPrice(it) * 0.3)}`),
@@ -1355,6 +1526,8 @@ export class DragonheartGame extends GameBase {
       case "boss": return s.bosses[boss] ? 1 : 0;
       case "nightmare": return s.nightmares[boss] ? 1 : 0;
       case "won": return s.won ? 1 : 0;
+      case "nightmares": return Object.values(s.nightmares || {}).reduce((a, b) => a + b, 0);
+      case "reach": return s.unlocked >= q.reach ? 1 : 0;
       case "collect": return (st.got || []).length;
       default: return st.n || 0;
     }
@@ -1414,7 +1587,7 @@ export class DragonheartGame extends GameBase {
     for (const q of QUESTS) {
       const st = s.quests[q.id];
       if (!st || st.done || this._qReady(q)) continue;
-      if (q.type === "kill" && q.foe === f.type) { st.n = (st.n || 0) + 1; this._questTick(q, f.name); }
+      if (q.type === "kill" && (q.foe === f.type || (q.foe === "bandit" && f.bandit))) { st.n = (st.n || 0) + 1; this._questTick(q, f.name); }
       else if (q.type === "elite" && f.elite && q.r === this.ri) { st.n = (st.n || 0) + 1; this._questTick(q, `Elite ${f.name}`); }
       else if (q.type === "drop" && q.r === this.ri && (!q.foe || q.foe === f.type) && Math.random() < q.chance) {
         const pending = this.drops.filter(d => d.kind === "quest" && d.val === q.id).length;
@@ -1436,6 +1609,7 @@ export class DragonheartGame extends GameBase {
     if (rw.gold) parts.push(`◈ ${formatNumber(rw.gold)}`);
     if (rw.tokens) parts.push(`✪ ${rw.tokens}`);
     if (rw.potions) parts.push(`⚗ ${rw.potions}`);
+    if (rw.enchant) parts.push(`✦ ${ENCHANT_NAMES[rw.enchant]} enchantment`);
     return parts.join(" · ");
   }
 
@@ -1453,6 +1627,7 @@ export class DragonheartGame extends GameBase {
     if (rw.tokens) s.tokens += rw.tokens;
     if (rw.potions) s.potions = Math.min(MAX_POTIONS, s.potions + rw.potions);
     const got = (rw.cos || []).map(c => { this._giveCos(c); return COSMETICS[c].name; });
+    if (rw.enchant) { if (!s.enchants.includes(rw.enchant)) s.enchants.push(rw.enchant); s.enchant = rw.enchant; got.push(`${ENCHANT_NAMES[rw.enchant]} enchantment`); }
     this._gainXp(Math.round(xpFor(Math.max(s.lv, REGIONS[q.r].lv)) * 0.35));
     audioManager.play("win");
     const h = this.hero;
@@ -1474,6 +1649,17 @@ export class DragonheartGame extends GameBase {
 
   _openQuests(gid) {
     const s = this._store(), G = GIVERS[gid];
+    // Letters and parcels addressed to this person change hands now.
+    for (const q of QUESTS) {
+      const st = s.quests[q.id];
+      if (q.type === "deliver" && q.to === gid && st && !st.done && !st.n) {
+        st.n = 1;
+        this._text(this.hero.x, this.hero.y - 50, `Delivered for ${GIVERS[q.giver].name}`, "#2ee6a6", true);
+        audioManager.play("achievement");
+        this.banner = { title: "DELIVERED", sub: `${q.name} — return to ${GIVERS[q.giver].name}`, t: 0.4, gold: true };
+        this._save();
+      }
+    }
     const body = el("div", { class: "dh-shop" });
     const render = () => {
       body.innerHTML = "";
@@ -1482,11 +1668,13 @@ export class DragonheartGame extends GameBase {
       for (const q of QUESTS.filter(x => x.giver === gid)) {
         const st = s.quests[q.id], goal = this._qGoal(q), prog = Math.min(this._qProg(q), goal);
         let btn;
-        if (!st) btn = el("button", { class: "btn btn-primary btn-sm", onClick: () => { s.quests[q.id] = { n: 0, got: [] }; audioManager.play("select"); this._buildQItems(); this._save(); render(); } }, "Accept");
+        const far = q.r > s.unlocked && q.type !== "reach";
+        if (!st && far) btn = el("em", { class: "dh-prog" }, `Reach ${REGIONS[q.r].name} first`);
+        else if (!st) btn = el("button", { class: "btn btn-primary btn-sm", onClick: () => { s.quests[q.id] = { n: 0, got: [] }; audioManager.play("select"); this._buildQItems(); this._save(); render(); } }, "Accept");
         else if (st.done) btn = el("em", { class: "up" }, "✓ Done");
         else if (this._qReady(q)) btn = el("button", { class: "btn btn-primary btn-sm", onClick: () => { this._claim(q); render(); } }, "Claim!");
         else btn = el("em", { class: "dh-prog" }, `${prog}/${goal}`);
-        const hint = st && !st.done && q.type === "collect" ? " Look for the pink sparkles on your minimap." : "";
+        const hint = st && !st.done && q.type === "collect" ? ` Look for the pink sparkles on your minimap${q.r !== this.ri ? ` in ${REGIONS[q.r].name}` : ""}.` : st && !st.done && q.type === "deliver" && !st.n ? ` Find ${GIVERS[q.to].name} in ${REGIONS[q.r].name}.` : "";
         body.append(el("div", { class: `dh-row${st?.done ? " eq" : ""}` }, [
           el("span", { class: "dh-ic", style: `--c:${q.item ? QITEMS[q.item].color : "#ffd76a"}` }, q.item ? QITEMS[q.item].icon : q.type === "kill" || q.type === "elite" ? "⚔" : "☠"),
           el("div", { class: "dh-info" }, [el("b", {}, q.name), el("span", {}, q.desc + hint), el("em", { class: "up" }, `Reward: ${this._rewardText(q.reward)}`)]),
@@ -1555,7 +1743,7 @@ export class DragonheartGame extends GameBase {
       s.bag.forEach((it, i) => {
         const v = value(it);
         body.append(el("div", { class: "dh-row" }, [
-          el("span", { class: "dh-ic", style: `--c:${RARITY[it.rarity].color}` }, it.kind === "weapon" ? "⚔" : "🛡"),
+          el("span", { class: "dh-ic", style: `--c:${RARITY[it.rarity].color}` }, itemIcon(it)),
           el("div", { class: "dh-info" }, [el("b", { style: `color:${RARITY[it.rarity].color}` }, itemName(it)), el("span", {}, it.kind === "weapon" ? `Attack +${itemPower(it).atk}` : `Defence ${itemPower(it).def} · Health +${itemPower(it).hp}`)]),
           el("button", { class: "btn btn-primary btn-sm", onClick: () => { s.tokens += v; s.bag.splice(i, 1); audioManager.play("coin"); this._save(); this._hud(); render(); } }, `Trade ✪ ${v}`),
         ]));
@@ -1606,11 +1794,58 @@ export class DragonheartGame extends GameBase {
     else if (id === "chest") {
       const it = this._rollGear(true, 1);
       if (it.rarity === "common" || it.rarity === "rare") it.rarity = "epic";
-      it.id = (it.kind === "weapon" ? WEAPONS : ARMORS).find(x => x.tier === clamp(Math.max(s.unlocked, this.ri) + 1, 1, MAX_TIER)).id;
+      const tier = clamp(Math.max(s.unlocked, this.ri) + 1, 1, MAX_TIER);
+      it.id = it.kind === "weapon" ? (WEAPONS.find(x => x.tier === tier && x.type === weaponOf(it).type && !x.named) || WEAPONS.find(x => x.tier === tier)).id : ARMORS.find(x => x.tier === tier).id;
       this._takeGear(it);
     }
     audioManager.play("achievement");
     this._save();
+  }
+
+  /** Chips to pick which enchantment the weapon carries. */
+  _enchantPicker(render) {
+    const s = this._store();
+    const own = weaponOf(s.weapon).fx;
+    const chip = (id, label, color) => el("button", {
+      class: `btn btn-sm ${s.enchant === id ? "btn-primary" : "btn-ghost"}`, style: color ? `border-color:${color}` : "",
+      onClick: () => { s.enchant = id; audioManager.play("select"); this._save(); render(); },
+    }, label);
+    return el("div", { class: "dh-row" }, [
+      el("span", { class: "dh-ic", style: `--c:${this.weaponFx ? WEAPON_FX[this.weaponFx].color : "#6a6a7a"}` }, "✦"),
+      el("div", { class: "dh-info" }, [
+        el("b", {}, `Enchantment: ${this.weaponFx ? WEAPON_FX[this.weaponFx].name : "none"}`),
+        el("span", {}, s.enchants.length ? "Pick what your weapon carries — change it any time." : "Enchantress Vela in Greenvale teaches enchantments."),
+        el("div", { class: "dh-chips" }, [chip(null, own ? `Weapon's own (${WEAPON_FX[own].name})` : "None"), ...s.enchants.map(id => chip(id, ENCHANT_NAMES[id], WEAPON_FX[id].color))]),
+      ]),
+    ]);
+  }
+
+  _openEnchant() {
+    const s = this._store();
+    const body = el("div", { class: "dh-shop" });
+    const render = () => {
+      body.innerHTML = "";
+      body.append(el("div", { class: "dh-talk" }, [el("p", {}, `"${GIVERS.vela.hello}"`)]));
+      body.append(el("div", { class: "dh-gold" }, `✪ ${s.tokens} tokens · ◈ ${formatNumber(s.gold)} gold`));
+      body.append(this._enchantPicker(render));
+      body.append(el("h4", { class: "dock-h" }, "Learn an enchantment"));
+      for (const [id, E] of Object.entries(ENCHANTS)) {
+        const F = WEAPON_FX[id], owned = s.enchants.includes(id);
+        body.append(el("div", { class: `dh-row${s.enchant === id ? " eq" : ""}` }, [
+          el("span", { class: "dh-ic", style: `--c:${F.color}` }, "✦"),
+          el("div", { class: "dh-info" }, [el("b", { style: `color:${F.color}` }, ENCHANT_NAMES[id]), el("span", {}, F.desc)]),
+          owned
+            ? (s.enchant === id ? el("em", { class: "up" }, "Active") : el("button", { class: "btn btn-ghost btn-sm", onClick: () => { s.enchant = id; this._save(); audioManager.play("select"); render(); } }, "Use"))
+            : el("button", { class: "btn btn-primary btn-sm", disabled: s.tokens < E.tokens || s.gold < E.gold || undefined, onClick: () => {
+              s.tokens -= E.tokens; s.gold -= E.gold; s.enchants.push(id); s.enchant = id;
+              this._burst(this.hero.x, this.hero.y - 20, F.color, 26, true); audioManager.play("levelup"); this._save(); this._hud(); render();
+            } }, `✪ ${E.tokens} · ◈ ${formatNumber(E.gold)}`),
+        ]));
+      }
+      body.append(el("button", { class: "btn btn-ghost", onClick: () => { closeModal(); setTimeout(() => this._openQuests("vela"), 50); } }, `📜 Vela's tasks${this._giverMark("vela") ? " (" + this._giverMark("vela") + ")" : ""}`));
+    };
+    render();
+    this._modal("Vela's Enchantments", body);
   }
 
   _reforgeRows(render) {
@@ -1619,7 +1854,7 @@ export class DragonheartGame extends GameBase {
     for (const slot of ["weapon", "armor"]) {
       const it = s[slot], R = REFORGE[it.rarity];
       rows.push(el("div", { class: "dh-row" }, [
-        el("span", { class: "dh-ic", style: `--c:${RARITY[it.rarity].color}` }, slot === "weapon" ? "⚔" : "🛡"),
+        el("span", { class: "dh-ic", style: `--c:${RARITY[it.rarity].color}` }, itemIcon(it)),
         el("div", { class: "dh-info" }, [el("b", { style: `color:${RARITY[it.rarity].color}` }, itemName(it)), el("span", {}, R ? `Reforge to ${RARITY[R.to].name}: ×${RARITY[R.to].mult} power` : "Already legendary — it can't get better.")]),
         R ? el("button", { class: "btn btn-primary btn-sm", disabled: s.tokens < R.tokens || s.gold < R.gold || undefined, onClick: () => {
           s.tokens -= R.tokens; s.gold -= R.gold; it.rarity = R.to;
@@ -1638,7 +1873,10 @@ export class DragonheartGame extends GameBase {
     for (const n of W.walkers) {
       n.sayT = Math.max(0, n.sayT - dt);
       n.st -= dt;
-      if (n.st <= 0) {
+      if (n.scared) {
+        // Raid: run for the chapel in the north.
+        n.tx = 12 * T + (n.seed - 3) * 14; n.ty = (W.mh / 2 - 8) * T;
+      } else if (n.st <= 0) {
         n.st = rand(2, 5);
         if (Math.random() < 0.35) { n.tx = n.x; n.ty = n.y; }
         else { const a = rand(0, TAU), d = rand(20, 110); n.tx = n.hx + Math.cos(a) * d; n.ty = n.hy + Math.sin(a) * d * 0.5; }
@@ -1647,7 +1885,8 @@ export class DragonheartGame extends GameBase {
       const dx = n.tx - n.x, dy = n.ty - n.y, d = hyp(dx, dy);
       n.moving = d > 4 && n.sayT <= 0;
       if (n.moving) {
-        const p = W.slide(n.x, n.y, n.x + dx / d * 34 * dt, n.y + dy / d * 34 * dt, 7);
+        const sp = n.scared ? 95 : 34;
+        const p = W.slide(n.x, n.y, n.x + dx / d * sp * dt, n.y + dy / d * sp * dt, 7);
         if (hyp(p.x - n.x, p.y - n.y) < 0.01) n.st = 0;
         n.x = p.x; n.y = p.y; n.walk += dt * 4; n.face = dx < 0 ? -1 : 1;
       }
@@ -1664,11 +1903,14 @@ export class DragonheartGame extends GameBase {
       const scared = hd < 40 && hd > 0.1;
       if (scared) { c.tx = c.x + (c.x - h.x) / hd * 60; c.ty = c.y + (c.y - h.y) / hd * 60; }
       const dx = (c.tx ?? c.x) - c.x, dy = (c.ty ?? c.y) - c.y, d = hyp(dx, dy);
+      c.moving = d > 3;
       if (d > 3) {
-        const sp = scared ? 95 : c.kind === "cat" ? 45 : 38;
-        const p = W.slide(c.x, c.y, c.x + dx / d * sp * dt, c.y + dy / d * sp * dt, 5);
+        const sp = scared ? 95 : c.kind === "cat" ? 45 : c.kind === "dog" ? 70 : c.kind === "duck" ? 22 : 38;
+        const nx = c.x + dx / d * sp * dt, ny = c.y + dy / d * sp * dt;
+        // Ducks stay on the pond.
+        const p = c.swim ? (W.onLiquid(nx, ny) ? { x: nx, y: ny } : (c.st = 0, { x: c.x, y: c.y })) : W.slide(c.x, c.y, nx, ny, 5);
         c.x = p.x; c.y = p.y; c.face = dx < 0 ? -1 : 1;
-        c.hop = c.kind === "chicken" ? Math.abs(Math.sin(this.t * 14 + c.hx)) * 2 : 0;
+        c.hop = c.kind === "chicken" ? Math.abs(Math.sin(this.t * 14 + c.hx)) * 2 : c.kind === "dog" ? Math.abs(Math.sin(this.t * 16)) * 1.2 : 0;
       } else c.hop = 0;
     }
     // The pet trots along behind you.
@@ -1767,8 +2009,8 @@ export class DragonheartGame extends GameBase {
     if (!w || !this.world) return;
     const tiles = clamp(w / 52, 11, 17);
     const sc = w / (tiles * T);
-    let cx = clamp(this.cam.x, w / sc / 2, MW * T - w / sc / 2);
-    let cy = clamp(this.cam.y, h / sc / 2, MH * T - h / sc / 2);
+    let cx = clamp(this.cam.x, w / sc / 2, this.world.mw * T - w / sc / 2);
+    let cy = clamp(this.cam.y, h / sc / 2, this.world.mh * T - h / sc / 2);
     if (this.shake > 0) { cx += rand(-1, 1) * this.shake * 8; cy += rand(-1, 1) * this.shake * 8; }
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.fillStyle = "#0b0f18"; ctx.fillRect(0, 0, w, h);
@@ -1795,9 +2037,9 @@ export class DragonheartGame extends GameBase {
     const st = this._store(), arm = armorOf(st.armor), wpn = weaponOf(st.weapon);
     if (st.cos.pet && !this.dead) list.push({ y: this.pet.y, d: () => drawPet(ctx, st.cos.pet, this.pet, this.t) });
     if (!this.dead) list.push({ y: hh.y, d: () => drawHero(ctx, {
-      ...hh, rolling: hh.rollT > 0, armorColor: arm.color, swordColor: wpn.color, tier: arm.tier, cos: st.cos,
+      ...hh, rolling: hh.rollT > 0, armorColor: arm.color, swordColor: wpn.color, tier: arm.tier, cos: st.cos, wtype: wpn.type || "sword",
       capeColor: st.cos.cape ? COSMETICS[st.cos.cape].color : arm.tier >= 7 ? "#3a1a5a" : arm.tier >= 4 ? "#8a1a2a" : "#2c4f9a",
-      trimColor: arm.tier >= 10 ? "#fff3c0" : "#c9a24a", fxColor: wpn.fx ? WEAPON_FX[wpn.fx].color : null,
+      trimColor: arm.tier >= 10 ? "#fff3c0" : "#c9a24a", fxColor: this.weaponFx ? WEAPON_FX[this.weaponFx].color : null,
     }, this.t) });
     // The nightmare altar, once the region's boss is beaten.
     if (st.bosses[W.region.boss] && !this.boss) list.push({ y: W.arena.y + 90, d: () => this._drawAltar(ctx, W.arena.x, W.arena.y + 90) });
@@ -1876,12 +2118,15 @@ export class DragonheartGame extends GameBase {
       else if (p.type === "campfire") light(p.x, p.y - 8, 150, 0.95, "255,160,70");
       else if (p.type === "lantern") light(p.x + 7, p.y - 34, 90, 0.8, "255,200,110");
       else if (p.type === "shrine" && !p.used) light(p.x, p.y - 36, 90, 0.8, "255,138,240");
+      else if (p.type === "tower") light(p.x, p.y - 160, 120, 0.9, "200,140,255");
+      else if (p.type === "feytree") light(p.x, p.y - 36, 80, 0.6, "255,170,250");
+      else if (p.type === "giantshroom") light(p.x, p.y - 46, 80, 0.6, "200,255,140");
     }
     // Glowing liquids light their banks.
     if (["lava", "void"].includes(R.water) || R.id === "caverns") {
       const col = R.water === "lava" ? "255,120,40" : R.water === "void" ? "170,110,255" : "120,220,255";
-      const x0 = Math.max(0, Math.floor(view.x0 / T)), x1 = Math.min(MW - 1, Math.ceil(view.x1 / T));
-      const y0 = Math.max(0, Math.floor(view.y0 / T)), y1 = Math.min(MH - 1, Math.ceil(view.y1 / T));
+      const x0 = Math.max(0, Math.floor(view.x0 / T)), x1 = Math.min(W.mw - 1, Math.ceil(view.x1 / T));
+      const y0 = Math.max(0, Math.floor(view.y0 / T)), y1 = Math.min(W.mh - 1, Math.ceil(view.y1 / T));
       for (let y = y0; y <= y1; y += 2) for (let x = x0; x <= x1; x += 2) if (W.g(x, y) === 2) light((x + 0.5) * T, (y + 0.5) * T, 70, 0.55, col);
     }
     for (const p of this.shots) light(p.x, p.y, p.owner === "hero" ? 80 : 55, 0.8, null);
@@ -2025,7 +2270,7 @@ export class DragonheartGame extends GameBase {
       ctx.fillStyle = g; ctx.beginPath(); ctx.arc(d.x, y, 26, 0, TAU); ctx.fill();
       ctx.fillStyle = c; ctx.save(); ctx.translate(d.x, y); ctx.rotate(Math.sin(this.t * 2) * 0.3);
       ctx.fillRect(-7, -7, 14, 14); ctx.fillStyle = "#1a1424"; ctx.font = "700 10px sans-serif"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
-      ctx.fillText(d.val.kind === "weapon" ? "⚔" : "🛡", 0, 1); ctx.restore();
+      ctx.fillText(itemIcon(d.val), 0, 1); ctx.restore();
       ctx.strokeStyle = c; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.moveTo(d.x, y - 12); ctx.lineTo(d.x, y - 40 - Math.sin(this.t * 3) * 4); ctx.stroke();
     }
   }
@@ -2045,6 +2290,23 @@ export class DragonheartGame extends GameBase {
         ctx.strokeStyle = c; ctx.lineWidth = 2; ctx.globalAlpha = 0.6;
         ctx.beginPath(); ctx.arc(p.x, p.y, p.r + 4 + Math.sin(this.t * 10) * 2, 0, TAU); ctx.stroke(); ctx.globalAlpha = 1;
       }
+      if (p.kind === "harrow") {
+        ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(Math.atan2(p.vy, p.vx));
+        if (p.color && this.weaponFx) { ctx.strokeStyle = p.color; ctx.globalAlpha = 0.5; ctx.lineWidth = 5; ctx.beginPath(); ctx.moveTo(-16, 0); ctx.lineTo(4, 0); ctx.stroke(); ctx.globalAlpha = 1; }
+        ctx.strokeStyle = "#e8dcc0"; ctx.lineWidth = 2.2; ctx.beginPath(); ctx.moveTo(-13, 0); ctx.lineTo(8, 0); ctx.stroke();
+        ctx.fillStyle = "#e8ecf4"; ctx.beginPath(); ctx.moveTo(12, 0); ctx.lineTo(6, -3.5); ctx.lineTo(6, 3.5); ctx.fill();
+        ctx.fillStyle = "#c0503a"; ctx.beginPath(); ctx.moveTo(-13, 0); ctx.lineTo(-17, -3.5); ctx.lineTo(-11, 0); ctx.lineTo(-17, 3.5); ctx.fill();
+        ctx.restore();
+        continue;
+      }
+      if (p.kind === "hmagic") {
+        const g = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, p.r * 2.6);
+        g.addColorStop(0, "#ffffff"); g.addColorStop(0.3, p.color); g.addColorStop(1, "rgba(0,0,0,0)");
+        ctx.fillStyle = g; ctx.beginPath(); ctx.arc(p.x, p.y, p.r * 2.6, 0, TAU); ctx.fill();
+        ctx.strokeStyle = "rgba(255,255,255,0.8)"; ctx.lineWidth = 1.2;
+        ctx.beginPath(); ctx.arc(p.x, p.y, p.r * 1.2, this.t * 8, this.t * 8 + 2); ctx.stroke();
+        continue;
+      }
       if (p.kind === "arrow") {
         ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(Math.atan2(p.vy, p.vx));
         ctx.strokeStyle = "#d8cfb8"; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(-10, 0); ctx.lineTo(6, 0); ctx.stroke();
@@ -2061,6 +2323,12 @@ export class DragonheartGame extends GameBase {
   _drawFx(ctx) {
     for (const p of this.fx) {
       const k = 1 - p.t / p.life;
+      if (p.corpse) {
+        ctx.save(); ctx.globalAlpha = Math.max(0, k * 0.9); ctx.translate(0, (1 - k) * 5);
+        drawFoe(ctx, p.corpse, this.t);
+        ctx.restore();
+        continue;
+      }
       if (p.bolt) {
         ctx.globalAlpha = k; ctx.lineCap = "round"; ctx.lineJoin = "round";
         for (const [lw, col] of [[7, p.color], [2.5, "#ffffff"]]) {
@@ -2088,7 +2356,8 @@ export class DragonheartGame extends GameBase {
     for (const t of this.texts) {
       const k = t.t / 1.1;
       ctx.globalAlpha = 1 - k * k;
-      ctx.font = `800 ${t.big ? 15 : 11}px Sora, Inter, sans-serif`;
+      const pop = 1 + Math.max(0, 0.18 - t.t) * 2.2;
+      ctx.font = `800 ${Math.round((t.big ? 15 : 11) * pop)}px Sora, Inter, sans-serif`;
       const y = t.y - k * 26;
       ctx.lineWidth = 3; ctx.strokeStyle = "rgba(10,10,20,0.75)"; ctx.strokeText(t.s, t.x, y);
       ctx.fillStyle = t.color; ctx.fillText(t.s, t.x, y);
@@ -2200,13 +2469,13 @@ export class DragonheartGame extends GameBase {
 
   _drawMinimap(ctx, w, h) {
     const W = this.world;
-    const mw = w < 520 ? 96 : 140, mh = mw * MH / MW;
+    const mw = w < 520 ? 96 : 140, mh = mw * W.mh / W.mw;
     const x = w - mw - 10, y = 10;
     ctx.fillStyle = "rgba(8,10,20,0.75)"; ctx.fillRect(x - 3, y - 3, mw + 6, mh + 6);
     ctx.globalAlpha = 0.9;
     ctx.drawImage(W.minimap(), x, y, mw, mh);
     ctx.globalAlpha = 1;
-    const P = (px, py) => [x + px / (MW * T) * mw, y + py / (MH * T) * mh];
+    const P = (px, py) => [x + px / (W.mw * T) * mw, y + py / (W.mh * T) * mh];
     const dot = (px, py, r, c) => { const [a, b] = P(px, py); ctx.fillStyle = c; ctx.beginPath(); ctx.arc(a, b, r, 0, TAU); ctx.fill(); };
     for (const c of this.chests) if (!c.opened) dot(c.x, c.y, 2, "#ffd76a");
     for (const q of this.qitems) dot(q.x, q.y, 2.2, Math.sin(this.t * 5) > 0 ? "#ff8af0" : "#ffffff");

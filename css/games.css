@@ -720,3 +720,6 @@ em.up { color: var(--accent-good, #2ee6a6); } em.down { color: var(--text-3); }
 .gi-panel.short .gi-pb-foot .gi-forms { flex: 1; flex-wrap: nowrap; overflow-x: auto; }
 .gi-panel.short .gi-go { width: auto; flex: none; min-height: 46px; font-size: .95rem; padding: 0 18px; }
 .gi-panel.short .gi-pbtabs button { min-height: 32px; padding: 4px 12px; }
+.dh-chips { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 5px; }
+.dh-chips .btn { padding: 3px 9px; min-height: 30px; }
+.dh-tabs .btn { padding: 4px 9px; }

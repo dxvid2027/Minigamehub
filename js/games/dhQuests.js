@@ -36,6 +36,22 @@ export const QITEMS = {
   voidshard: { name: "Void Shard",      icon: "🔮", color: "#b06bff" },
   star:      { name: "Fallen Star",     icon: "⭐", color: "#ffd76a" },
   relic:     { name: "Ancient Relic",   icon: "🏺", color: "#e0b06a" },
+  tablet:    { name: "Atlantean Tablet", icon: "🗿", color: "#5ce0e6" },
+  emberlily: { name: "Ember Lily",      icon: "🌺", color: "#ff7a2a" },
+  moonpetal: { name: "Moonpetal",       icon: "🌸", color: "#ff8af0" },
+  royalbone: { name: "Royal Bones",     icon: "🦴", color: "#e8e2d0" },
+  soul:      { name: "Bound Soul",      icon: "👻", color: "#c8d8ff" },
+  skycrystal:{ name: "Sky Crystal",     icon: "💠", color: "#8ac8ff" },
+  sporepod:  { name: "Spore Pod",       icon: "🌱", color: "#9ad04a" },
+  ancientice:{ name: "Ancient Ice",     icon: "🧊", color: "#bfe3f7" },
+  loot:      { name: "Stolen Loot",     icon: "💰", color: "#ffd76a" },
+  brimstone: { name: "Brimstone",       icon: "🪨", color: "#ff5a2a" },
+  hoard:     { name: "Dragon Gold",     icon: "🥇", color: "#ffd24a" },
+  emberore:  { name: "Ember Ore",       icon: "⛏", color: "#ff9a3a" },
+  starmetal: { name: "Star Metal",      icon: "✨", color: "#fff3c0" },
+  stormessence:{ name: "Storm Essence", icon: "🌩", color: "#ffef6a" },
+  venomsac:  { name: "Venom Sac",       icon: "🧪", color: "#8aff5a" },
+  spice:     { name: "Desert Spice",    icon: "🌶", color: "#ff5a3a" },
 };
 
 // --- Quest givers -----------------------------------------------------------
@@ -59,9 +75,27 @@ export const GIVERS = {
   yll:     { name: "Void Seer Yll",       color: "#2a1a4a", hair: "#b06bff", hat: "voidmask", hello: "I have seen the end of the world. It is rather close." },
   sera:    { name: "Seraphine",           color: "#fff3c0", hair: "#ffd76a", hat: "halo", hello: "The gardens are beautiful. And they are watching you, little hero." },
   knight:  { name: "The Last Knight",     color: "#3a2a5a", hair: "#c9ccd8", hat: "crown", hello: "Every road ends here. Mine did. Yours need not." },
+  // Greenvale's new faces.
+  orla:    { name: "Captain Orla",        color: "#8a90a4", hair: "#c0503a", hat: "greathelm", hello: "Bandits on every road, and they've started eyeing Greenvale. I need a sword arm." },
+  finn:    { name: "Postmaster Finn",     color: "#2c4f9a", hair: "#c08a3a", hat: "piratehat", hello: "Letters for half the world and no one brave enough to carry them. You look brave!" },
+  tam:     { name: "Apprentice Tam",      color: "#8a5a2a", hair: "#ff9a3a", hello: "Master Bram says I can forge something great — if I ever get proper metal." },
+  vela:    { name: "Enchantress Vela",    color: "#6a2aaa", hair: "#e8e8ff", hat: "witchhat", hello: "Fire, frost, lightning… tell me what your blade should sing, and I will teach it." },
+  maelis:  { name: "Old Sage Maelis",     color: "#3a4a8a", hair: "#e8e8e8", hat: "wizard", hello: "Beyond the Throne of Eternity lie lands older than the map. Will you walk them?" },
+  // Camps beyond Eternity.
+  coralia: { name: "Diver Coralia",       color: "#1a7aa0", hair: "#5ce0e6", hat: "goggles", hello: "An empire under the waves, and its guards still on duty. Rude, honestly." },
+  ignis:   { name: "Ashwalker Ignis",     color: "#5a4a40", hair: "#ff7a2a", hat: "hood", hello: "Walk softly. The ash remembers fire." },
+  puck:    { name: "Puck the Trickster",  color: "#3ad0a0", hair: "#ff8af0", hat: "antlers", hello: "Oh, a visitor! Nothing here will hurt you. Probably. Hee." },
+  morrow:  { name: "Gravekeeper Morrow",  color: "#4a4438", hair: "#c9ccd8", hat: "skullhelm", hello: "The king's bones walk at night. And at noon. Mostly always, really." },
+  aeolus:  { name: "Windrider Aeolus",    color: "#6a9ad0", hair: "#ffffff", hat: "wingedhelm", hello: "Don't look down. Actually, do — it's lovely." },
+  spora:   { name: "Herbalist Spora",     color: "#6a3a7a", hair: "#9ad04a", hat: "witchhat", hello: "Breathe through your nose. Or don't breathe. Your choice." },
+  bjorn:   { name: "Bjorn Frostbeard",    color: "#6a8ab0", hair: "#f4f8fc", hat: "horned", hello: "Giants! Ha! I eat giants for breakfast. Well. I would." },
+  ruth:    { name: "Sheriff Ruth",        color: "#8a5a2a", hair: "#3a2a1a", hat: "tophat", hello: "This is Krag's country now. I aim to change that." },
+  seth:    { name: "Exorcist Seth",       color: "#2a1a1a", hair: "#ff3a1a", hat: "hood", hello: "Do not listen to the whispers from the Gate. They lie." },
+  drakon:  { name: "Elder Drakon",        color: "#c9a24a", hair: "#ffd24a", hat: "dhcrown", hello: "You carry the Dragonheart. Aurelith has been waiting a long time for you." },
 };
 // Which giver keeps camp in which region (Greenvale's live in the village).
-export const CAMP_GIVER = [null, "fen", "ines", "hilde", "brokk", "kael", "mara", "zahir", "moira", "pip", "aeris", "gus", "vlad", "yll", "sera", "knight"];
+export const CAMP_GIVER = [null, "fen", "ines", "hilde", "brokk", "kael", "mara", "zahir", "moira", "pip", "aeris", "gus", "vlad", "yll", "sera", "knight",
+  "coralia", "ignis", "puck", "morrow", "aeolus", "spora", "bjorn", "ruth", "seth", "drakon"];
 
 // --- Quests -----------------------------------------------------------------
 // `r` is the region index the quest belongs to. `slot` picks which of the
@@ -72,7 +106,7 @@ export const QUESTS = [
   { id: "g_apples", r: 0, giver: "granny", name: "Apple Harvest", desc: "Granny Wen's apples rolled all over Greenvale. Find six.", type: "collect", item: "apple", n: 6, reward: { gold: 60, potions: 1, cos: ["flowercrown"] } },
   { id: "g_slimes", r: 0, giver: "farmer", name: "Slime Trouble", desc: "Squash twelve slimes before they eat the turnips.", type: "kill", foe: "slime", n: 12, reward: { gold: 90, cos: ["petslime"] } },
   { id: "g_first",  r: 0, giver: "elder",  name: "First Steps", desc: "Defeat the Slime King in the stone circle east of the village.", type: "boss", reward: { gold: 150, cos: ["capehero"] } },
-  { id: "g_heart",  r: 0, giver: "elder",  name: "The Dragonheart", desc: "Defeat Nyxara, the World Eater, on the Throne of Eternity.", type: "won", reward: { gold: 50000, tokens: 200, cos: ["dhcrown", "petphoenix"] } },
+  { id: "g_heart",  r: 0, giver: "elder",  name: "The Dragonheart", desc: "Defeat Aurelith, the First Dragon, at the end of every road.", type: "won", reward: { gold: 250000, tokens: 300, cos: ["dhcrown", "petphoenix"] } },
   // Whisperwood
   { id: "w_caps",   r: 1, giver: "fen", name: "Glowcaps", desc: "Pick seven glowing mushrooms. Owls love them.", type: "collect", item: "glowcap", n: 7, reward: { gold: 200, cos: ["petowl"] } },
   { id: "w_wolves", r: 1, giver: "fen", name: "The Wolf Pack", desc: "Thin the pack: defeat ten wolves.", type: "kill", foe: "wolf", n: 10, reward: { gold: 250, potions: 2, cos: ["hood"] } },
@@ -119,6 +153,40 @@ export const QUESTS = [
   // Throne of Eternity
   { id: "th_relic", r: 15, giver: "knight", name: "Relics of Eternity", desc: "Eight relics of the old kings lie about the Throne.", type: "collect", item: "relic", n: 8, reward: { gold: 24000, cos: ["auragold"] } },
   { id: "th_night", r: 15, giver: "knight", name: "Beyond the End", desc: "Banish the Nightmare of Nyxara.", type: "nightmare", reward: { gold: 60000, tokens: 100, cos: ["caperainbow"] } },
+  // Greenvale: jobs that take you across the world.
+  { id: "gv_bounty", r: 0, giver: "orla", name: "Bandit Bounty", desc: "Defeat 15 bandits — they ambush travellers on every road.", type: "kill", foe: "bandit", n: 15, reward: { gold: 3000, tokens: 10, cos: ["greathelm"] } },
+  { id: "gv_raid",   r: 0, giver: "orla", name: "Defend Greenvale", desc: "When the bell rings and raiders storm the village, drive them all out.", type: "raid", n: 1, reward: { gold: 2500, tokens: 10, cos: ["capeknight"] } },
+  { id: "gv_letter", r: 1, giver: "finn", name: "Letter for the Ranger", desc: "Carry Finn's letter to Ranger Fen at his camp in Whisperwood.", type: "deliver", to: "fen", reward: { gold: 300, cos: ["petpigeon"] } },
+  { id: "gv_parcel", r: 6, giver: "finn", name: "Parcel for the Captain", desc: "A very wet parcel for Captain Mara on the Coral Coast.", type: "deliver", to: "mara", reward: { gold: 4000, tokens: 8, cos: ["catears"] } },
+  { id: "gv_orders", r: 15, giver: "finn", name: "Sealed Orders", desc: "Deliver the king's sealed orders to the Last Knight on the Throne of Eternity.", type: "deliver", to: "knight", reward: { gold: 30000, tokens: 40 } },
+  { id: "gv_ore",    r: 4, giver: "tam", name: "Fire for the Forge", desc: "Dig up 5 lumps of Ember Ore in the Ember Caldera.", type: "collect", item: "emberore", n: 5, reward: { gold: 1500, tokens: 15 } },
+  { id: "gv_star",   r: 14, giver: "tam", name: "Star Metal", desc: "Bring 5 pieces of Star Metal from the Celestial Gardens.", type: "collect", item: "starmetal", n: 5, reward: { gold: 20000, tokens: 50 } },
+  { id: "gv_storm",  r: 10, giver: "vela", name: "Essence of Storms", desc: "Gather 6 Storm Essences on Stormspire Peaks. Vela will teach your weapon the Tempest.", type: "collect", item: "stormessence", n: 6, reward: { gold: 6000, enchant: "storm" } },
+  { id: "gv_venom",  r: 11, giver: "vela", name: "Venom Sacs", desc: "Crystal spiders carry venom sacs. Bring 6 and learn the Venom enchantment.", type: "drop", item: "venomsac", foe: "spider", n: 6, chance: 0.4, reward: { gold: 8000, enchant: "poison" } },
+  { id: "gv_spice",  r: 7, giver: "granny", name: "Desert Spices", desc: "Granny's stew needs 5 spices from the Mirage Desert.", type: "collect", item: "spice", n: 5, reward: { gold: 4500, potions: 3, cos: ["auranotes"] } },
+  { id: "gv_champ",  r: 0, giver: "maelis", name: "Champion of the Realms", desc: "Banish three Nightmare bosses at their altars.", type: "nightmares", n: 3, reward: { gold: 20000, tokens: 30, cos: ["wingsphoenix"] } },
+  { id: "gv_beyond", r: 0, giver: "maelis", name: "Beyond the Throne", desc: "Defeat Nyxara and set foot in Sunken Atlantis.", type: "reach", reach: 16, reward: { gold: 40000, tokens: 40, cos: ["phoenixcrown"] } },
+  // Beyond Eternity.
+  { id: "at_tab",  r: 16, giver: "coralia", name: "Drowned Words", desc: "Seven Atlantean tablets lie in the ruins.", type: "collect", item: "tablet", n: 7, reward: { gold: 30000, cos: ["aurabubbles"] } },
+  { id: "at_tri",  r: 16, giver: "coralia", name: "Off Duty", desc: "Relieve 12 Triton Guards of their posts.", type: "kill", foe: "triton", n: 12, reward: { gold: 32000, tokens: 30, cos: ["petkraken"] } },
+  { id: "as_lily", r: 17, giver: "ignis", name: "Flowers in the Ash", desc: "Seven Ember Lilies bloom in the Ashen Wastes.", type: "collect", item: "emberlily", n: 7, reward: { gold: 36000, cos: ["capelava"] } },
+  { id: "as_hound",r: 17, giver: "ignis", name: "Cinder Hounds", desc: "Defeat 12 Cinder Hounds.", type: "kill", foe: "cinderhound", n: 12, reward: { gold: 38000, tokens: 30, cos: ["petwolf"] } },
+  { id: "fe_petal",r: 18, giver: "puck", name: "Moonpetals", desc: "Pick eight Moonpetals. Don't eat them.", type: "collect", item: "moonpetal", n: 8, reward: { gold: 42000, cos: ["wingsfairy"] } },
+  { id: "fe_elite",r: 18, giver: "puck", name: "Court of Thorns", desc: "Defeat five elite monsters in the Feywild.", type: "elite", n: 5, reward: { gold: 44000, tokens: 35, cos: ["antlers"] } },
+  { id: "bo_bones",r: 19, giver: "morrow", name: "The King's Bones", desc: "Seven of the old king's bones went walkabout.", type: "collect", item: "royalbone", n: 7, reward: { gold: 48000, cos: ["bonecrown"] } },
+  { id: "bo_souls",r: 19, giver: "morrow", name: "Bound Souls", desc: "Bone Mages carry bound souls. Free six.", type: "drop", item: "soul", foe: "bonemage", n: 6, chance: 0.4, reward: { gold: 50000, tokens: 35, cos: ["aurasouls"] } },
+  { id: "sk_cryst",r: 20, giver: "aeolus", name: "Sky Crystals", desc: "Seven Sky Crystals hold the islands up.", type: "collect", item: "skycrystal", n: 7, reward: { gold: 55000, cos: ["capeaurora"] } },
+  { id: "sk_harpy",r: 20, giver: "aeolus", name: "Harpy Season", desc: "Defeat 12 Sky Harpies.", type: "kill", foe: "skyharpy", n: 12, reward: { gold: 57000, tokens: 40, cos: ["petfairy"] } },
+  { id: "my_pods", r: 21, giver: "spora", name: "Spore Pods", desc: "Eight Spore Pods for Spora's cures.", type: "collect", item: "sporepod", n: 8, reward: { gold: 62000, cos: ["auraleaves"] } },
+  { id: "my_beast",r: 21, giver: "spora", name: "Overgrowth", desc: "Defeat 6 Spore Beasts.", type: "kill", foe: "sporebeast", n: 6, reward: { gold: 64000, tokens: 45, cos: ["petgolem"] } },
+  { id: "gl_ice",  r: 22, giver: "bjorn", name: "Ancient Ice", desc: "Seven blocks of ice older than the world.", type: "collect", item: "ancientice", n: 7, reward: { gold: 70000, cos: ["petpenguin"] } },
+  { id: "gl_giant",r: 22, giver: "bjorn", name: "Giant Slayer", desc: "Defeat 6 Frost Giants.", type: "kill", foe: "frostgiant", n: 6, reward: { gold: 72000, tokens: 45, cos: ["kabuto"] } },
+  { id: "bl_loot", r: 23, giver: "ruth", name: "Stolen Goods", desc: "Recover 8 bags of stolen loot from the bandits' stashes.", type: "collect", item: "loot", n: 8, reward: { gold: 78000, cos: ["jester"] } },
+  { id: "bl_gang", r: 23, giver: "ruth", name: "Clean Up the Badlands", desc: "Defeat 20 bandits.", type: "kill", foe: "bandit", n: 20, reward: { gold: 80000, tokens: 50, cos: ["bandana"] } },
+  { id: "in_brim", r: 24, giver: "seth", name: "Brimstone", desc: "Seven chunks of brimstone to seal the Gate.", type: "collect", item: "brimstone", n: 7, reward: { gold: 88000, cos: ["auraaurora"] } },
+  { id: "in_elite",r: 24, giver: "seth", name: "Hellspawn", desc: "Defeat six elite monsters at the Infernal Gate.", type: "elite", n: 6, reward: { gold: 90000, tokens: 55, cos: ["wingsdemon"] } },
+  { id: "dr_hoard",r: 25, giver: "drakon", name: "The First Hoard", desc: "Eight coins from the oldest dragon hoard of all.", type: "collect", item: "hoard", n: 8, reward: { gold: 100000, cos: ["dragonking"] } },
+  { id: "dr_night",r: 25, giver: "drakon", name: "Dream of the First Dragon", desc: "Summon and banish Aurelith's Nightmare.", type: "nightmare", reward: { gold: 300000, tokens: 200, cos: ["wingsgold"] } },
 ];
 // Collect quests take their spots in order of appearance within a region.
 {
@@ -150,6 +218,16 @@ export const COSMETICS = {
   crown:        { slot: "helm", name: "Golden Crown",      color: "#ffd76a", price: 60 },
   tophat:       { slot: "helm", name: "Top Hat",           color: "#1a1a24", price: 18 },
   dhcrown:      { slot: "helm", name: "Dragonheart Crown", color: "#ff3a5a", from: "Quest: The Dragonheart" },
+  greathelm:    { slot: "helm", name: "Knight's Greathelm", color: "#c9ccd8", from: "Quest: Bandit Bounty" },
+  kabuto:       { slot: "helm", name: "Kabuto",            color: "#8a1a1a", from: "Quest: Giant Slayer" },
+  jester:       { slot: "helm", name: "Jester's Cap",      color: "#ff3a5a", from: "Quest: Stolen Goods" },
+  catears:      { slot: "helm", name: "Cat Ears",          color: "#ff9a3a", from: "Quest: Parcel for the Captain" },
+  phoenixcrown: { slot: "helm", name: "Phoenix Crown",     color: "#ff7a2a", from: "Quest: Beyond the Throne" },
+  antlers:      { slot: "helm", name: "Fey Antlers",       color: "#8a5a2a", from: "Quest: Court of Thorns" },
+  bonecrown:    { slot: "helm", name: "Bone Crown",        color: "#e8e2d0", from: "Quest: The King's Bones" },
+  bandana:      { slot: "helm", name: "Outlaw's Bandana",  color: "#c0203a", from: "Quest: Clean Up the Badlands" },
+  dragonking:   { slot: "helm", name: "Dragon King's Helm", color: "#ffd24a", from: "Quest: The First Hoard" },
+  wizardgold:   { slot: "helm", name: "Archmage Hat",      color: "#2a1a6a", price: 70 },
   // Capes and wings
   capehero:     { slot: "cape", name: "Hero's Cape",       color: "#2c4f9a", trim: "#ffd76a", from: "Quest: First Steps" },
   capecrimson:  { slot: "cape", name: "Crimson Cape",      color: "#a01a2a", trim: "#c9a24a", price: 5 },
@@ -165,6 +243,14 @@ export const COSMETICS = {
   wingsdragon:  { slot: "cape", name: "Dragon Wings",      color: "#8a1a2a", trim: "#ffb347", wings: "dragon", from: "Quest: Ashvane's Nightmare" },
   wingsangel:   { slot: "cape", name: "Angel Wings",       color: "#ffffff", trim: "#ffd76a", wings: "angel", from: "Quest: Trial of Light" },
   wingsbat:     { slot: "cape", name: "Bat Wings",         color: "#2a1a2a", trim: "#6a4a6a", wings: "bat", price: 45 },
+  capeknight:   { slot: "cape", name: "Knight's Tabard",   color: "#f4f4f6", trim: "#c0203a", pattern: "cross", from: "Quest: Defend Greenvale" },
+  capeaurora:   { slot: "cape", name: "Aurora Cape",       color: "#1a6a6a", trim: "#b06bff", pattern: "aurora", from: "Quest: Sky Crystals" },
+  capelava:     { slot: "cape", name: "Magma Cape",        color: "#2a1210", trim: "#ff7a2a", pattern: "lava", from: "Quest: Flowers in the Ash" },
+  wingsphoenix: { slot: "cape", name: "Phoenix Wings",     color: "#ff7a2a", trim: "#ffd76a", wings: "angel", fire: true, from: "Quest: Champion of the Realms" },
+  wingsfairy:   { slot: "cape", name: "Fairy Wings",       color: "#9affe8", trim: "#ff8af0", wings: "fairy", from: "Quest: Moonpetals" },
+  wingsdemon:   { slot: "cape", name: "Demon Wings",       color: "#5a0a0a", trim: "#ff3a1a", wings: "dragon", from: "Quest: Hellspawn" },
+  wingsgold:    { slot: "cape", name: "Wings of the First Dragon", color: "#d8a020", trim: "#fff3a0", wings: "dragon", from: "Quest: Dream of the First Dragon" },
+  capegalaxy:   { slot: "cape", name: "Galaxy Cape",       color: "#0a0a2a", trim: "#7cf0ff", pattern: "stars", price: 55 },
   // Auras
   aurahearts:   { slot: "aura", name: "Hearts",            color: "#ff7fa8", price: 15 },
   auraflame:    { slot: "aura", name: "Flame Aura",        color: "#ff7a2a", price: 40 },
@@ -173,6 +259,11 @@ export const COSMETICS = {
   aurasparkle:  { slot: "aura", name: "Sparkles",          color: "#ffffff", from: "Quest: Spider Nests" },
   auravoid:     { slot: "aura", name: "Void Aura",         color: "#b06bff", price: 80 },
   auragold:     { slot: "aura", name: "Golden Radiance",   color: "#ffd76a", from: "Quest: Relics of Eternity" },
+  aurabubbles:  { slot: "aura", name: "Bubbles",           color: "#9fe8ff", from: "Quest: Drowned Words" },
+  auraleaves:   { slot: "aura", name: "Falling Leaves",    color: "#8acb4a", from: "Quest: Spore Pods" },
+  auranotes:    { slot: "aura", name: "Music Notes",       color: "#ff8af0", from: "Quest: Desert Spices" },
+  auraaurora:   { slot: "aura", name: "Aurora",            color: "#7cf0ff", from: "Quest: Brimstone" },
+  aurasouls:    { slot: "aura", name: "Wandering Souls",   color: "#c8d8ff", from: "Quest: Bound Souls" },
   // Pets — they follow you everywhere.
   petslime:     { slot: "pet", name: "Pet Slime",          color: "#5ad15a", from: "Quest: Slime Trouble" },
   petowl:       { slot: "pet", name: "Owl",                color: "#a07a4a", from: "Quest: Glowcaps" },
@@ -184,6 +275,13 @@ export const COSMETICS = {
   petcat:       { slot: "pet", name: "Kitten",             color: "#ff9a3a", price: 12 },
   petfox:       { slot: "pet", name: "Fox",                color: "#ff7a2a", price: 25 },
   petphoenix:   { slot: "pet", name: "Phoenix",            color: "#ff7a2a", from: "Quest: The Dragonheart" },
+  petwolf:      { slot: "pet", name: "Wolf Pup",           color: "#8b90a0", from: "Quest: Cinder Hounds" },
+  petpenguin:   { slot: "pet", name: "Penguin",            color: "#1a1a24", from: "Quest: Ancient Ice" },
+  petfairy:     { slot: "pet", name: "Fairy",              color: "#ff8af0", from: "Quest: Harpy Season" },
+  petgolem:     { slot: "pet", name: "Pebble Golem",       color: "#8a8a92", from: "Quest: Overgrowth" },
+  petkraken:    { slot: "pet", name: "Baby Kraken",        color: "#8a3aca", from: "Quest: Off Duty" },
+  petpigeon:    { slot: "pet", name: "Post Pigeon",        color: "#9aa0b4", from: "Quest: Letter for the Ranger" },
+  petunicorn:   { slot: "pet", name: "Tiny Unicorn",       color: "#ffffff", price: 90 },
 };
 export const COS_SLOTS = [
   { id: "helm", name: "Helmet", icon: "⛑" },
@@ -210,3 +308,6 @@ export const TOKEN_GOODS = [
   { id: "elixir",   name: "Hero's Elixir",        desc: "A whole level's worth of XP.", icon: "✦", price: 14 },
   { id: "chest",    name: "Mystery Gear Chest",   desc: "Epic or better, for your region.", icon: "🎁", price: 20 },
 ];
+
+/** Plain-language names for the enchantment picker. */
+export const ENCHANT_NAMES = { burn: "Fire", shock: "Lightning", chill: "Ice", poison: "Venom", leech: "Vampire", crit: "Keen", holy: "Holy", storm: "Tempest" };

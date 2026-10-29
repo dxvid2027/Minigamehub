@@ -274,19 +274,20 @@ left-handed layout and a floating stick. Files: `js/games/gridiron.js` (menus,
 season, playbook, settings), `gridironMatch.js` (simulation), `gridironDraw.js`,
 `gridironControls.js`, `gridironSeason.js` and `gridironData.js`.
 
-**Dragonheart** (🐉 action RPG, its own longer code) runs across sixteen
-regions, from the village of Greenvale past Dragon's Spire, the Coral Coast,
-the Clockwork Citadel and the Abyssal Rift to the Throne of Eternity: sword
-combos, dodge rolls, nine skills (keys 1–9) won from bosses, weapons with
-burn/chill/shock/leech/crit/storm effects, loot in four rarities, a shop, a
-smith, a healing fountain, waystone travel, sixteen three-phase boss fights
-ending with Nyxara, the World Eater, and a nightmare altar in every cleared
-arena that summons a far stronger version of its boss. Every region has a
-camp with a quest giver (35 quests in all), a shrine that grants a blessing,
-and the Greenvale market has stalls, villagers and a farm. Quests reward
-cosmetics — helmets (including a Dragon Helm), capes, wings, auras and pets —
-and Grit the scrapper trades gear for Dragon Tokens, which Lysa the tailor
-takes for cosmetics and Bram for reforging gear to a higher rarity. Files:
+**Dragonheart** (🐉 action RPG, its own longer code) runs across twenty-six
+lands, from the village of Greenvale past Dragon's Spire and the Throne of
+Eternity to the Realm of the First Dragon; the ten newest lands are twice the
+size of the old ones. Seven weapon types (sword, axe, spear, warhammer, daggers,
+bow, staff), each with its own attack, and enchantments (fire, lightning, ice,
+venom, vampire, keen, holy, tempest) bought from Enchantress Vela and switched
+freely. Nine skills, loot in four rarities, twenty-six three-phase bosses ending
+with Aurelith, and a nightmare altar in every cleared arena. Every land has a
+camp with a quest giver (67 quests), Greenvale is a large village with a
+market, tavern, chapel, pond, fields and training dummies, and its people send
+you on errands across the world. Bandits — armed people like the hero — ambush
+travellers and sometimes raid Greenvale. Quests reward cosmetics (helmets,
+capes, wings, auras, pets); Grit trades gear for Dragon Tokens, which Lysa
+takes for cosmetics and Bram for reforging. Files:
 `js/games/dragonheart.js` (game, combat, UI), `dhWorld.js` (region generation
 and ground/prop drawing), `dhArt.js` (hero, monsters, bosses), `dhCosmetics.js` (cosmetic art),
 `dhQuests.js` (quests, cosmetics, tokens) and `dhData.js` (balance).

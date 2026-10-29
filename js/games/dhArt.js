@@ -69,27 +69,90 @@ export function drawHero(ctx, h, t) {
   const by = y - bob;
   const outline = "rgba(10,10,20,0.55)";
   ctx.lineWidth = 1.2; ctx.strokeStyle = outline;
-  const drawSword = () => {
-    let a;
-    if (h.swing >= 0) a = h.swingDir + (-1.15 + h.swing * 2.3) * (h.combo % 2 ? -1 : 1);
-    else a = face + (side ? 0.9 * side : 0.9);
-    const hx = x + Math.cos(a) * 10, hy = by - 12 + Math.sin(a) * 6;
-    const len = 22 + Math.min(10, tier * 0.7);
-    ctx.save();
-    ctx.translate(hx, hy); ctx.rotate(a);
-    if (h.fxColor) {
-      const gg = ctx.createRadialGradient(4 + len / 2, 0, 0, 4 + len / 2, 0, len * 0.7);
-      gg.addColorStop(0, h.fxColor + "99"); gg.addColorStop(1, h.fxColor + "00");
-      ctx.fillStyle = gg; ctx.beginPath(); ctx.arc(4 + len / 2, 0, len * 0.7, 0, TAU); ctx.fill();
-    }
-    ctx.fillStyle = "#4a2e18"; ctx.fillRect(-4, -1.6, 7, 3.2);
-    ctx.fillStyle = trim; ctx.fillRect(2, -5, 3, 10);
-    ctx.beginPath(); ctx.arc(-4.5, 0, 2, 0, TAU); ctx.fill();
-    const g = ctx.createLinearGradient(5, -3, 5, 3);
+  const wtype = h.wtype || "sword";
+  const glowFx = (cx, cy, r) => {
+    if (!h.fxColor) return;
+    const gg = ctx.createRadialGradient(cx, cy, 0, cx, cy, r);
+    gg.addColorStop(0, h.fxColor + "99"); gg.addColorStop(1, h.fxColor + "00");
+    ctx.fillStyle = gg; ctx.beginPath(); ctx.arc(cx, cy, r, 0, TAU); ctx.fill();
+  };
+  const blade = (x0, len, w0) => {
+    const g = ctx.createLinearGradient(x0, -w0, x0, w0);
     g.addColorStop(0, "#ffffff"); g.addColorStop(0.5, h.swordColor); g.addColorStop(1, shadeOr(h.swordColor, -0.35));
     ctx.fillStyle = g;
-    ctx.beginPath(); ctx.moveTo(5, -2.8); ctx.lineTo(4 + len - 4, -2); ctx.lineTo(4 + len + 2, 0); ctx.lineTo(4 + len - 4, 2); ctx.lineTo(5, 2.8); ctx.closePath(); ctx.fill();
+    ctx.beginPath(); ctx.moveTo(x0, -w0); ctx.lineTo(x0 + len - 4, -w0 * 0.7); ctx.lineTo(x0 + len + 2, 0); ctx.lineTo(x0 + len - 4, w0 * 0.7); ctx.lineTo(x0, w0); ctx.closePath(); ctx.fill();
     ctx.strokeStyle = outline; ctx.lineWidth = 0.8; ctx.stroke();
+  };
+  const handle = (x0, x1, col = "#4a2e18", w = 3) => { ctx.fillStyle = col; ctx.fillRect(x0, -w / 2, x1 - x0, w); };
+  const drawSword = () => {
+    const sw = h.swing;
+    let a, ext = 0;
+    if (wtype === "spear" || wtype === "daggers") {
+      a = sw >= 0 ? h.swingDir + (wtype === "daggers" ? (h.combo % 2 ? 0.25 : -0.25) : 0) : face + (side ? 0.5 * side : 0.6);
+      ext = sw >= 0 ? Math.sin(Math.min(1, sw) * Math.PI) * (wtype === "spear" ? 16 : 9) : 0;
+    } else if (wtype === "hammer") a = sw >= 0 ? h.swingDir - 2.4 + sw * 2.6 : face + (side ? 0.9 * side : 0.9);
+    else if (wtype === "axe") a = sw >= 0 ? h.swingDir + (-1.5 + sw * 3) * (h.combo % 2 ? -1 : 1) : face + (side ? 0.9 * side : 0.9);
+    else if (wtype === "bow" || wtype === "staff") a = sw >= 0 ? h.swingDir : face + (side ? 0.35 * side : 0.4);
+    else a = sw >= 0 ? h.swingDir + (-1.15 + sw * 2.3) * (h.combo % 2 ? -1 : 1) : face + (side ? 0.9 * side : 0.9);
+    const hx = x + Math.cos(a) * (10 + ext), hy = by - 12 + Math.sin(a) * (6 + ext * 0.6);
+    const len = 22 + Math.min(14, tier * 0.55);
+    ctx.save();
+    ctx.translate(hx, hy); ctx.rotate(a);
+    if (wtype === "sword") {
+      glowFx(4 + len / 2, 0, len * 0.7);
+      handle(-4, 3);
+      ctx.fillStyle = trim; ctx.fillRect(2, -5, 3, 10); ctx.beginPath(); ctx.arc(-4.5, 0, 2, 0, TAU); ctx.fill();
+      blade(5, len, 2.8);
+    } else if (wtype === "axe") {
+      glowFx(len, 0, len * 0.6);
+      handle(-6, len + 2, "#5a3a1e", 3.4);
+      const g = ctx.createLinearGradient(len - 6, -14, len + 6, 0);
+      g.addColorStop(0, "#ffffff"); g.addColorStop(0.6, h.swordColor); g.addColorStop(1, shadeOr(h.swordColor, -0.4));
+      ctx.fillStyle = g;
+      ctx.beginPath(); ctx.moveTo(len - 8, -1.5); ctx.quadraticCurveTo(len - 14, -12, len - 4, -16); ctx.quadraticCurveTo(len + 8, -8, len + 4, 2); ctx.lineTo(len - 2, 2); ctx.closePath(); ctx.fill();
+      ctx.strokeStyle = outline; ctx.lineWidth = 0.8; ctx.stroke();
+      ctx.fillStyle = trim; ctx.fillRect(len - 9, -2.5, 4, 5);
+    } else if (wtype === "spear") {
+      glowFx(len + 16, 0, 12);
+      handle(-12, len + 10, "#6a4422", 2.6);
+      ctx.fillStyle = trim; ctx.fillRect(len + 8, -3, 3, 6);
+      const g = ctx.createLinearGradient(0, -4, 0, 4); g.addColorStop(0, "#ffffff"); g.addColorStop(1, h.swordColor);
+      ctx.fillStyle = g; ctx.beginPath(); ctx.moveTo(len + 10, -4); ctx.lineTo(len + 24, 0); ctx.lineTo(len + 10, 4); ctx.closePath(); ctx.fill();
+      ctx.strokeStyle = outline; ctx.lineWidth = 0.8; ctx.stroke();
+    } else if (wtype === "hammer") {
+      glowFx(len, 0, 16);
+      handle(-6, len, "#5a3a1e", 3.4);
+      const g = ctx.createLinearGradient(len - 4, -10, len + 6, 10); g.addColorStop(0, "#ffffff"); g.addColorStop(0.5, h.swordColor); g.addColorStop(1, shadeOr(h.swordColor, -0.45));
+      ctx.fillStyle = g; ctx.fillRect(len - 5, -10, 13, 20);
+      ctx.strokeStyle = outline; ctx.lineWidth = 0.9; ctx.strokeRect(len - 5, -10, 13, 20);
+      ctx.fillStyle = trim; ctx.fillRect(len - 6, -11, 15, 3); ctx.fillRect(len - 6, 8, 15, 3);
+    } else if (wtype === "daggers") {
+      glowFx(12, 0, 12);
+      handle(-2, 3); ctx.fillStyle = trim; ctx.fillRect(2, -3.5, 2, 7);
+      blade(4, 13, 2.2);
+      // The second dagger in the other hand.
+      ctx.rotate(-0.9); ctx.translate(-2, -10);
+      handle(-2, 3); ctx.fillStyle = trim; ctx.fillRect(2, -3.5, 2, 7);
+      blade(4, 12, 2);
+    } else if (wtype === "bow") {
+      const draw = sw >= 0 ? Math.sin(Math.min(1, sw * 1.4) * Math.PI) : 0;
+      glowFx(4, 0, 14);
+      ctx.strokeStyle = shadeOr(h.swordColor, -0.2); ctx.lineWidth = 2.6;
+      ctx.beginPath(); ctx.arc(-6, 0, 15, -1.05, 1.05); ctx.stroke();
+      ctx.strokeStyle = trim; ctx.lineWidth = 1.2; ctx.beginPath(); ctx.arc(-6, 0, 15, -0.3, 0.3); ctx.stroke();
+      const sx = 1.5 - draw * 9;
+      ctx.strokeStyle = "rgba(240,240,240,0.9)"; ctx.lineWidth = 0.8;
+      ctx.beginPath(); ctx.moveTo(-6 + Math.cos(-1.05) * 15, Math.sin(-1.05) * 15); ctx.lineTo(sx, 0); ctx.lineTo(-6 + Math.cos(1.05) * 15, Math.sin(1.05) * 15); ctx.stroke();
+      if (draw > 0.15) { ctx.strokeStyle = "#e8e2d0"; ctx.lineWidth = 1.4; ctx.beginPath(); ctx.moveTo(sx, 0); ctx.lineTo(sx + 20, 0); ctx.stroke(); ctx.fillStyle = "#c9ccd8"; ctx.beginPath(); ctx.moveTo(sx + 20, -2.5); ctx.lineTo(sx + 25, 0); ctx.lineTo(sx + 20, 2.5); ctx.fill(); }
+    } else if (wtype === "staff") {
+      handle(-10, len + 8, "#6a4a2a", 3);
+      ctx.fillStyle = trim; ctx.fillRect(len + 4, -3.5, 4, 7);
+      const pulse = 0.7 + Math.sin(t * 5) * 0.2 + (sw >= 0 ? 0.4 : 0);
+      const og = ctx.createRadialGradient(len + 13, 0, 0, len + 13, 0, 11);
+      og.addColorStop(0, "#ffffff"); og.addColorStop(0.4, h.fxColor || h.swordColor); og.addColorStop(1, "rgba(0,0,0,0)");
+      ctx.globalAlpha *= Math.min(1, pulse); ctx.fillStyle = og; ctx.beginPath(); ctx.arc(len + 13, 0, 11, 0, TAU); ctx.fill(); ctx.globalAlpha = h.hurt > 0 && Math.floor(t * 30) % 2 ? 0.55 : 1;
+      ctx.fillStyle = h.swordColor; ctx.beginPath(); ctx.arc(len + 13, 0, 4.2, 0, TAU); ctx.fill();
+    }
     ctx.restore();
   };
   if (back) drawSword();
@@ -153,18 +216,30 @@ export function drawHero(ctx, h, t) {
     if (side >= 0) ctx.fillRect(x + 1.5 + ex, by - 27, 1.9, 2.8);
     if (side <= 0) ctx.fillRect(x - 3.4 + ex, by - 27, 1.9, 2.8);
   }
+  if (h.hostile && !back) {
+    // A bandit's scarf over the lower face.
+    ctx.fillStyle = h.maskColor || "#8a1a1a";
+    ctx.beginPath(); ctx.moveTo(x - 7.4, by - 23.8); ctx.lineTo(x + 7.4, by - 23.8); ctx.lineTo(x + 5.6, by - 20); ctx.lineTo(x, by - 18.6); ctx.lineTo(x - 5.6, by - 20); ctx.closePath(); ctx.fill();
+  }
   if (!back) drawSword();
   ctx.restore();
   // Swing trail, tinted by the weapon's effect.
-  if (h.swing >= 0 && h.swing < 0.9) {
-    const a0 = h.swingDir - 1.15, a1 = h.swingDir - 1.15 + h.swing * 2.3;
-    const flip = h.combo % 2;
+  if (h.swing >= 0 && h.swing < 0.9 && wtype !== "bow" && wtype !== "staff") {
     const col = h.fxColor || "#ffffff";
-    ctx.strokeStyle = col; ctx.globalAlpha = 0.65 * (1 - h.swing);
-    ctx.lineWidth = h.combo === 2 ? 9 : 5.5; ctx.lineCap = "round";
+    ctx.strokeStyle = col; ctx.globalAlpha = 0.65 * (1 - h.swing); ctx.lineCap = "round";
     ctx.beginPath();
-    if (!flip) ctx.arc(x, by - 12, 32, a0, a1);
-    else ctx.arc(x, by - 12, 32, h.swingDir + 1.15 - h.swing * 2.3, h.swingDir + 1.15);
+    if (wtype === "spear" || wtype === "daggers") {
+      const reach = wtype === "spear" ? 62 : 30, a = h.swingDir + (wtype === "daggers" ? (h.combo % 2 ? 0.25 : -0.25) : 0);
+      ctx.lineWidth = wtype === "spear" ? 5 : 3.5;
+      ctx.moveTo(x + Math.cos(a) * 12, by - 12 + Math.sin(a) * 8); ctx.lineTo(x + Math.cos(a) * reach * Math.min(1, h.swing * 2), by - 12 + Math.sin(a) * reach * 0.7 * Math.min(1, h.swing * 2));
+    } else {
+      const span = wtype === "axe" ? 1.5 : wtype === "hammer" ? 1.3 : 1.15, R = wtype === "hammer" ? 40 : wtype === "axe" ? 36 : 32;
+      ctx.lineWidth = h.combo === 2 || wtype === "hammer" ? 10 : wtype === "axe" ? 8 : 5.5;
+      const flip = h.combo % 2 && wtype !== "hammer";
+      if (wtype === "hammer") ctx.arc(x, by - 12, R, h.swingDir - 2.4, h.swingDir - 2.4 + h.swing * 2.6);
+      else if (!flip) ctx.arc(x, by - 12, R, h.swingDir - span, h.swingDir - span + h.swing * span * 2);
+      else ctx.arc(x, by - 12, R, h.swingDir + span - h.swing * span * 2, h.swingDir + span);
+    }
     ctx.stroke();
     ctx.strokeStyle = "#ffffff"; ctx.lineWidth = 2; ctx.stroke();
     ctx.globalAlpha = 1;
@@ -182,6 +257,7 @@ function drawHair(ctx, x, by, back) {
 // Monsters
 // ==========================================================================
 export function drawFoe(ctx, f, t) {
+  if ((f.art || f.type) === "human") { drawHuman(ctx, f, t); return; }
   const { x, y } = f;
   const r = f.r;
   const ph = t * 4 + f.seed;
@@ -390,6 +466,7 @@ export function drawFoe(ctx, f, t) {
   }
   if (f.frozen > 0) { ctx.fillStyle = "rgba(190,235,255,0.45)"; ctx.beginPath(); ctx.ellipse(0, -r, r * 1.3, r * 1.2, 0, 0, TAU); ctx.fill(); ctx.strokeStyle = "rgba(255,255,255,0.8)"; ctx.lineWidth = 1.5; ctx.stroke(); }
   if (f.burn > 0 && Math.random() < 0.7) { ctx.fillStyle = `rgba(255,${120 + Math.random() * 100},40,0.85)`; ctx.beginPath(); ctx.arc(rand2(r), -r * 1.4 - Math.random() * r, 2 + Math.random() * 2, 0, TAU); ctx.fill(); }
+  if (f.poisonT > 0) for (let i = 0; i < Math.min(3, f.poison); i++) { const ph = (t * 1.2 + i / 3) % 1; ctx.fillStyle = `rgba(140,255,90,${0.8 * (1 - ph)})`; ctx.beginPath(); ctx.arc(Math.sin(i * 2.4 + t * 2) * r * 0.7, -r * 1.3 - ph * r * 1.4, 2 + (1 - ph) * 1.5, 0, TAU); ctx.fill(); }
   ctx.restore();
   // Health bar once it has been hurt.
   if (f.hp < f.maxHp && f.hp > 0) {
@@ -397,6 +474,26 @@ export function drawFoe(ctx, f, t) {
     const top = y - (f.ai === "float" ? r * 3.4 : r * 2.6) - 6;
     ctx.fillStyle = "rgba(0,0,0,0.6)"; ctx.fillRect(x - w / 2 - 1, top - 1, w + 2, 5);
     ctx.fillStyle = f.elite ? "#ffb347" : "#ff5470"; ctx.fillRect(x - w / 2, top, w * (f.hp / f.maxHp), 3);
+  }
+}
+
+/** Bandits and raiders: people like the hero, armed and hostile. */
+function drawHuman(ctx, f, t) {
+  const since = t - (f.atkAnimT ?? -9);
+  let swing = since >= 0 && since < 0.3 ? since / 0.3 : -1;
+  if (f.ai === "ranged" && f.state === "wind") swing = Math.min(0.6, f.wind * 0.6);
+  if (f.wind > 0 && f.ai !== "ranged") glow(ctx, f.x, f.y - 16, 30, "rgba(255,60,60,A)", 0.35 * f.wind);
+  drawHero(ctx, {
+    x: f.x + (f.wind > 0 ? Math.sin(t * 60) * f.wind * 1.5 : 0), y: f.y, ang: f.ang || 0, walk: f.walk || 0, moving: !!f.moving,
+    swing, swingDir: f.ang || 0, combo: f.combo || 0, armorColor: f.flash > 0 ? "#ffffff" : f.frozen > 0 ? "#bfe8ff" : f.color,
+    swordColor: f.elite ? "#ffd76a" : "#b8bcc8", tier: f.elite ? 10 : 5, capeColor: shadeOr(f.color, -0.45), trimColor: "#8a6a3a",
+    wtype: f.wtype || "sword", hostile: true, maskColor: f.mask, cos: { helm: f.helm || null }, hurt: 0, shield: 0,
+  }, t);
+  if (f.burn > 0 && Math.random() < 0.7) { ctx.fillStyle = `rgba(255,${120 + Math.random() * 100},40,0.85)`; ctx.beginPath(); ctx.arc(f.x + rand2(10), f.y - 30 - Math.random() * 10, 2 + Math.random() * 2, 0, TAU); ctx.fill(); }
+  if (f.hp < f.maxHp && f.hp > 0) {
+    const w = 26, top = f.y - 52;
+    ctx.fillStyle = "rgba(0,0,0,0.6)"; ctx.fillRect(f.x - w / 2 - 1, top - 1, w + 2, 5);
+    ctx.fillStyle = f.elite ? "#ffb347" : "#ff5470"; ctx.fillRect(f.x - w / 2, top, w * (f.hp / f.maxHp), 3);
   }
 }
 
@@ -417,6 +514,16 @@ export function drawBoss(ctx, b, t) {
   ctx.translate(x, y);
   if (b.nightmare) glow(ctx, 0, -r, r * 2.4, "rgba(140,0,200,A)", 0.3 + Math.sin(t * 4) * 0.1);
   switch (b.art || b.type) {
+    case "warlord": {
+      ctx.scale(2.3, 2.3);
+      const since = t - (b.atkAnimT ?? -9);
+      drawHero(ctx, {
+        x: 0, y: 0, ang: b.ang ?? Math.PI, walk: t * 5, moving: wind <= 0, swing: since >= 0 && since < 0.4 ? since / 0.4 : wind > 0 ? 0 : -1,
+        swingDir: b.ang ?? 0, combo: 0, armorColor: col, swordColor: "#c9ccd8", tier: 12, capeColor: "#3a0a0a", trimColor: "#ffd76a",
+        wtype: "axe", hostile: true, maskColor: "#1a1a1a", cos: { helm: "horned", cape: enr ? "capeblood" : null }, fxColor: enr ? "#ff3a3a" : null, hurt: 0, shield: 0,
+      }, t);
+      break;
+    }
     case "slimeking": {
       const sq = 1 + Math.sin(ph * 2) * 0.06 + wind * 0.3;
       ctx.fillStyle = col; ctx.beginPath(); ctx.ellipse(0, -r * 0.8 / sq, r * sq, r * 0.85 / sq, 0, 0, TAU); ctx.fill();
@@ -643,6 +750,22 @@ export function drawCritter(ctx, c, t) {
     ctx.fillStyle = "#ffb347"; ctx.beginPath(); ctx.moveTo(6.5, -10.5 + peck); ctx.lineTo(9, -9.5 + peck); ctx.lineTo(6.5, -8.5 + peck); ctx.fill();
     ctx.fillStyle = "#111"; ctx.fillRect(4.5, -11 + peck, 1, 1);
     ctx.strokeStyle = "#ffb347"; ctx.beginPath(); ctx.moveTo(-1, -2); ctx.lineTo(-1, 0); ctx.moveTo(1.5, -2); ctx.lineTo(1.5, 0); ctx.stroke();
+  } else if (c.kind === "duck") {
+    ctx.fillStyle = "rgba(255,255,255,0.35)"; ctx.beginPath(); ctx.ellipse(0, 0, 8 + Math.sin(t * 3) * 1, 2.4, 0, 0, TAU); ctx.fill();
+    ctx.fillStyle = "#f8f4ec"; ctx.beginPath(); ctx.ellipse(0, -3, 6, 3.6, 0, 0, TAU); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = "#2a8a4a"; ctx.beginPath(); ctx.arc(5, -7, 2.8, 0, TAU); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = "#ffb347"; ctx.beginPath(); ctx.moveTo(7.4, -7.4); ctx.lineTo(10, -6.6); ctx.lineTo(7.4, -5.8); ctx.fill();
+    ctx.fillStyle = "#111"; ctx.fillRect(5.4, -8, 1, 1);
+  } else if (c.kind === "dog") {
+    const step = Math.sin(t * 12) * (c.hop > 0 || c.moving ? 1.5 : 0);
+    ctx.strokeStyle = "#8a5a2a"; ctx.lineWidth = 2; ctx.lineCap = "round";
+    ctx.beginPath(); ctx.moveTo(-6, -7); ctx.lineTo(-10, -11 + Math.sin(t * 14) * 2); ctx.stroke();
+    ctx.strokeStyle = "rgba(10,10,20,0.45)"; ctx.lineWidth = 1;
+    ctx.fillStyle = "#6a4422"; ctx.fillRect(-5, -4 + step, 2.2, 4 - step); ctx.fillRect(3, -4 - step, 2.2, 4 + step);
+    ctx.fillStyle = "#a0703a"; ctx.beginPath(); ctx.ellipse(-0.5, -6, 7, 4, 0, 0, TAU); ctx.fill(); ctx.stroke();
+    ctx.beginPath(); ctx.arc(6, -10, 4, 0, TAU); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = "#6a4422"; ctx.beginPath(); ctx.ellipse(4, -12, 1.6, 3.2, -0.4, 0, TAU); ctx.fill();
+    ctx.fillStyle = "#1a1a1a"; ctx.beginPath(); ctx.arc(9.6, -9.6, 1, 0, TAU); ctx.fill(); ctx.fillRect(6.4, -11.4, 1, 1);
   } else {
     ctx.strokeStyle = "#5a5a6a"; ctx.lineWidth = 2; ctx.lineCap = "round";
     ctx.beginPath(); ctx.moveTo(-5, -5); ctx.quadraticCurveTo(-10, -6, -9 + Math.sin(t * 2) * 1.5, -12); ctx.stroke();
