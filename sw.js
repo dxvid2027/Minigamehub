@@ -1,16 +1,16 @@
 // ==========================================================================
 // MegaPlay Hub service worker.
 //
-// Strategy:
-//   • navigations  → network-first (so a fresh deploy is picked up straight
-//                    away), falling back to the cached shell when offline
-//   • everything   → stale-while-revalidate: instant from cache, refreshed in
-//     else           the background for the next visit
+// Strategy: network-first for everything, falling back to the cache when
+// offline. Stale-while-revalidate used to serve the previous deploy's files
+// first, so a new game or a new secret code only appeared after two or
+// three reloads — and a page could even run a mix of old and new modules.
+// Online, the site is now always the latest deploy; offline it still works.
 //
 // Bump CACHE_VERSION whenever the shell changes in a breaking way; old caches
 // are deleted on activate.
 // ==========================================================================
-const CACHE_VERSION = "megaplay-v1";
+const CACHE_VERSION = "megaplay-v2";
 const SHELL = [
   "./",
   "./index.html",
@@ -86,17 +86,14 @@ self.addEventListener("fetch", (event) => {
   }
 
   event.respondWith(
-    caches.match(request).then((cached) => {
-      const network = fetch(request)
-        .then((response) => {
-          if (response && response.status === 200 && response.type === "basic") {
-            const copy = response.clone();
-            caches.open(CACHE_VERSION).then((cache) => cache.put(request, copy));
-          }
-          return response;
-        })
-        .catch(() => cached);
-      return cached || network;
-    })
+    fetch(request, { cache: "no-cache" })
+      .then((response) => {
+        if (response && response.status === 200 && response.type === "basic") {
+          const copy = response.clone();
+          caches.open(CACHE_VERSION).then((cache) => cache.put(request, copy));
+        }
+        return response;
+      })
+      .catch(() => caches.match(request).then((cached) => cached || Response.error()))
   );
 });
