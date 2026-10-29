@@ -42,8 +42,10 @@ export class World {
   constructor(regionIndex) {
     this.ri = regionIndex;
     this.region = REGIONS[regionIndex];
-    this.ground = new Uint8Array(MW * MH);
-    this.variant = new Uint8Array(MW * MH);
+    // Every region has its own size; the newer lands are far bigger.
+    [this.mw, this.mh] = this.region.size || [MW, MH];
+    this.ground = new Uint8Array(this.mw * this.mh);
+    this.variant = new Uint8Array(this.mw * this.mh);
     this.props = [];
     this.decor = [];
     this.spawns = [];
@@ -56,33 +58,33 @@ export class World {
     this._generate();
     this._index();
     const hexA = (h, a) => { const v = parseInt(h.slice(1), 16); return `rgba(${(v >> 16) & 255},${(v >> 8) & 255},${v & 255},${a})`; };
-    this.patches = Array.from({ length: 170 }, () => {
+    this.patches = Array.from({ length: Math.round(170 * this.mw * this.mh / (MW * MH)) }, () => {
       const c = this.region.ground[1 + ((this.rng() * 2) | 0)];
-      return { x: this.rng() * MW * T, y: this.rng() * MH * T, r: 50 + this.rng() * 110, c: hexA(c, 0.75), c0: hexA(c, 0) };
+      return { x: this.rng() * this.mw * T, y: this.rng() * this.mh * T, r: 50 + this.rng() * 110, c: hexA(c, 0.75), c0: hexA(c, 0) };
     });
   }
 
-  g(x, y) { return x < 0 || y < 0 || x >= MW || y >= MH ? G_WALL : this.ground[y * MW + x]; }
-  setG(x, y, v) { if (x >= 0 && y >= 0 && x < MW && y < MH) this.ground[y * MW + x] = v; }
+  g(x, y) { return x < 0 || y < 0 || x >= this.mw || y >= this.mh ? G_WALL : this.ground[y * this.mw + x]; }
+  setG(x, y, v) { if (x >= 0 && y >= 0 && x < this.mw && y < this.mh) this.ground[y * this.mw + x] = v; }
 
   _generate() {
     const R = this.region, rng = rngFrom(9173 + this.ri * 7919);
     this.rng = rng;
-    const n1 = noiseField(rng, MW, MH, 7), n2 = noiseField(rng, MW, MH, 4), n3 = noiseField(rng, MW, MH, 11);
-    for (let i = 0; i < MW * MH; i++) this.variant[i] = (rng() * 3) | 0;
+    const n1 = noiseField(rng, this.mw, this.mh, 7), n2 = noiseField(rng, this.mw, this.mh, 4), n3 = noiseField(rng, this.mw, this.mh, 11);
+    for (let i = 0; i < this.mw * this.mh; i++) this.variant[i] = (rng() * 3) | 0;
 
     // Base: grass, liquid where the slow noise dips, a thick edge of wall.
-    const midY = MH / 2;
-    for (let y = 0; y < MH; y++) for (let x = 0; x < MW; x++) {
+    const midY = this.mh / 2;
+    for (let y = 0; y < this.mh; y++) for (let x = 0; x < this.mw; x++) {
       let v = G_GRASS;
-      const edge = Math.min(x, y, MW - 1 - x, MH - 1 - y);
+      const edge = Math.min(x, y, this.mw - 1 - x, this.mh - 1 - y);
       if (edge < 2 || (edge < 4 && n2(x, y) > 0.55)) v = G_WALL;
       else if (n3(x, y) > 0.66) v = G_LIQUID;
       this.setG(x, y, v);
     }
 
     // The road: a wandering walk from the waystone in the west to the arena.
-    const arena = { tx: MW - 10, ty: Math.round(midY), r: 7.5 };
+    const arena = { tx: this.mw - 10, ty: Math.round(midY), r: 7.5 };
     this.arena = { x: (arena.tx + 0.5) * T, y: (arena.ty + 0.5) * T, r: arena.r * T };
     let px = 3, py = Math.round(midY), dyDrift = 0;
     const road = [];
@@ -90,15 +92,15 @@ export class World {
       road.push([px, py]);
       if (rng() < 0.7) px++;
       else { dyDrift = rng() < 0.5 ? -1 : 1; }
-      if (rng() < 0.35) py = Math.max(6, Math.min(MH - 7, py + dyDrift));
-      if (Math.abs(py - midY) > 12) py += py > midY ? -1 : 1;
-      if (R.village && px < 23) py = Math.round(midY);      // straight through the market
+      if (rng() < 0.35) py = Math.max(6, Math.min(this.mh - 7, py + dyDrift));
+      if (Math.abs(py - midY) > this.mh * 0.27) py += py > midY ? -1 : 1;
+      if (R.village && px < 46) py = Math.round(midY);      // straight through the village
     }
     for (const [x, y] of road) {
       for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) this.setG(x + dx, y + dy, G_PATH);
       // Keep the road's shoulders walkable.
       for (let dy = -3; dy <= 3; dy++) for (let dx = -2; dx <= 2; dx++) {
-        if (this.g(x + dx, y + dy) === G_LIQUID || (this.g(x + dx, y + dy) === G_WALL && Math.min(x + dx, y + dy, MW - 1 - x - dx, MH - 1 - y - dy) >= 2)) this.setG(x + dx, y + dy, G_GRASS);
+        if (this.g(x + dx, y + dy) === G_LIQUID || (this.g(x + dx, y + dy) === G_WALL && Math.min(x + dx, y + dy, this.mw - 1 - x - dx, this.mh - 1 - y - dy) >= 2)) this.setG(x + dx, y + dy, G_GRASS);
       }
     }
     this.road = road;
@@ -115,14 +117,15 @@ export class World {
 
     // Clearings along the road for camps and chests.
     const clearings = [];
-    const startX = R.village ? 26 : 12;
-    for (let k = 0; k < 6; k++) {
-      const [rx, ry] = road[Math.min(road.length - 1, Math.floor(startX + (k + 0.5) * (road.length - startX) / 6.5))] || [30, midY];
+    const startX = R.village ? 48 : 12;
+    const nClear = Math.min(12, Math.round(6 * this.mw * this.mh / (MW * MH)));
+    for (let k = 0; k < nClear; k++) {
+      const [rx, ry] = road[Math.min(road.length - 1, Math.floor(startX + (k + 0.5) * (road.length - startX) / (nClear + 0.5)))] || [30, midY];
       const side = rng() < 0.5 ? -1 : 1;
-      const cx = rx + Math.round(rng() * 4 - 2), cy = Math.max(7, Math.min(MH - 8, ry + side * (5 + Math.round(rng() * 5))));
+      const cx = rx + Math.round(rng() * 4 - 2), cy = Math.max(7, Math.min(this.mh - 8, ry + side * (5 + Math.round(rng() * 5))));
       const rad = 3.5 + rng() * 2;
       for (let y = cy - 6; y <= cy + 6; y++) for (let x = cx - 6; x <= cx + 6; x++) {
-        if (Math.hypot(x - cx, y - cy) <= rad && this.g(x, y) !== G_PATH && Math.min(x, y, MW - 1 - x, MH - 1 - y) >= 2) this.setG(x, y, G_GRASS);
+        if (Math.hypot(x - cx, y - cy) <= rad && this.g(x, y) !== G_PATH && Math.min(x, y, this.mw - 1 - x, this.mh - 1 - y) >= 2) this.setG(x, y, G_GRASS);
       }
       clearings.push({ tx: cx, ty: cy, r: rad });
     }
@@ -137,12 +140,12 @@ export class World {
 
     // Props: trees on the wall band and scattered through the grass by noise.
     const occupied = new Set();
-    const clearOf = (x, y) => this.g(x, y) === G_GRASS && !occupied.has(y * MW + x)
+    const clearOf = (x, y) => this.g(x, y) === G_GRASS && !occupied.has(y * this.mw + x)
       && Math.hypot((x + 0.5) * T - this.arena.x, (y + 0.5) * T - this.arena.y) > this.arena.r + T * 1.5
-      && !(R.village && x < 24 && Math.abs(y - midY) < 10)
+      && !(R.village && x < 45 && Math.abs(y - midY) < 17)
       && !this.safe.some(z => Math.hypot((x + 0.5) * T - z.x, (y + 0.5) * T - z.y) < z.r)
       && Math.hypot(x - 4, y - road[0][1]) > 4;
-    for (let y = 0; y < MH; y++) for (let x = 0; x < MW; x++) {
+    for (let y = 0; y < this.mh; y++) for (let x = 0; x < this.mw; x++) {
       const t = this.g(x, y);
       if (t === G_WALL && rng() < 0.75) {
         this.props.push(this._prop(R.tree, (x + 0.5 + (rng() - 0.5) * 0.6) * T, (y + 0.7 + (rng() - 0.5) * 0.4) * T, false));
@@ -153,12 +156,12 @@ export class World {
       if (nearClearing) continue;
       if (n1(x, y) > 0.58 && rng() < 0.55) {
         this.props.push(this._prop(R.tree, (x + 0.5) * T + (rng() - 0.5) * 12, (y + 0.7) * T, true));
-        occupied.add(y * MW + x);
+        occupied.add(y * this.mw + x);
       } else if (rng() < 0.05) {
         const kind = R.props[(rng() * R.props.length) | 0];
         const p = this._prop(kind, (x + 0.5) * T + (rng() - 0.5) * 10, (y + 0.6) * T, true);
         (p.solid || p.tall ? this.props : this.decor).push(p);
-        occupied.add(y * MW + x);
+        occupied.add(y * this.mw + x);
       } else if (rng() < 0.06) {
         const flat = R.props.find(k => ["flower", "kelp", "shell", "dune", "bones", "reed", "lily", "rose"].includes(k));
         this.decor.push(this._prop(flat && rng() < 0.7 ? flat : "tuft", (x + rng()) * T, (y + rng()) * T, false));
@@ -203,25 +206,25 @@ export class World {
   /** Walkable tiles reachable from the entry, for quest items. */
   _questSpots(rng) {
     const ok = (t) => t === G_GRASS || t === G_PATH || t === G_PLAZA || t === G_ARENA || (t === G_LIQUID && this.region.water === "ice");
-    const seen = new Uint8Array(MW * MH);
+    const seen = new Uint8Array(this.mw * this.mh);
     const sx = Math.floor(this.entry.x / T), sy = Math.floor(this.entry.y / T);
-    const q = [[sx, sy]]; seen[sy * MW + sx] = 1;
+    const q = [[sx, sy]]; seen[sy * this.mw + sx] = 1;
     while (q.length) {
       const [x, y] = q.pop();
       for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
         const nx = x + dx, ny = y + dy;
-        if (nx < 0 || ny < 0 || nx >= MW || ny >= MH || seen[ny * MW + nx] || !ok(this.g(nx, ny))) continue;
-        seen[ny * MW + nx] = 1; q.push([nx, ny]);
+        if (nx < 0 || ny < 0 || nx >= this.mw || ny >= this.mh || seen[ny * this.mw + nx] || !ok(this.g(nx, ny))) continue;
+        seen[ny * this.mw + nx] = 1; q.push([nx, ny]);
       }
     }
     const blockedT = new Set();
-    for (const p of this.props) if (p.solid) blockedT.add(Math.floor(p.x / T) + Math.floor(p.y / T) * MW);
+    for (const p of this.props) if (p.solid) blockedT.add(Math.floor(p.x / T) + Math.floor(p.y / T) * this.mw);
     const cand = [];
-    for (let y = 3; y < MH - 3; y++) for (let x = 8; x < MW - 3; x++) {
-      if (!seen[y * MW + x] || this.g(x, y) !== G_GRASS || blockedT.has(x + y * MW)) continue;
+    for (let y = 3; y < this.mh - 3; y++) for (let x = 8; x < this.mw - 3; x++) {
+      if (!seen[y * this.mw + x] || this.g(x, y) !== G_GRASS || blockedT.has(x + y * this.mw)) continue;
       const px = (x + 0.5) * T, py = (y + 0.5) * T;
       if (Math.hypot(px - this.arena.x, py - this.arena.y) < this.arena.r + 3 * T) continue;
-      if (this.region.village && x < 25 && Math.abs(y - MH / 2) < 10) continue;
+      if (this.region.village && x < 46 && Math.abs(y - this.mh / 2) < 17) continue;
       if (this.safe.some(z => Math.hypot(px - z.x, py - z.y) < z.r)) continue;
       cand.push([px, py]);
     }
@@ -239,7 +242,7 @@ export class World {
     const side = ry - 8 >= 3 ? -1 : 1;
     const cx = rx + 2, cy = ry + side * 5;
     for (let y = cy - 4; y <= cy + 4; y++) for (let x = cx - 4; x <= cx + 4; x++) {
-      if (Math.hypot(x - cx, y - cy) <= 3.6 && Math.min(x, y, MW - 1 - x, MH - 1 - y) >= 2 && this.g(x, y) !== G_PATH) this.setG(x, y, G_GRASS);
+      if (Math.hypot(x - cx, y - cy) <= 3.6 && Math.min(x, y, this.mw - 1 - x, this.mh - 1 - y) >= 2 && this.g(x, y) !== G_PATH) this.setG(x, y, G_GRASS);
     }
     // A short trail from the road to the camp.
     for (let k = 1; k < 5; k++) { const y = ry + side * k; if (this.g(rx + 1, y) !== G_PATH) { this.setG(rx + 1, y, G_GRASS); this.setG(rx + 2, y, G_GRASS); } }
@@ -260,17 +263,24 @@ export class World {
   }
 
   _village() {
-    const cy = Math.round(MH / 2);
-    for (let y = cy - 7; y <= cy + 8; y++) for (let x = 5; x <= 23; x++) {
+    const cy = Math.round(this.mh / 2);
+    for (let y = cy - 15; y <= cy + 16; y++) for (let x = 4; x <= 44; x++) {
       if (Math.min(x, y) < 2) continue;
-      if (Math.abs(y - cy) <= 3 && x >= 6 && x <= 22) this.setG(x, y, G_PLAZA);
+      if (Math.abs(y - cy) <= 3 && x >= 6 && x <= 43) this.setG(x, y, G_PLAZA);
       else if (this.g(x, y) !== G_PATH) this.setG(x, y, G_GRASS);
     }
+    // The duck pond in the south of the village.
+    for (let y = cy + 9; y <= cy + 14; y++) for (let x = 21; x <= 29; x++) {
+      if (((x - 25) / 4.4) ** 2 + ((y - cy - 11.5) / 2.7) ** 2 <= 1) this.setG(x, y, G_LIQUID);
+    }
+    // Paths: north to the chapel and the park, south to the fields and the training ground.
+    for (let y = cy - 12; y <= cy - 3; y++) { this.setG(13, y, G_PATH); this.setG(33, y, G_PATH); }
+    for (let y = cy + 3; y <= cy + 12; y++) { this.setG(17, y, G_PATH); this.setG(36, y, G_PATH); }
     const H = (x, y, roof, kind) => this.props.push(Object.assign(this._prop("house", x * T, y * T, true), { roof, kind }));
     H(9, cy - 4.2, "#c0503a", "home"); H(14, cy - 4.4, "#3a6ac0", "shop"); H(19, cy - 4.2, "#7a4ab0", "home");
     H(10.5, cy + 6.4, "#3a9a5a", "smith"); H(17, cy + 6.4, "#c08a3a", "home");
     this.fountain = { x: 13.5 * T, y: (cy + 0.6) * T };
-    this.safe.push({ x: 14 * T, y: cy * T, r: 9 * T });
+    this.safe.push({ x: 24 * T, y: cy * T, r: 21 * T });
     this.props.push(Object.assign(this._prop("fountain", this.fountain.x, this.fountain.y, true), { fountain: true }));
     // The market: stalls along the plaza's north edge, their keepers behind the counters.
     const P = (type, x, y, extra) => { const p = Object.assign(this._prop(type, x * T, y * T, true), extra || {}); this.props.push(p); return p; };
@@ -287,11 +297,22 @@ export class World {
     N({ id: "tailor", role: "tailor", name: "Lysa the Tailor", x: 16.6 * T, y: (cy - 2.45) * T, color: "#b03a8a", hair: "#ffd76a", hat: "tophat" });
     N({ id: "scrap", role: "scrap", name: "Grit the Scrapper", x: 21.7 * T, y: (cy - 2.45) * T, color: "#5a6a7a", hair: "#3a2a1a", hat: "goggles", apron: "#4a3a2a", beard: true });
     N({ id: "farmer", giver: "farmer", name: "Farmer Tom", x: 6.4 * T, y: (cy + 5.6) * T, color: "#6a8a3a", hair: "#8a5a2a", hat: "strawhat" });
+    // The east quarter: tavern, post office, the Enchantress's tower.
+    this.props.push(Object.assign(this._prop("tavern", 28 * T, (cy - 4.6) * T, true), { roof: "#8a3a2a" }));
+    this.props.push(Object.assign(this._prop("tower", 39 * T, (cy - 4.4) * T, true), {}));
+    H(27, cy + 6.4, "#3a8aa0", "home"); H(33, cy + 6.4, "#a05a3a", "home"); H(42, cy + 6.6, "#5a7a3a", "home");
+    this.props.push(Object.assign(this._prop("chapel", 12 * T, (cy - 10.5) * T, true), {}));
+    P("stall", 33.6, cy - 1.9, { variant: "post", color: "#2c4f9a" });
+    N({ id: "finn", giver: "finn", name: "Postmaster Finn", x: 33.6 * T, y: (cy - 2.45) * T, color: "#2c4f9a", hair: "#c08a3a", hat: "piratehat" });
+    N({ id: "vela", role: "enchant", giver: "vela", name: "Enchantress Vela", x: 39 * T, y: (cy - 2.1) * T, color: "#6a2aaa", hair: "#e8e8ff", hat: "witchhat" });
+    N({ id: "tam", giver: "tam", name: "Apprentice Tam", x: 15.2 * T, y: (cy + 7.3) * T, color: "#8a5a2a", hair: "#ff9a3a", apron: "#5a3a1a" });
+    N({ id: "orla", giver: "orla", name: "Captain Orla", x: 36 * T, y: (cy + 9.6) * T, color: "#8a90a4", hair: "#c0503a", hat: "greathelm" });
+    N({ id: "maelis", giver: "maelis", name: "Old Sage Maelis", x: 33 * T, y: (cy - 8.6) * T, color: "#3a4a8a", hair: "#e8e8e8", hat: "wizard", beard: true });
   }
 
   /** Lanterns, bunting, benches, barrels, a well, a farm corner and people. */
   _villageDecor(rng) {
-    const cy = Math.round(MH / 2);
+    const cy = Math.round(this.mh / 2);
     const P = (type, x, y, extra) => { const p = Object.assign(this._prop(type, x * T, y * T, true), extra || {}); this.props.push(p); return p; };
     P("lantern", 6.6, cy - 1.7); P("lantern", 19.9, cy - 1.7); P("lantern", 8.9, cy + 2.3); P("lantern", 18.6, cy + 2.3);
     P("bunting", 6.6, cy - 1.7, { x2: 19.9 * T, y2: (cy - 1.7) * T });
@@ -305,22 +326,49 @@ export class World {
     P("planter", 7.2, cy - 3.6); P("planter", 10.8, cy - 3.7); P("planter", 20.6, cy - 3.6); P("planter", 15.6, cy + 5.4); P("planter", 18.4, cy + 5.4);
     P("hay", 4.6, cy + 6.6); P("hay", 5.5, cy + 7.4); P("cart", 8.2, cy + 7.6);
     P("signpost", 23.4, cy + 1.9);
+    // East quarter.
+    P("lantern", 25.4, cy - 1.7); P("lantern", 42.4, cy - 1.7); P("lantern", 25.4, cy + 2.3); P("lantern", 42.4, cy + 2.3);
+    P("bunting", 25.4, cy - 1.7, { x2: 42.4 * T, y2: (cy - 1.7) * T });
+    P("bunting", 25.4, cy + 2.3, { x2: 42.4 * T, y2: (cy + 2.3) * T });
+    P("statue", 30.5, cy + 3.4); P("planter", 28.6, cy + 3.6); P("planter", 32.4, cy + 3.6);
+    P("barrel", 31.7, cy - 2.2); P("barrel", 32.5, cy - 3.0); P("crate", 24.6, cy - 2.5);
+    P("bench", 36.5, cy + 2.8); P("bench", 39.5, cy + 2.8);
+    // North: chapel, graveyard and the park.
+    for (const [gx, gy] of [[8.4, cy - 11.6], [9.8, cy - 11.4], [8.6, cy - 9.2], [10.1, cy - 9.0], [15.6, cy - 11.4], [16.8, cy - 9.4]]) P("gravestone", gx, gy);
+    for (const [tx, ty] of [[29, cy - 12.5], [37.5, cy - 12], [27.5, cy - 8.4], [39, cy - 8], [41.5, cy - 12.5], [20, cy - 12], [5.5, cy - 12.5]]) P("oak", tx, ty);
+    P("bench", 31.2, cy - 9.8); P("bench", 34.8, cy - 9.8); P("planter", 31, cy - 7.4); P("planter", 35, cy - 7.4); P("planter", 33, cy - 12.2);
+    P("well", 23, cy - 10.5);
+    // South: fields, the windmill, the pond and the training ground.
+    for (let x = 4.6; x <= 15.6; x += 1.1) { P("fence", x, cy + 9.2); P("fence", x, cy + 15.2); }
+    for (let y = cy + 10; y <= cy + 15; y += 1.1) { P("fence", 4.4, y, { vert: true }); P("fence", 15.8, y, { vert: true }); }
+    for (let row = 0; row < 5; row++) for (let x = 5.3; x < 15.4; x += 0.75) this.decor.push(Object.assign(this._prop("crop", x * T, (cy + 10.2 + row * 1.05) * T, false), { crop: row % 3 }));
+    P("windmill", 19.4, cy + 12.4);
+    this.decor.push(Object.assign(this._prop("dock", 26.5 * T, (cy + 9.4) * T, false), {}));
+    for (const [rx, ry] of [[21.4, cy + 10.4], [28.8, cy + 13.2], [22, cy + 13.6], [29.2, cy + 10.6]]) this.decor.push(this._prop("reed", rx * T, ry * T, false));
+    for (const [lx, ly] of [[24, cy + 12.4], [26.5, cy + 11.2], [23, cy + 11]]) this.decor.push(this._prop("lily", lx * T, ly * T, false));
+    for (const [dx, dy] of [[33.5, cy + 11.6], [35.8, cy + 12.6], [38.2, cy + 11.4], [40.2, cy + 12.8]]) P("dummy", dx, dy, { dummy: true });
+    P("rack", 41.8, cy + 10.2); P("crate", 32.2, cy + 13.8); P("barrel", 41.6, cy + 13.9);
     // Folk wandering the market.
     const folk = [
       { name: "Villager", color: "#c06a3a", hair: "#3a2a1a", lines: ["Fresh bread at the bakery!", "Lovely day, isn't it?", "Have you seen my cat?"], carry: "#d84a3a" },
       { name: "Villager", color: "#3a7ab0", hair: "#e8c46a", lines: ["I heard a dragon roar last night…", "The Slime King is getting bigger!", "Lysa makes the best capes."] },
       { name: "Kid", color: "#e0a03a", hair: "#6a3a1a", lines: ["Are you a real hero?!", "When I grow up I'll have a dragon helm!", "Race you to the fountain!"], small: true },
       { name: "Guard", color: "#8a90a4", hair: "#2a1a10", hat: "horned", lines: ["Move along, citizen.", "All quiet in Greenvale.", "Grit pays tokens for old gear."] },
+      { name: "Traveller", color: "#6a4a8a", hair: "#2a1a10", hat: "hood", lines: ["Vela can put lightning on a blade, you know.", "Bandits on the roads lately. Watch yourself.", "The tavern's stew is legendary."] },
+      { name: "Guard", color: "#8a90a4", hair: "#6a3a1a", hat: "greathelm", lines: ["Captain Orla is looking for volunteers.", "If you hear the bell, it's a raid!", "Stay sharp out there."] },
+      { name: "Villager", color: "#3a8a5a", hair: "#ffd76a", lines: ["Have you tried the training dummies?", "The pond ducks are very rude.", "Finn always needs a courier."] },
     ];
     folk.forEach((f, i) => {
-      const hx = (9 + i * 3.4) * T, hy = (cy + (i % 2 ? 1.3 : -0.6)) * T;
+      const hx = (9 + i * 4.6) * T, hy = (cy + (i % 2 ? 1.3 : -0.6)) * T;
       this.walkers.push({ ...f, x: hx, y: hy, hx, hy, tx: hx, ty: hy, st: rng() * 3, walk: 0, moving: false, face: 1, sayT: 0, say: "", seed: i });
     });
     for (let i = 0; i < 5; i++) this.critters.push({ kind: "chicken", x: (5.5 + rng() * 3) * T, y: (cy + 5.5 + rng() * 2) * T, hx: 6.5 * T, hy: (cy + 6.2) * T, range: 70, st: rng() * 2, face: 1 });
     this.critters.push({ kind: "cat", x: 13 * T, y: (cy + 2) * T, hx: 13.5 * T, hy: (cy + 1) * T, range: 150, st: 1, face: 1 });
+    this.critters.push({ kind: "dog", x: 30 * T, y: (cy + 1) * T, hx: 32 * T, hy: (cy + 1) * T, range: 220, st: 1, face: 1 });
+    for (let i = 0; i < 3; i++) this.critters.push({ kind: "duck", x: (24 + i * 1.6) * T, y: (cy + 11.5) * T, hx: 25 * T, hy: (cy + 11.5) * T, range: 90, st: rng() * 2, face: 1, swim: true });
     // Flowers in the village grass.
-    for (let k = 0; k < 90; k++) {
-      const x = 5 + rng() * 19, y = cy - 7 + rng() * 16;
+    for (let k = 0; k < 260; k++) {
+      const x = 4.5 + rng() * 40, y = cy - 15 + rng() * 31;
       if (this.g(Math.floor(x), Math.floor(y)) !== G_GRASS) continue;
       this.decor.push(this._prop(rng() < 0.6 ? "flower" : "tuft", x * T, y * T, false));
     }
@@ -334,11 +382,13 @@ export class World {
       coral: 12, gear: 13, pipe: 11, stormrock: 13, crystalcluster: 13, gravestone: 10, voidcrystal: 12, starstone: 12,
       stall: 30, lantern: 6, well: 22, barrel: 10, crate: 11, planter: 11, bench: 12, cart: 24, hay: 14, board: 12,
       tent: 30, campfire: 12, shrine: 15, signpost: 6, anvil: 10,
+      tavern: 70, tower: 26, chapel: 44, statue: 14, windmill: 26, fence: 6, dummy: 10, rack: 12, feytree: 15, giantshroom: 16,
     };
     const tall = ["oak", "pine", "dead", "snowpine", "charred", "crystal", "pillar", "house", "waystone", "iceshard", "obsidian",
       "palm", "cactus", "willow", "chimney", "stormpine", "voidspire", "goldtree", "obelisk", "coral", "pipe", "crystalcluster",
       "gravestone", "voidcrystal", "starstone", "stormrock", "gear", "stall", "lantern", "bunting", "well", "barrel", "crate",
-      "planter", "bench", "cart", "hay", "board", "tent", "campfire", "shrine", "signpost", "anvil"].includes(type);
+      "planter", "bench", "cart", "hay", "board", "tent", "campfire", "shrine", "signpost", "anvil",
+      "tavern", "tower", "chapel", "statue", "windmill", "fence", "dummy", "rack", "feytree", "giantshroom"].includes(type);
     const isSolid = solid && big[type] !== undefined;
     return { type, x, y, r: big[type] || 0, solid: isSolid, tall, seed: (x * 31 + y * 17) | 0 };
   }
@@ -348,7 +398,7 @@ export class World {
     this.cells = new Map();
     for (const p of this.props) {
       if (!p.solid) continue;
-      const k = Math.floor(p.x / T) + Math.floor(p.y / T) * MW;
+      const k = Math.floor(p.x / T) + Math.floor(p.y / T) * this.mw;
       if (!this.cells.has(k)) this.cells.set(k, []);
       this.cells.get(k).push(p);
     }
@@ -356,7 +406,7 @@ export class World {
 
   removeProp(p) {
     p.gone = true; p.solid = false;
-    const k = Math.floor(p.x / T) + Math.floor(p.y / T) * MW;
+    const k = Math.floor(p.x / T) + Math.floor(p.y / T) * this.mw;
     const a = this.cells.get(k);
     if (a) this.cells.set(k, a.filter(q => q !== p));
   }
@@ -388,14 +438,15 @@ export class World {
       // Push out of solid props.
       const tx = Math.floor(ox / T), ty = Math.floor(oy / T);
       for (let dy = -2; dy <= 2; dy++) for (let dx = -2; dx <= 2; dx++) {
-        const list = this.cells.get(tx + dx + (ty + dy) * MW);
+        const list = this.cells.get(tx + dx + (ty + dy) * this.mw);
         if (!list) continue;
         for (const p of list) {
-          const pr = p.r * (p.type === "house" ? 0.75 : 0.55);
-          const ddx = ox - p.x, ddy = oy - (p.y - (p.type === "house" ? 10 : 0)), d = Math.hypot(ddx, ddy);
+          const bld = p.type === "house" || p.type === "tavern" || p.type === "chapel";
+          const pr = p.r * (bld ? 0.75 : 0.55);
+          const ddx = ox - p.x, ddy = oy - (p.y - (bld ? 10 : 0)), d = Math.hypot(ddx, ddy);
           const min = pr + r;
           if (d < min && d > 0.001) {
-            const px2 = p.x + (ddx / d) * min, py2 = (p.y - (p.type === "house" ? 10 : 0)) + (ddy / d) * min;
+            const px2 = p.x + (ddx / d) * min, py2 = (p.y - (bld ? 10 : 0)) + (ddy / d) * min;
             if (free(px2, py2)) { ox = px2; oy = py2; }
           }
         }
@@ -468,15 +519,15 @@ export class World {
   }
 
   drawGround(ctx, view, pxPerUnit, time) {
-    const x0 = Math.max(0, Math.floor(view.x0 / T)), x1 = Math.min(MW - 1, Math.ceil(view.x1 / T));
-    const y0 = Math.max(0, Math.floor(view.y0 / T)), y1 = Math.min(MH - 1, Math.ceil(view.y1 / T));
+    const x0 = Math.max(0, Math.floor(view.x0 / T)), x1 = Math.min(this.mw - 1, Math.ceil(view.x1 / T));
+    const y0 = Math.max(0, Math.floor(view.y0 / T)), y1 = Math.min(this.mh - 1, Math.ceil(view.y1 / T));
     const px = Math.max(8, Math.ceil(T * pxPerUnit));
     const R = this.region;
     for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) {
       const t = this.g(x, y);
       // Paths and plazas sit on grass with soft edges, so draw grass first.
-      const base = t === G_PATH || t === G_PLAZA ? G_GRASS : t;
-      ctx.drawImage(this._tex(base, this.variant[y * MW + x], px), x * T, y * T, T + 0.5, T + 0.5);
+      const base = t === G_PATH || t === G_PLAZA || t === G_LIQUID ? G_GRASS : t;
+      ctx.drawImage(this._tex(base, this.variant[y * this.mw + x], px), x * T, y * T, T + 0.5, T + 0.5);
     }
     // Soft patches of lighter and darker ground.
     for (const pt of this.patches) {
@@ -485,17 +536,28 @@ export class World {
       gr.addColorStop(0, pt.c); gr.addColorStop(1, pt.c0);
       ctx.fillStyle = gr; ctx.beginPath(); ctx.arc(pt.x, pt.y, pt.r, 0, 7); ctx.fill();
     }
-    // Stone and water stay clean: stamp them again over the patches.
+    // Stone and water stay clean: stamp them again over the patches. Water
+    // gets rounded outer corners so ponds and rivers read as shapes, not grids.
+    const RC = T * 0.48;
     for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) {
       const t = this.g(x, y);
-      if (t === G_ARENA || t === G_LIQUID) ctx.drawImage(this._tex(t, this.variant[y * MW + x], px), x * T, y * T, T + 0.5, T + 0.5);
+      if (t === G_ARENA) { ctx.drawImage(this._tex(t, this.variant[y * this.mw + x], px), x * T, y * T, T + 0.5, T + 0.5); continue; }
+      if (t !== G_LIQUID) continue;
+      const n = this.g(x, y - 1) === G_LIQUID, so = this.g(x, y + 1) === G_LIQUID, w = this.g(x - 1, y) === G_LIQUID, e = this.g(x + 1, y) === G_LIQUID;
+      const tex = this._tex(t, this.variant[y * this.mw + x], px);
+      if (n && so && w && e) { ctx.drawImage(tex, x * T, y * T, T + 0.5, T + 0.5); continue; }
+      ctx.save();
+      roundTile(ctx, x * T, y * T, T + 0.5, !n && !w ? RC : 0, !n && !e ? RC : 0, !so && !e ? RC : 0, !so && !w ? RC : 0);
+      ctx.clip();
+      ctx.drawImage(tex, x * T, y * T, T + 0.5, T + 0.5);
+      ctx.restore();
     }
     // Paths as overlapping rounded blobs: an organic edge, not a grid.
     for (const kind of [G_PATH, G_PLAZA]) {
       ctx.fillStyle = kind === G_PLAZA ? "#b9ad92" : R.path;
       for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) {
         if (this.g(x, y) !== kind) continue;
-        ctx.drawImage(this._tex(kind, this.variant[y * MW + x], px), x * T, y * T, T + 0.5, T + 0.5);
+        ctx.drawImage(this._tex(kind, this.variant[y * this.mw + x], px), x * T, y * T, T + 0.5, T + 0.5);
         const n = this.g(x, y - 1) === kind, s = this.g(x, y + 1) === kind, w = this.g(x - 1, y) === kind, e = this.g(x + 1, y) === kind;
         ctx.fillStyle = kind === G_PLAZA ? "#b9ad92" : R.path;
         if (!n) { ctx.beginPath(); ctx.ellipse(x * T + T / 2, y * T + 2, T * 0.55, 5, 0, 0, 7); ctx.fill(); }
@@ -530,12 +592,25 @@ export class World {
         ctx.strokeStyle = "rgba(255,255,255,0.5)"; ctx.lineWidth = 1;
         ctx.beginPath(); ctx.moveTo(wx + 6, wy + 22); ctx.lineTo(wx + 14, wy + 12); ctx.stroke();
       }
-      const shore = lava ? "rgba(40,10,0,0.55)" : ice ? "rgba(255,255,255,0.7)" : voidL ? "rgba(176,107,255,0.6)" : cloud ? "rgba(255,255,255,0.9)" : "rgba(220,240,255,0.55)";
-      ctx.fillStyle = shore;
-      if (this.g(x, y - 1) !== G_LIQUID) ctx.fillRect(wx, wy, T, 3);
-      if (this.g(x, y + 1) !== G_LIQUID) ctx.fillRect(wx, wy + T - 2, T, 2);
-      if (this.g(x - 1, y) !== G_LIQUID) ctx.fillRect(wx, wy, 2, T);
-      if (this.g(x + 1, y) !== G_LIQUID) ctx.fillRect(wx + T - 2, wy, 2, T);
+      const shore = lava ? "rgba(40,10,0,0.55)" : ice ? "rgba(255,255,255,0.7)" : voidL ? "rgba(176,107,255,0.6)" : cloud ? "rgba(255,255,255,0.9)" : "rgba(220,240,255,0.6)";
+      const n = this.g(x, y - 1) === G_LIQUID, so = this.g(x, y + 1) === G_LIQUID, w = this.g(x - 1, y) === G_LIQUID, e = this.g(x + 1, y) === G_LIQUID;
+      if (!(n && so && w && e)) {
+        ctx.strokeStyle = shore; ctx.lineWidth = 2.6;
+        const r = T * 0.48, X1 = wx + T, Y1 = wy + T;
+        const tl = !n && !w, tr = !n && !e, br = !so && !e, bl = !so && !w;
+        ctx.beginPath();
+        if (!n) { ctx.moveTo(wx + (tl ? r : 0), wy + 1.3); ctx.lineTo(X1 - (tr ? r : 0), wy + 1.3); }
+        if (!so) { ctx.moveTo(wx + (bl ? r : 0), Y1 - 1.3); ctx.lineTo(X1 - (br ? r : 0), Y1 - 1.3); }
+        if (!w) { ctx.moveTo(wx + 1.3, wy + (tl ? r : 0)); ctx.lineTo(wx + 1.3, Y1 - (bl ? r : 0)); }
+        if (!e) { ctx.moveTo(X1 - 1.3, wy + (tr ? r : 0)); ctx.lineTo(X1 - 1.3, Y1 - (br ? r : 0)); }
+        ctx.stroke();
+        ctx.beginPath();
+        if (tl) { ctx.moveTo(wx + 1.3, wy + r); ctx.arcTo(wx + 1.3, wy + 1.3, wx + r, wy + 1.3, r - 1.3); }
+        if (tr) { ctx.moveTo(X1 - r, wy + 1.3); ctx.arcTo(X1 - 1.3, wy + 1.3, X1 - 1.3, wy + r, r - 1.3); }
+        if (br) { ctx.moveTo(X1 - 1.3, Y1 - r); ctx.arcTo(X1 - 1.3, Y1 - 1.3, X1 - r, Y1 - 1.3, r - 1.3); }
+        if (bl) { ctx.moveTo(wx + r, Y1 - 1.3); ctx.arcTo(wx + 1.3, Y1 - 1.3, wx + 1.3, Y1 - r, r - 1.3); }
+        ctx.stroke();
+      }
     }
     // Arena rune ring.
     if (this.arena.x > view.x0 - this.arena.r && this.arena.x < view.x1 + this.arena.r) {
@@ -555,10 +630,10 @@ export class World {
   minimap() {
     if (this._mini) return this._mini;
     const c = document.createElement("canvas");
-    c.width = MW * 2; c.height = MH * 2;
+    c.width = this.mw * 2; c.height = this.mh * 2;
     const g = c.getContext("2d");
     const R = this.region;
-    for (let y = 0; y < MH; y++) for (let x = 0; x < MW; x++) {
+    for (let y = 0; y < this.mh; y++) for (let x = 0; x < this.mw; x++) {
       const t = this.g(x, y);
       g.fillStyle = t === G_WALL ? "#10141c" : t === G_LIQUID ? R.liquid[0] : t === G_PATH || t === G_PLAZA ? R.path : t === G_ARENA ? "#8a8a96" : R.ground[0];
       g.fillRect(x * 2, y * 2, 2, 2);
@@ -913,6 +988,10 @@ export function drawProp(ctx, p, R, time) {
         ctx.fillStyle = `rgba(255,215,106,${gl})`; ctx.beginPath(); ctx.arc(x - 15, y - 34, 4, 0, 7); ctx.fill();
       } else if (v === "bread") {
         for (let i = 0; i < 4; i++) { ctx.fillStyle = i % 2 ? "#d8a05a" : "#c0803a"; ctx.beginPath(); ctx.ellipse(x - 20 + i * 13, y - 26, 6, 3.6, 0, 0, 7); ctx.fill(); ctx.strokeStyle = "rgba(255,255,255,0.4)"; ctx.beginPath(); ctx.moveTo(x - 23 + i * 13, y - 27); ctx.lineTo(x - 18 + i * 13, y - 26); ctx.stroke(); }
+      } else if (v === "post") {
+        ctx.fillStyle = "#e8d8b8"; for (let i = 0; i < 3; i++) { ctx.fillRect(x - 24 + i * 9, y - 30 + (i % 2) * 2, 8, 6); ctx.fillStyle = "#c0203a"; ctx.fillRect(x - 21 + i * 9, y - 28 + (i % 2) * 2, 2, 2); ctx.fillStyle = "#e8d8b8"; }
+        ctx.fillStyle = "#a0703a"; ctx.fillRect(x + 4, y - 34, 16, 12); ctx.strokeStyle = "#6a4422"; ctx.strokeRect(x + 4, y - 34, 16, 12);
+        ctx.fillStyle = "#c0203a"; ctx.fillRect(x + 22, y - 40, 6, 18); ctx.beginPath(); ctx.arc(x + 25, y - 40, 3, Math.PI, 0); ctx.fill();
       } else if (v === "fish") {
         for (let i = 0; i < 4; i++) {
           const fx = x - 20 + i * 13, fy = y - 26;
@@ -1088,6 +1167,158 @@ export function drawProp(ctx, p, R, time) {
       ctx.fillStyle = `rgba(255,120,40,${hot})`; ctx.fillRect(x - 4, y - 18, 8, 2);
       break;
     }
+    case "tavern": {
+      ctx.fillStyle = "rgba(0,0,0,0.3)"; ctx.fillRect(x - 64, y - 6, 132, 14);
+      ctx.fillStyle = "#e0cca8"; ctx.fillRect(x - 60, y - 58, 120, 60);
+      ctx.fillStyle = "#6a4422";
+      for (const bx of [-60, -20, 20, 56]) ctx.fillRect(x + bx, y - 58, 4, 60);
+      ctx.fillRect(x - 60, y - 32, 120, 3); ctx.fillRect(x - 60, y - 58, 120, 4);
+      ctx.fillStyle = "#4a2e18"; ctx.fillRect(x - 10, y - 30, 20, 32);
+      ctx.fillStyle = "#ffd76a"; ctx.fillRect(x + 6, y - 15, 2, 2);
+      for (const wx of [-48, 28]) { ctx.fillStyle = `rgba(255,200,100,${0.75 + Math.sin(time * 3 + wx) * 0.1})`; ctx.fillRect(x + wx, y - 24, 18, 14); ctx.fillStyle = "#4a2e18"; ctx.fillRect(x + wx + 8, y - 24, 2, 14); }
+      for (const wx of [-48, -8, 28]) { ctx.fillStyle = "#9fd8ff"; ctx.fillRect(x + wx, y - 52, 18, 13); ctx.fillStyle = "rgba(255,255,255,0.4)"; ctx.fillRect(x + wx, y - 52, 6, 13); }
+      ctx.fillStyle = p.roof || "#8a3a2a";
+      ctx.beginPath(); ctx.moveTo(x - 70, y - 56); ctx.lineTo(x - 40, y - 96); ctx.lineTo(x + 40, y - 96); ctx.lineTo(x + 70, y - 56); ctx.closePath(); ctx.fill();
+      ctx.strokeStyle = "rgba(0,0,0,0.18)"; for (let i = 1; i < 4; i++) { const yy = y - 96 + i * 10, half = 40 + i * 7.5; ctx.beginPath(); ctx.moveTo(x - half, yy); ctx.lineTo(x + half, yy); ctx.stroke(); }
+      ctx.fillStyle = "#8a5a4a"; ctx.fillRect(x + 30, y - 110, 12, 18);
+      for (let i = 0; i < 3; i++) { const t2 = (time * 0.35 + i / 3) % 1; ctx.fillStyle = `rgba(220,220,230,${0.45 * (1 - t2)})`; ctx.beginPath(); ctx.arc(x + 36 + t2 * 14, y - 116 - t2 * 34, 5 + t2 * 7, 0, 7); ctx.fill(); }
+      // Hanging sign.
+      ctx.strokeStyle = "#3a2a1a"; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(x + 14, y - 44); ctx.lineTo(x + 34, y - 44); ctx.stroke();
+      ctx.fillStyle = "#3a2a1a"; ctx.fillRect(x + 20, y - 43, 22, 14);
+      ctx.fillStyle = "#ffd76a"; ctx.font = "700 9px Sora, Inter, sans-serif"; ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillText("🐉", x + 31, y - 35.5);
+      ctx.fillStyle = "#3a2a1a"; ctx.fillRect(x - 36, y - 76, 72, 14);
+      ctx.fillStyle = "#ffd76a"; ctx.font = "800 8px Sora, Inter, sans-serif"; ctx.fillText("THE GOLDEN DRAGON", x, y - 68.5);
+      break;
+    }
+    case "tower": {
+      shadow(28, 9);
+      const g = ctx.createLinearGradient(x - 22, 0, x + 22, 0);
+      g.addColorStop(0, "#5a4a7a"); g.addColorStop(0.5, "#8a7ab0"); g.addColorStop(1, "#4a3a6a");
+      ctx.fillStyle = g; ctx.fillRect(x - 22, y - 110, 44, 112);
+      ctx.strokeStyle = "rgba(0,0,0,0.18)"; ctx.lineWidth = 1;
+      for (let yy = y - 100; yy < y; yy += 12) { ctx.beginPath(); ctx.moveTo(x - 22, yy); ctx.lineTo(x + 22, yy); ctx.stroke(); }
+      ctx.fillStyle = "#2a1a3a"; ctx.beginPath(); ctx.arc(x, y - 14, 10, Math.PI, 0); ctx.lineTo(x + 10, y); ctx.lineTo(x - 10, y); ctx.fill();
+      const gl = 0.6 + Math.sin(time * 2.5) * 0.3;
+      ctx.fillStyle = `rgba(200,140,255,${gl})`; ctx.fillRect(x - 6, y - 70, 12, 16); ctx.fillRect(x - 6, y - 44, 12, 12);
+      ctx.fillStyle = "#3a1a5a"; ctx.beginPath(); ctx.moveTo(x - 30, y - 108); ctx.lineTo(x, y - 156); ctx.lineTo(x + 30, y - 108); ctx.closePath(); ctx.fill();
+      const og = ctx.createRadialGradient(x, y - 162, 1, x, y - 162, 18);
+      og.addColorStop(0, `rgba(255,220,255,${gl})`); og.addColorStop(1, "rgba(176,107,255,0)");
+      ctx.fillStyle = og; ctx.beginPath(); ctx.arc(x, y - 162, 18, 0, 7); ctx.fill();
+      ctx.fillStyle = "#e8d0ff"; ctx.beginPath(); ctx.arc(x, y - 162 + Math.sin(time * 2) * 2, 5, 0, 7); ctx.fill();
+      break;
+    }
+    case "chapel": {
+      ctx.fillStyle = "rgba(0,0,0,0.3)"; ctx.fillRect(x - 44, y - 6, 92, 14);
+      ctx.fillStyle = "#e8e4dc"; ctx.fillRect(x - 40, y - 50, 80, 52);
+      ctx.fillStyle = "#a9a698"; ctx.fillRect(x - 40, y - 4, 80, 6);
+      ctx.fillStyle = "#4a2e18"; ctx.beginPath(); ctx.arc(x, y - 22, 9, Math.PI, 0); ctx.lineTo(x + 9, y); ctx.lineTo(x - 9, y); ctx.fill();
+      for (const wx of [-28, 20]) { const g = ctx.createLinearGradient(0, y - 40, 0, y - 20); g.addColorStop(0, "#ff7fa8"); g.addColorStop(0.5, "#7cf0ff"); g.addColorStop(1, "#ffd76a"); ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x + wx + 4, y - 34, 4, Math.PI, 0); ctx.lineTo(x + wx + 8, y - 20); ctx.lineTo(x + wx, y - 20); ctx.fill(); }
+      ctx.fillStyle = "#5a6a8a"; ctx.beginPath(); ctx.moveTo(x - 46, y - 48); ctx.lineTo(x, y - 80); ctx.lineTo(x + 46, y - 48); ctx.closePath(); ctx.fill();
+      ctx.fillStyle = "#e8e4dc"; ctx.fillRect(x - 9, y - 104, 18, 30);
+      ctx.fillStyle = "#5a6a8a"; ctx.beginPath(); ctx.moveTo(x - 12, y - 102); ctx.lineTo(x, y - 128); ctx.lineTo(x + 12, y - 102); ctx.closePath(); ctx.fill();
+      ctx.fillStyle = "#ffd76a"; ctx.fillRect(x - 1, y - 140, 2, 13); ctx.fillRect(x - 5, y - 136, 10, 2);
+      ctx.fillStyle = "#c9a24a"; ctx.beginPath(); ctx.arc(x, y - 88, 5 + Math.sin(time * 1.5) * 0.4, 0, 7); ctx.fill();
+      break;
+    }
+    case "statue": {
+      shadow(18, 6);
+      ctx.fillStyle = "#8d8a7c"; ctx.fillRect(x - 16, y - 14, 32, 14); ctx.fillStyle = "#a9a698"; ctx.fillRect(x - 19, y - 18, 38, 5);
+      ctx.fillStyle = "#c0c4cc";
+      ctx.beginPath(); ctx.ellipse(x, y - 36, 9, 13, 0, 0, 7); ctx.fill();
+      ctx.beginPath(); ctx.arc(x, y - 54, 7, 0, 7); ctx.fill();
+      ctx.strokeStyle = "#c0c4cc"; ctx.lineWidth = 3.5; ctx.lineCap = "round";
+      ctx.beginPath(); ctx.moveTo(x + 6, y - 40); ctx.lineTo(x + 16, y - 52); ctx.stroke();
+      ctx.lineWidth = 2.5; ctx.beginPath(); ctx.moveTo(x + 16, y - 52); ctx.lineTo(x + 22, y - 76); ctx.stroke();
+      ctx.fillStyle = "rgba(255,255,255,0.35)"; ctx.beginPath(); ctx.ellipse(x - 3, y - 40, 3, 7, 0, 0, 7); ctx.fill();
+      ctx.fillStyle = "#3a2a1a"; ctx.font = "700 6px Inter, sans-serif"; ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillText("HERO", x, y - 7);
+      break;
+    }
+    case "windmill": {
+      shadow(26, 8);
+      ctx.fillStyle = "#d8c8a8"; ctx.beginPath(); ctx.moveTo(x - 20, y); ctx.lineTo(x - 13, y - 62); ctx.lineTo(x + 13, y - 62); ctx.lineTo(x + 20, y); ctx.closePath(); ctx.fill();
+      ctx.fillStyle = "#8a3a2a"; ctx.beginPath(); ctx.moveTo(x - 17, y - 60); ctx.lineTo(x, y - 82); ctx.lineTo(x + 17, y - 60); ctx.closePath(); ctx.fill();
+      ctx.fillStyle = "#4a2e18"; ctx.fillRect(x - 6, y - 16, 12, 16);
+      ctx.save(); ctx.translate(x, y - 64); ctx.rotate(time * 0.8 + s);
+      for (let i = 0; i < 4; i++) {
+        ctx.rotate(Math.PI / 2);
+        ctx.fillStyle = "#6a4422"; ctx.fillRect(-1.5, 0, 3, 42);
+        ctx.fillStyle = "rgba(248,240,224,0.92)"; ctx.fillRect(1.5, 10, 10, 30);
+        ctx.strokeStyle = "rgba(106,68,34,0.6)"; ctx.lineWidth = 0.8; ctx.strokeRect(1.5, 10, 10, 30);
+      }
+      ctx.fillStyle = "#3a2a1a"; ctx.beginPath(); ctx.arc(0, 0, 4, 0, 7); ctx.fill();
+      ctx.restore();
+      break;
+    }
+    case "fence": {
+      ctx.fillStyle = "#8a5a2a";
+      if (p.vert) { ctx.fillRect(x - 2, y - 18, 4, 18); ctx.fillStyle = "#a0703a"; ctx.fillRect(x - 1, y - 30, 2, 30); }
+      else { ctx.fillRect(x - 2, y - 14, 4, 14); ctx.fillStyle = "#a0703a"; ctx.fillRect(x - 18, y - 12, 36, 2.5); ctx.fillRect(x - 18, y - 6, 36, 2.5); }
+      break;
+    }
+    case "crop": {
+      const sway = Math.sin(time * 1.6 + s * 0.1) * 1.2;
+      const col = ["#d8b44a", "#5aa84a", "#e07a3a"][p.crop || 0];
+      ctx.strokeStyle = "#4a8a3a"; ctx.lineWidth = 1.4;
+      ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + sway, y - 12); ctx.stroke();
+      ctx.fillStyle = col; ctx.beginPath(); ctx.ellipse(x + sway, y - 13, 2.4, 4, 0, 0, 7); ctx.fill();
+      ctx.fillStyle = "rgba(90,60,30,0.35)"; ctx.fillRect(x - 3, y - 1, 6, 2);
+      break;
+    }
+    case "dock": {
+      ctx.fillStyle = "rgba(0,0,0,0.25)"; ctx.fillRect(x - 12, y + 2, 26, 50);
+      for (let i = 0; i < 7; i++) { ctx.fillStyle = i % 2 ? "#a0703a" : "#8a5a2a"; ctx.fillRect(x - 12, y + i * 7, 24, 6); }
+      ctx.fillStyle = "#5a3a1e"; ctx.fillRect(x - 13, y + 46, 3, 8); ctx.fillRect(x + 10, y + 46, 3, 8);
+      break;
+    }
+    case "dummy": {
+      shadow(10, 4);
+      const wob = p.hitT > 0 ? Math.sin(p.hitT * 40) * p.hitT * 0.5 : 0;
+      ctx.save(); ctx.translate(x, y); ctx.rotate(wob);
+      ctx.fillStyle = "#6a4422"; ctx.fillRect(-2, -34, 4, 34);
+      ctx.fillStyle = "#d8b45a"; ctx.beginPath(); ctx.ellipse(0, -26, 9, 12, 0, 0, 7); ctx.fill();
+      ctx.fillStyle = "#c09a3a"; ctx.fillRect(-14, -30, 28, 5);
+      ctx.fillStyle = "#e8c46a"; ctx.beginPath(); ctx.arc(0, -42, 7, 0, 7); ctx.fill();
+      ctx.strokeStyle = "#c0203a"; ctx.lineWidth = 1.6; ctx.beginPath(); ctx.arc(0, -26, 5, 0, 7); ctx.stroke(); ctx.beginPath(); ctx.arc(0, -26, 1.5, 0, 7); ctx.stroke();
+      ctx.restore();
+      if (p.hitT > 0) p.hitT = Math.max(0, p.hitT - 1 / 60);
+      break;
+    }
+    case "rack": {
+      shadow(14, 4);
+      ctx.fillStyle = "#6a4422"; ctx.fillRect(x - 14, y - 30, 3, 30); ctx.fillRect(x + 11, y - 30, 3, 30); ctx.fillRect(x - 14, y - 30, 28, 3); ctx.fillRect(x - 14, y - 10, 28, 3);
+      ctx.strokeStyle = "#c9ccd8"; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.moveTo(x - 7, y - 4); ctx.lineTo(x - 7, y - 40); ctx.moveTo(x, y - 4); ctx.lineTo(x + 2, y - 44); ctx.moveTo(x + 7, y - 4); ctx.lineTo(x + 7, y - 36); ctx.stroke();
+      ctx.fillStyle = "#c9ccd8"; ctx.beginPath(); ctx.moveTo(x + 2, y - 50); ctx.lineTo(x - 1, y - 42); ctx.lineTo(x + 5, y - 42); ctx.fill();
+      ctx.fillStyle = "#8a90a4"; ctx.beginPath(); ctx.moveTo(x + 7, y - 36); ctx.quadraticCurveTo(x + 15, y - 34, x + 13, y - 26); ctx.lineTo(x + 7, y - 28); ctx.fill();
+      break;
+    }
+    case "feytree": {
+      shadow(20, 8);
+      ctx.fillStyle = "#3a2a4a"; ctx.fillRect(x - 4, y - 20, 8, 22);
+      const sw = Math.sin(time * 1.1 + s) * 1.4;
+      const cols = ["#1a7a6a", "#2aa08a", "#5ae0c0"];
+      [[0, -36, 19], [-12, -28, 12], [12, -28, 12], [0, -46, 12]].forEach(([dx, dy, r], i) => {
+        const g = ctx.createRadialGradient(x + dx + sw - r * 0.3, y + dy - r * 0.3, 1, x + dx + sw, y + dy, r);
+        g.addColorStop(0, cols[2]); g.addColorStop(1, cols[i % 2]);
+        ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x + dx + sw, y + dy, r, 0, 7); ctx.fill();
+      });
+      for (let i = 0; i < 4; i++) {
+        const a = time * 0.9 + i * 1.7 + s, gl = 0.5 + Math.sin(time * 3 + i + s) * 0.4;
+        ctx.fillStyle = `rgba(255,170,250,${gl})`; ctx.beginPath(); ctx.arc(x + Math.cos(a) * 16, y - 36 + Math.sin(a * 1.3) * 10, 1.8, 0, 7); ctx.fill();
+      }
+      break;
+    }
+    case "giantshroom": {
+      shadow(22, 8);
+      ctx.fillStyle = "#e8dcc8"; ctx.beginPath(); ctx.moveTo(x - 6, y); ctx.quadraticCurveTo(x - 4, y - 26, x - 5, y - 40); ctx.lineTo(x + 5, y - 40); ctx.quadraticCurveTo(x + 4, y - 26, x + 6, y); ctx.fill();
+      const g = ctx.createRadialGradient(x - 6, y - 50, 2, x, y - 44, 26);
+      g.addColorStop(0, "#d090ff"); g.addColorStop(1, "#6a2a8a");
+      ctx.fillStyle = g; ctx.beginPath(); ctx.ellipse(x, y - 42, 26, 14, 0, Math.PI, 0); ctx.closePath(); ctx.fill();
+      ctx.fillStyle = "#4a1a6a"; ctx.beginPath(); ctx.ellipse(x, y - 42, 26, 4, 0, 0, Math.PI); ctx.fill();
+      ctx.fillStyle = `rgba(200,255,140,${0.6 + Math.sin(time * 2 + s) * 0.3})`;
+      for (const [dx, dy] of [[-12, -48], [4, -52], [14, -45], [-3, -45]]) { ctx.beginPath(); ctx.arc(x + dx, y + dy, 2.2, 0, 7); ctx.fill(); }
+      break;
+    }
     case "signpost": {
       shadow(6, 2.5);
       ctx.fillStyle = "#5a3a1e"; ctx.fillRect(x - 1.5, y - 32, 3, 32);
@@ -1109,6 +1340,17 @@ export function drawProp(ctx, p, R, time) {
       break;
     }
   }
+}
+
+/** A square tile path with independently rounded corners (tl, tr, br, bl). */
+function roundTile(ctx, x, y, s, tl, tr, br, bl) {
+  ctx.beginPath();
+  ctx.moveTo(x + tl, y);
+  ctx.lineTo(x + s - tr, y); if (tr) ctx.arcTo(x + s, y, x + s, y + tr, tr);
+  ctx.lineTo(x + s, y + s - br); if (br) ctx.arcTo(x + s, y + s, x + s - br, y + s, br);
+  ctx.lineTo(x + bl, y + s); if (bl) ctx.arcTo(x, y + s, x, y + s - bl, bl);
+  ctx.lineTo(x, y + tl); if (tl) ctx.arcTo(x, y, x + tl, y, tl);
+  ctx.closePath();
 }
 
 function shadeCol(hex, amt) {

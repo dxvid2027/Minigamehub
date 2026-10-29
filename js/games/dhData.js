@@ -14,7 +14,7 @@
 // spells push it back. `weather` picks the drifting particles.
 export const REGIONS = [
   {
-    id: "greenvale", name: "Greenvale", sub: "The village and its meadows", lv: 1,
+    id: "greenvale", name: "Greenvale", sub: "The village and its meadows", lv: 1, size: [104, 62],
     ground: ["#4f9a3f", "#5aa847", "#4a8f3a"], path: "#b89a63", pathEdge: "#9c7f4c",
     water: "liquid", liquid: ["#2f7fc0", "#4aa3e0"], tree: "oak", props: ["flower", "flower", "bush", "rock"],
     foes: { slime: 6, boar: 3 }, boss: "slimeking", tint: null, village: true, dark: 0, weather: "petal",
@@ -110,6 +110,68 @@ export const REGIONS = [
     water: "void", liquid: ["#05030c", "#3a1a6a"], tree: "obelisk", props: ["voidcrystal", "starstone", "obsidian"],
     foes: { voidknight: 4, angel: 2, voideye: 2, tendril: 2 }, boss: "eternal", tint: "rgba(40,0,60,0.25)", dark: 0.8, weather: "star",
   },
+  // --- Beyond Eternity: Nyxara's fall tore the map open. Bigger lands. ----
+  {
+    id: "atlantis", name: "Sunken Atlantis", sub: "A drowned empire still standing guard", lv: 64, size: [104, 62],
+    ground: ["#3a6a7a", "#437584", "#33606e"], path: "#a8b8a8", pathEdge: "#889888",
+    water: "liquid", liquid: ["#0a5a8a", "#2a9ad0"], tree: "pillar", props: ["coral", "kelp", "shell", "rubble"],
+    foes: { triton: 5, angler: 3, coralgolem: 2 }, boss: "nereus", tint: "rgba(0,60,120,0.18)", dark: 0.4, weather: "bubble",
+  },
+  {
+    id: "ashen", name: "Ashen Wastes", sub: "What the fire left behind", lv: 68, size: [104, 62],
+    ground: ["#5a5450", "#645d58", "#4e4844"], path: "#7a7068", pathEdge: "#625a54",
+    water: "lava", liquid: ["#ff5a1a", "#ffa040"], tree: "charred", props: ["obsidian", "vent", "rubble", "bones"],
+    foes: { ashwraith: 4, cinderhound: 4, ashgolem: 2 }, boss: "ashcolossus", tint: "rgba(80,40,20,0.18)", dark: 0.35, weather: "ember",
+  },
+  {
+    id: "fey", name: "Feywild Grove", sub: "Pretty. Hungry.", lv: 72, size: [104, 62],
+    ground: ["#2a5a4a", "#316856", "#244e40"], path: "#8a7ab0", pathEdge: "#6e6090",
+    water: "liquid", liquid: ["#3ad0c0", "#9affe8"], tree: "feytree", props: ["mushroom", "flower", "lily", "crystalcluster"],
+    foes: { pixie: 4, thornling: 4, feyknight: 2 }, boss: "feymonarch", tint: "rgba(80,0,120,0.12)", dark: 0.45, weather: "fly",
+  },
+  {
+    id: "bone", name: "Bone Kingdom", sub: "Its king never noticed he died", lv: 76, size: [104, 62],
+    ground: ["#4a4438", "#544d40", "#403a30"], path: "#8a8270", pathEdge: "#6e6858",
+    water: "liquid", liquid: ["#2a3a2a", "#4a6a4a"], tree: "dead", props: ["gravestone", "bones", "skull", "pillar"],
+    foes: { bonehound: 4, boneknight: 4, bonemage: 3 }, boss: "boneemperor", tint: "rgba(40,50,30,0.22)", dark: 0.6, weather: "fly",
+  },
+  {
+    id: "skyreach", name: "Skyreach Isles", sub: "Islands that forgot the ground", lv: 80, size: [104, 62],
+    ground: ["#7ab06a", "#86bc76", "#6ea25e"], path: "#d8d0b0", pathEdge: "#c0b898",
+    water: "cloud", liquid: ["#c8e0ff", "#ffffff"], tree: "stormpine", props: ["rock", "flower", "stormrock", "starstone"],
+    foes: { skyharpy: 4, windwisp: 4, skyknight: 3 }, boss: "zephyros", tint: "rgba(160,200,255,0.08)", dark: 0, weather: "petal",
+  },
+  {
+    id: "myco", name: "Mycelium Depths", sub: "Everything here is one creature", lv: 84, size: [104, 62],
+    ground: ["#3a2a48", "#433152", "#32243e"], path: "#6a5a7a", pathEdge: "#544662",
+    water: "liquid", liquid: ["#5a8a2a", "#9ad04a"], tree: "giantshroom", props: ["mushroom", "rubble", "crystalcluster"],
+    foes: { fungling: 4, sporebeast: 3, sporefly: 4 }, boss: "mycomother", tint: "rgba(60,20,80,0.2)", dark: 0.6, weather: "spore",
+  },
+  {
+    id: "glacier", name: "Glacier Throne", sub: "Cold enough to stop time", lv: 88, size: [104, 62],
+    ground: ["#cfe0f0", "#dbe8f6", "#c2d4e8"], path: "#98b0c8", pathEdge: "#7e96ae",
+    water: "ice", liquid: ["#7fc0ea", "#bfe3f7"], tree: "snowpine", props: ["iceshard", "snowbush", "crystalcluster"],
+    foes: { frostgiant: 3, icewraith: 4, glacierwolf: 4 }, boss: "ymir", tint: "rgba(100,160,230,0.14)", dark: 0.15, weather: "snow",
+  },
+  {
+    id: "badlands", name: "Bandit Badlands", sub: "Every rock hides a blade", lv: 92, size: [104, 62],
+    ground: ["#b08050", "#bc8c5a", "#a47448"], path: "#d0a870", pathEdge: "#b08e58",
+    water: "liquid", liquid: ["#5a8aa0", "#8abcd0"], tree: "cactus", props: ["rock", "bones", "dune", "tent"],
+    foes: { bandit: 4, banditarcher: 3, banditbrute: 2, banditlancer: 2 }, boss: "warlord", tint: "rgba(160,80,20,0.08)", dark: 0, weather: "sand",
+  },
+  {
+    id: "infernal", name: "Infernal Gate", sub: "The door was never meant to open", lv: 96, size: [104, 62],
+    ground: ["#3a1410", "#461a14", "#30100c"], path: "#6a2a1a", pathEdge: "#521e12",
+    water: "lava", liquid: ["#ff3a10", "#ff9a30"], tree: "charred", props: ["vent", "obsidian", "skull", "bones"],
+    foes: { demon: 4, hellhound: 4, infernalbrute: 2 }, boss: "baal", tint: "rgba(140,20,0,0.22)", dark: 0.55, weather: "ember",
+  },
+  {
+    id: "dragonrealm", name: "Realm of the First Dragon", sub: "Where every dragon began", lv: 100, size: [104, 62],
+    ground: ["#4a3a20", "#564428", "#3e3018"], path: "#c9a24a", pathEdge: "#a8862e",
+    water: "lava", liquid: ["#ffb020", "#fff07a"], tree: "goldtree", props: ["starstone", "obsidian", "crystalcluster", "pillar"],
+    foes: { dragonkin: 4, wyrmling: 4, drakeguard: 2 }, boss: "aurelith", tint: "rgba(120,80,0,0.14)", dark: 0.35, weather: "ember",
+  },
+
 ];
 
 // --- Monsters -------------------------------------------------------------
@@ -169,6 +231,48 @@ export const FOES = {
   angel:     { name: "Fallen Angel", hp: 4200, atk: 260, spd: 130, r: 13, ai: "float",  color: "#fff3c0", xp: 1000, gold: 340, art: "ghost" },
   guardian:  { name: "Gilded Guardian", hp: 7800, atk: 300, spd: 60, r: 20, ai: "tank",  color: "#ffd76a", xp: 1200, gold: 400, art: "construct" },
   starling:  { name: "Starling",     hp: 3400, atk: 250, spd: 120, r: 11, ai: "ranged", color: "#ffffff", xp: 960, gold: 320, shot: "orb", art: "wisp" },
+  // Sunken Atlantis
+  triton:    { name: "Triton Guard",  hp: 6200,  atk: 300, spd: 110, r: 14, ai: "melee",  color: "#2a8ac0", xp: 1150, gold: 380, art: "knight" },
+  angler:    { name: "Abyss Angler",  hp: 5200,  atk: 290, spd: 160, r: 12, ai: "float",  color: "#1a4a6a", xp: 1100, gold: 360, art: "serpentling" },
+  coralgolem:{ name: "Coral Golem",   hp: 11000, atk: 350, spd: 55,  r: 20, ai: "tank",   color: "#ff7a8a", xp: 1400, gold: 460, art: "yeti" },
+  // Ashen Wastes
+  ashwraith: { name: "Ash Wraith",    hp: 6400,  atk: 330, spd: 125, r: 12, ai: "ranged", color: "#9a9088", xp: 1300, gold: 420, shot: "fire", art: "ghost" },
+  cinderhound:{ name: "Cinder Hound", hp: 7000,  atk: 340, spd: 170, r: 13, ai: "lunge",  color: "#ff7a2a", xp: 1320, gold: 430, art: "wolf" },
+  ashgolem:  { name: "Ash Golem",     hp: 13500, atk: 390, spd: 55,  r: 20, ai: "tank",   color: "#5a5048", xp: 1650, gold: 540, art: "magma" },
+  // Feywild Grove
+  pixie:     { name: "Wicked Pixie",  hp: 6800,  atk: 350, spd: 190, r: 9,  ai: "float",  color: "#ff8af0", xp: 1500, gold: 470, art: "bat" },
+  thornling: { name: "Thornling",     hp: 8200,  atk: 360, spd: 60,  r: 13, ai: "ranged", color: "#4aaa5a", xp: 1520, gold: 480, shot: "spore", art: "shroom" },
+  feyknight: { name: "Fey Knight",    hp: 13000, atk: 420, spd: 105, r: 15, ai: "melee",  color: "#3ad0a0", xp: 1900, gold: 600, art: "knight" },
+  // Bone Kingdom
+  bonehound: { name: "Bone Hound",    hp: 8600,  atk: 390, spd: 175, r: 13, ai: "lunge",  color: "#e8e2d0", xp: 1750, gold: 540, art: "wolf" },
+  boneknight:{ name: "Bone Knight",   hp: 13500, atk: 440, spd: 90,  r: 15, ai: "melee",  color: "#bdb5a0", xp: 2000, gold: 620, art: "skeleton" },
+  bonemage:  { name: "Bone Mage",     hp: 8000,  atk: 400, spd: 85,  r: 12, ai: "ranged", color: "#d8cfb8", xp: 1800, gold: 560, shot: "void", art: "archer" },
+  // Skyreach Isles
+  skyharpy:  { name: "Sky Harpy",     hp: 9200,  atk: 430, spd: 200, r: 12, ai: "float",  color: "#f0f4ff", xp: 2050, gold: 640, art: "bat" },
+  windwisp:  { name: "Wind Spirit",   hp: 8800,  atk: 420, spd: 140, r: 10, ai: "ranged", color: "#bfe3f7", xp: 2000, gold: 620, shot: "bolt", art: "wisp" },
+  skyknight: { name: "Sky Knight",    hp: 15500, atk: 480, spd: 110, r: 15, ai: "melee",  color: "#6a9ad0", xp: 2400, gold: 740, art: "knight" },
+  // Mycelium Depths
+  fungling:  { name: "Fungling",      hp: 10500, atk: 470, spd: 70,  r: 13, ai: "ranged", color: "#a07ab0", xp: 2350, gold: 720, shot: "spore", art: "shroom" },
+  sporebeast:{ name: "Spore Beast",   hp: 20000, atk: 540, spd: 60,  r: 20, ai: "tank",   color: "#7a4a8a", xp: 2900, gold: 900, art: "yeti" },
+  sporefly:  { name: "Spore Fly",     hp: 9000,  atk: 450, spd: 190, r: 10, ai: "float",  color: "#9ad04a", xp: 2250, gold: 700, art: "bat" },
+  // Glacier Throne
+  frostgiant:{ name: "Frost Giant",   hp: 24000, atk: 600, spd: 60,  r: 21, ai: "tank",   color: "#bfe3f7", xp: 3300, gold: 1000, art: "yeti" },
+  icewraith: { name: "Ice Wraith",    hp: 11500, atk: 520, spd: 140, r: 12, ai: "ranged", color: "#9fd8ff", xp: 2700, gold: 820, shot: "ice", art: "ghost" },
+  glacierwolf:{ name: "Glacier Wolf", hp: 12500, atk: 540, spd: 185, r: 13, ai: "lunge",  color: "#dfeefa", xp: 2750, gold: 840, art: "wolf" },
+  // Bandit Badlands — people, armed like you.
+  bandit:      { name: "Bandit",          hp: 14000, atk: 580, spd: 125, r: 12, ai: "melee",  color: "#7a3a2a", xp: 3000, gold: 1000, art: "human", wtype: "sword", bandit: true },
+  banditarcher:{ name: "Bandit Archer",   hp: 11000, atk: 560, spd: 115, r: 12, ai: "ranged", color: "#5a4a2a", xp: 3000, gold: 1000, art: "human", wtype: "bow", shot: "arrow", bandit: true },
+  banditbrute: { name: "Bandit Brute",    hp: 24000, atk: 680, spd: 85,  r: 14, ai: "tank",   color: "#4a2a2a", xp: 3600, gold: 1200, art: "human", wtype: "axe", bandit: true },
+  banditlancer:{ name: "Bandit Lancer",   hp: 15000, atk: 600, spd: 140, r: 12, ai: "lunge",  color: "#6a5a3a", xp: 3200, gold: 1050, art: "human", wtype: "spear", bandit: true },
+  // Infernal Gate
+  demon:     { name: "Lesser Demon",  hp: 15000, atk: 640, spd: 130, r: 12, ai: "ranged", color: "#c0201a", xp: 3500, gold: 1150, shot: "fire", art: "imp" },
+  hellhound: { name: "Hellhound",     hp: 16500, atk: 660, spd: 190, r: 14, ai: "lunge",  color: "#3a0a0a", xp: 3550, gold: 1150, art: "wolf" },
+  infernalbrute:{ name: "Infernal Brute", hp: 32000, atk: 760, spd: 60, r: 21, ai: "tank", color: "#6a1a10", xp: 4300, gold: 1400, art: "magma" },
+  // Realm of the First Dragon
+  dragonkin: { name: "Dragonkin",     hp: 21000, atk: 720, spd: 120, r: 15, ai: "melee",  color: "#c9a24a", xp: 4100, gold: 1350, art: "knight" },
+  wyrmling:  { name: "Wyrmling",      hp: 17000, atk: 690, spd: 180, r: 13, ai: "lunge",  color: "#ff9a2a", xp: 3900, gold: 1300, art: "boar" },
+  drakeguard:{ name: "Drake Guard",   hp: 38000, atk: 820, spd: 60,  r: 21, ai: "tank",   color: "#a8862e", xp: 4800, gold: 1550, art: "construct" },
+
 };
 
 // --- Bosses ---------------------------------------------------------------
@@ -191,7 +295,18 @@ export const BOSSES = {
   vampirelord:{ name: "Lord Vesper",           hp: 150000, atk: 395, r: 34, color: "#a01a3a", xp: 33000, gold: 24000, moves: ["blink", "homing", "lunge", "summon", "spiral", "walls"], art: "lich", reward: { skill: "aegis" } },
   kraken:     { name: "The Void Kraken",       hp: 185000, atk: 450, r: 54, color: "#6a2aaa", xp: 40000, gold: 29000, moves: ["roots", "laser", "walls", "homing", "spiral", "summon"], art: "kraken", reward: { gear: "voidreaver" } },
   seraph:     { name: "Seraph Aurelion",       hp: 230000, atk: 510, r: 40, color: "#ffd76a", xp: 50000, gold: 35000, moves: ["laser", "meteor", "ring", "blink", "walls", "homing", "spiral"], art: "seraph", reward: { skill: "storm" } },
-  eternal:    { name: "Nyxara, the World Eater", hp: 320000, atk: 600, r: 60, color: "#d77bff", xp: 80000, gold: 60000, moves: ["breath", "laser", "meteor", "walls", "spiral", "summon", "homing", "lunge", "ring"], art: "eternal", reward: { win: true } },
+  eternal:    { name: "Nyxara, the World Eater", hp: 320000, atk: 600, r: 60, color: "#d77bff", xp: 80000, gold: 60000, moves: ["breath", "laser", "meteor", "walls", "spiral", "summon", "homing", "lunge", "ring"], art: "eternal", reward: { gear: "eternity" } },
+  nereus:     { name: "Tidelord Nereus",       hp: 420000,  atk: 700,  r: 36, color: "#2a9ad0", xp: 100000, gold: 70000,  moves: ["spiral", "walls", "homing", "summon", "laser", "ring"], art: "lich", reward: { gear: "tidebreaker" } },
+  ashcolossus:{ name: "The Ash Colossus",      hp: 520000,  atk: 780,  r: 54, color: "#6a5a50", xp: 120000, gold: 80000,  moves: ["slam", "meteor", "walls", "lunge", "ring", "breath"], art: "frostgolem", reward: { gear: "ashmaul" } },
+  feymonarch: { name: "The Fey Monarch",       hp: 640000,  atk: 860,  r: 40, color: "#ff8af0", xp: 140000, gold: 92000,  moves: ["blink", "spiral", "homing", "roots", "laser", "summon"], art: "seraph", reward: { gear: "thornbow" } },
+  boneemperor:{ name: "The Bone Emperor",      hp: 780000,  atk: 940,  r: 36, color: "#e8e2d0", xp: 165000, gold: 105000, moves: ["summon", "spiral", "walls", "blink", "meteor", "homing"], art: "lich", reward: { gear: "gravecleaver" } },
+  zephyros:   { name: "Zephyros, Storm Dragon", hp: 950000, atk: 1020, r: 56, color: "#8ac8ff", xp: 190000, gold: 120000, moves: ["breath", "laser", "lunge", "meteor", "ring", "homing", "spiral"], art: "dragon", reward: { gear: "galeblades" } },
+  mycomother: { name: "The Mycelium Mother",   hp: 1150000, atk: 1100, r: 46, color: "#9a5ab0", xp: 220000, gold: 135000, moves: ["roots", "summon", "spiral", "walls", "homing", "slam"], art: "treant", reward: { gear: "sporestaff" } },
+  ymir:       { name: "Ymir, the Frost Giant", hp: 1400000, atk: 1200, r: 60, color: "#cfe8ff", xp: 255000, gold: 150000, moves: ["slam", "ring", "walls", "meteor", "lunge", "laser"], art: "frostgolem", reward: { gear: "rimehammer" } },
+  warlord:    { name: "Warlord Krag",          hp: 1650000, atk: 1300, r: 40, color: "#7a2a1a", xp: 290000, gold: 170000, moves: ["lunge", "slam", "summon", "walls", "spiral", "meteor"], art: "warlord", reward: { gear: "warlordaxe" } },
+  baal:       { name: "Baal the Infernal",     hp: 1950000, atk: 1420, r: 62, color: "#ff3a1a", xp: 330000, gold: 190000, moves: ["breath", "laser", "meteor", "walls", "spiral", "summon", "homing"], art: "eternal", reward: { gear: "hellspear" } },
+  aurelith:   { name: "Aurelith, the First Dragon", hp: 2400000, atk: 1550, r: 66, color: "#ffd24a", xp: 400000, gold: 250000, moves: ["breath", "laser", "meteor", "walls", "spiral", "summon", "homing", "lunge", "ring"], art: "dragon", reward: { win: true } },
+
 };
 
 // --- Gear -----------------------------------------------------------------
@@ -213,6 +328,32 @@ export const WEAPON_FX = {
   leech: { name: "Vampiric",  desc: "Heals you for 6% of damage", color: "#ff5470" },
   crit:  { name: "Keen",      desc: "+15% critical chance",       color: "#ffffff" },
   storm: { name: "Tempest",   desc: "Burns and arcs lightning",   color: "#d77bff" },
+  poison:{ name: "Venom",     desc: "Poison that stacks up",      color: "#8aff5a" },
+  holy:  { name: "Holy",      desc: "+30% damage to bosses and the undead", color: "#fff3a0" },
+};
+
+// Enchantments the Enchantress sells. Once bought, switch between them freely.
+export const ENCHANTS = {
+  burn:   { tokens: 6,  gold: 300 },
+  shock:  { tokens: 8,  gold: 500 },
+  chill:  { tokens: 8,  gold: 500 },
+  poison: { tokens: 10, gold: 900 },
+  leech:  { tokens: 14, gold: 1600 },
+  crit:   { tokens: 14, gold: 1600 },
+  holy:   { tokens: 20, gold: 4000 },
+  storm:  { tokens: 30, gold: 9000 },
+};
+
+// Weapon types: how each one fights. mult scales its attack against a sword
+// of the same tier; cd is the time between attacks.
+export const WEAPON_TYPES = {
+  sword:   { name: "Sword",    icon: "⚔", desc: "Three-hit combo, balanced", mult: 1 },
+  axe:     { name: "Axe",      icon: "🪓", desc: "Slow, wide, knocks enemies flying", mult: 1.45 },
+  spear:   { name: "Spear",    icon: "🔱", desc: "Long-reach thrusts", mult: 1.05 },
+  hammer:  { name: "Warhammer",icon: "🔨", desc: "Very slow ground slam that hits everything around", mult: 2.1 },
+  daggers: { name: "Daggers",  icon: "🗡", desc: "Lightning-fast twin strikes, more crits", mult: 0.55 },
+  bow:     { name: "Bow",      icon: "🏹", desc: "Arrows from a distance", mult: 0.85 },
+  staff:   { name: "Staff",    icon: "🪄", desc: "Magic orbs that pierce through enemies", mult: 0.95 },
 };
 export const WEAPONS = [
   { id: "stick",        name: "Hazel Stick",      atk: 2,   tier: 0,  color: "#a27a4a" },
@@ -232,7 +373,37 @@ export const WEAPONS = [
   { id: "voidreaver",   name: "Voidreaver",       atk: 550, tier: 14, color: "#b06bff", fx: "shock" },
   { id: "seraphgrace",  name: "Seraph's Grace",   atk: 650, tier: 15, color: "#fff3c0", fx: "leech" },
   { id: "eternity",     name: "Eternity",         atk: 770, tier: 16, color: "#ff8af0", fx: "storm" },
+  { id: "tidesong",     name: "Tidesong",         atk: 900,  tier: 17, color: "#2a9ad0" },
+  { id: "cinderbrand",  name: "Cinderbrand",      atk: 1050, tier: 18, color: "#ff7a2a" },
+  { id: "thornblade",   name: "Thornblade",       atk: 1230, tier: 19, color: "#3ad0a0" },
+  { id: "gravesong",    name: "Gravesong",        atk: 1440, tier: 20, color: "#e8e2d0" },
+  { id: "skycutter",    name: "Skycutter",        atk: 1680, tier: 21, color: "#8ac8ff" },
+  { id: "sporebane",    name: "Sporebane",        atk: 1960, tier: 22, color: "#b06bff" },
+  { id: "rimefang",     name: "Rimefang",         atk: 2290, tier: 23, color: "#cfe8ff" },
+  { id: "warlordedge",  name: "Warlord's Edge",   atk: 2680, tier: 24, color: "#c0503a" },
+  { id: "hellreaver",   name: "Hellreaver",       atk: 3130, tier: 25, color: "#ff3a1a" },
+  { id: "dawnfire",     name: "Dawnfire",         atk: 3660, tier: 26, color: "#ffd24a" },
+  // Named weapons the new bosses drop.
+  { id: "tidebreaker",  name: "Tidebreaker",      atk: 1000, tier: 17, color: "#5ce0e6", fx: "chill", type: "spear", named: true },
+  { id: "ashmaul",      name: "Ashmaul",          atk: 2300, tier: 18, color: "#ff7a2a", fx: "burn", type: "hammer", named: true },
+  { id: "thornbow",     name: "Thornbow",         atk: 1100, tier: 19, color: "#8aff5a", fx: "poison", type: "bow", named: true },
+  { id: "gravecleaver", name: "Gravecleaver",     atk: 2200, tier: 20, color: "#e8e2d0", fx: "leech", type: "axe", named: true },
+  { id: "galeblades",   name: "Galeblades",       atk: 1000, tier: 21, color: "#ffef6a", fx: "shock", type: "daggers", named: true },
+  { id: "sporestaff",   name: "Sporestaff",       atk: 2000, tier: 22, color: "#b06bff", fx: "poison", type: "staff", named: true },
+  { id: "rimehammer",   name: "Rimehammer",       atk: 5000, tier: 23, color: "#cfe8ff", fx: "chill", type: "hammer", named: true },
+  { id: "warlordaxe",   name: "Krag's Butcher",   atk: 4000, tier: 24, color: "#c0503a", fx: "crit", type: "axe", named: true },
+  { id: "hellspear",    name: "Hellspear",        atk: 3400, tier: 25, color: "#ff3a1a", fx: "storm", type: "spear", named: true },
 ];
+for (const w of WEAPONS) w.type = w.type || "sword";
+// Every other weapon type at every tier, from the sword of that tier.
+const TIER_NAMES = ["Wooden", "Iron", "Steel", "Rune", "Frost", "Ember", "Dragon", "Tide", "Sun", "Hex", "Brass", "Storm", "Prism", "Blood", "Void", "Seraph",
+  "Eternal", "Atlantean", "Ashen", "Fey", "Bone", "Skyborne", "Mycelial", "Glacial", "Warlord's", "Infernal", "Primordial"];
+for (const type of ["axe", "spear", "hammer", "daggers", "bow", "staff"]) {
+  for (let tier = 1; tier <= 26; tier++) {
+    const sword = WEAPONS.find(w => w.tier === tier && w.type === "sword" && !w.named);
+    WEAPONS.push({ id: `${type}${tier}`, name: `${TIER_NAMES[tier]} ${WEAPON_TYPES[type].name}`, atk: Math.round(sword.atk * WEAPON_TYPES[type].mult), tier, color: sword.color, type });
+  }
+}
 export const ARMORS = [
   { id: "tunic",      name: "Linen Tunic",     def: 1,   hp: 0,    tier: 0,  color: "#8a6a4a" },
   { id: "leather",    name: "Leather Armour",  def: 4,   hp: 20,   tier: 1,  color: "#9a6a3a" },
@@ -251,8 +422,18 @@ export const ARMORS = [
   { id: "voidplate",  name: "Voidplate",       def: 300, hp: 1100, tier: 14, color: "#2a1a5a" },
   { id: "halo",       name: "Haloed Raiment",  def: 350, hp: 1250, tier: 15, color: "#fff3c0" },
   { id: "eternalaegis",name: "Eternal Aegis",  def: 410, hp: 1400, tier: 16, color: "#ff8af0" },
+  { id: "tidemail",   name: "Tidemail",        def: 470, hp: 1560, tier: 17, color: "#2a8ac0" },
+  { id: "ashplate",   name: "Ashplate",        def: 535, hp: 1730, tier: 18, color: "#6a5a50" },
+  { id: "feyweave",   name: "Feyweave",        def: 605, hp: 1910, tier: 19, color: "#3ad0a0" },
+  { id: "boneguard",  name: "Boneguard",       def: 680, hp: 2100, tier: 20, color: "#d8cfb8" },
+  { id: "skyplate",   name: "Skyplate",        def: 760, hp: 2300, tier: 21, color: "#8ac8ff" },
+  { id: "sporehide",  name: "Sporehide",       def: 845, hp: 2510, tier: 22, color: "#7a4a8a" },
+  { id: "rimeplate",  name: "Rimeplate",       def: 935, hp: 2730, tier: 23, color: "#cfe8ff" },
+  { id: "warplate",   name: "Warlord's Plate", def: 1030, hp: 2960, tier: 24, color: "#7a2a1a" },
+  { id: "hellforged", name: "Hellforged Mail", def: 1130, hp: 3200, tier: 25, color: "#c0201a" },
+  { id: "dragonheart",name: "Dragonheart Plate", def: 1240, hp: 3450, tier: 26, color: "#ffd24a" },
 ];
-export const MAX_TIER = 16;
+export const MAX_TIER = 26;
 
 // --- Skills ---------------------------------------------------------------
 // One skill is active at a time (L / ✦); Q or the number keys switch.
