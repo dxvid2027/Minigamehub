@@ -6,6 +6,8 @@
 // an actor white for a frame when it is hit, and `wind` (0…1) is how far
 // into an attack's wind-up it is — every attack shows it, so it can be read.
 // ==========================================================================
+import { COSMETICS } from "./dhQuests.js";
+import { drawHelm, helmCoversHair, fillCape, drawWings, drawAura } from "./dhCosmetics.js";
 
 const TAU = Math.PI * 2;
 
@@ -44,6 +46,8 @@ export function drawHero(ctx, h, t) {
   const tier = h.tier || 0;
   const trim = h.trimColor || "#c9a24a";
   shadow(ctx, x, y + 1, 12);
+  const cos = h.cos || {};
+  if (cos.aura && !h.rolling) drawAura(ctx, cos.aura, x, y, t);
   if (h.shield > 0) {
     // Aegis: a shimmering bubble.
     const a = 0.25 + Math.sin(t * 6) * 0.08;
@@ -89,15 +93,21 @@ export function drawHero(ctx, h, t) {
     ctx.restore();
   };
   if (back) drawSword();
-  // Cape.
-  ctx.fillStyle = h.capeColor || "#2c4f9a";
   const sway = Math.sin(h.walk * 2) * (h.moving ? 2.5 : 0.8) + Math.sin(t * 2.2) * 0.6;
-  ctx.beginPath();
-  ctx.moveTo(x - 7.5, by - 20); ctx.lineTo(x + 7.5, by - 20);
-  ctx.quadraticCurveTo(x + 11 - fx * 4 + sway, by - 8, x + 10 - fx * 5 + sway, by - 1 - fy * 2);
-  ctx.lineTo(x - 10 - fx * 5 + sway, by - 1 - fy * 2);
-  ctx.quadraticCurveTo(x - 11 - fx * 4 + sway, by - 8, x - 7.5, by - 20);
-  ctx.closePath(); ctx.fill(); ctx.stroke();
+  const wings = cos.cape && COSMETICS[cos.cape]?.wings;
+  if (wings && !back) drawWings(ctx, cos.cape, x, by - 17, t, h.moving);
+  else if (!wings) {
+    // Cape.
+    ctx.fillStyle = h.capeColor || "#2c4f9a";
+    ctx.beginPath();
+    ctx.moveTo(x - 7.5, by - 20); ctx.lineTo(x + 7.5, by - 20);
+    ctx.quadraticCurveTo(x + 11 - fx * 4 + sway, by - 8, x + 10 - fx * 5 + sway, by - 1 - fy * 2);
+    ctx.lineTo(x - 10 - fx * 5 + sway, by - 1 - fy * 2);
+    ctx.quadraticCurveTo(x - 11 - fx * 4 + sway, by - 8, x - 7.5, by - 20);
+    ctx.closePath();
+    if (cos.cape) { fillCape(ctx, cos.cape, x - 11 - fx * 5 + sway, by - 20, x + 11 - fx * 5 + sway, by - 1 - fy * 2, t); ctx.lineWidth = 1.2; ctx.strokeStyle = outline; }
+    else { ctx.fill(); ctx.stroke(); }
+  }
   // Legs and boots.
   const step = h.moving ? Math.sin(h.walk * 2) * 3 : 0;
   ctx.fillStyle = "#2a2030";
@@ -122,21 +132,21 @@ export function drawHero(ctx, h, t) {
   }
   ctx.fillStyle = "#4a2e18"; ctx.fillRect(x - 8.5, by - 10.5, 17, 2.5);
   ctx.fillStyle = trim; ctx.fillRect(x - 1.8, by - 11, 3.6, 3.5);
+  if (wings && back) drawWings(ctx, cos.cape, x, by - 17, t, h.moving);
   // Head, hair or helmet.
   ctx.fillStyle = "#f1c9a5";
   ctx.beginPath(); ctx.arc(x, by - 27, 7.8, 0, TAU); ctx.fill(); ctx.stroke();
-  if (tier >= 3) {
+  if (cos.helm) {
+    if (!helmCoversHair(cos.helm)) drawHair(ctx, x, by, back);
+    drawHelm(ctx, cos.helm, x, by - 27, 7.8, t, back, sway);
+    ctx.lineWidth = 1.2; ctx.strokeStyle = outline;
+  } else if (tier >= 3) {
     // Helmet.
     ctx.fillStyle = shadeOr(h.armorColor, 0.15);
     ctx.beginPath(); ctx.arc(x, by - 28.5, 8.3, Math.PI * 0.95, Math.PI * 2.05); ctx.lineTo(x + 8.3, by - 26); ctx.lineTo(x - 8.3, by - 26); ctx.closePath(); ctx.fill(); ctx.stroke();
     ctx.fillStyle = trim; ctx.fillRect(x - 8.3, by - 27, 16.6, 1.6);
     if (tier >= 7) { ctx.fillStyle = h.fxColor || "#ff5470"; ctx.beginPath(); ctx.moveTo(x, by - 36); ctx.quadraticCurveTo(x - 9 - sway, by - 42, x - 12 - sway, by - 30); ctx.lineTo(x - 2, by - 33); ctx.fill(); }
-  } else if (back) { ctx.fillStyle = "#6a3a1a"; ctx.beginPath(); ctx.arc(x, by - 28, 8, 0, TAU); ctx.fill(); }
-  else {
-    ctx.fillStyle = "#6a3a1a";
-    ctx.beginPath(); ctx.arc(x, by - 29.5, 7.8, Math.PI * 1.05, Math.PI * 1.95); ctx.fill();
-    ctx.beginPath(); ctx.moveTo(x - 7.8, by - 29); ctx.lineTo(x - 4, by - 24); ctx.lineTo(x - 2, by - 29); ctx.lineTo(x + 2, by - 25); ctx.lineTo(x + 4, by - 29); ctx.lineTo(x + 7.8, by - 25); ctx.lineTo(x + 7.8, by - 30); ctx.closePath(); ctx.fill();
-  }
+  } else drawHair(ctx, x, by, back);
   if (!back) {
     ctx.fillStyle = "#1a1a2a";
     const ex = side * 2.2;
@@ -159,6 +169,13 @@ export function drawHero(ctx, h, t) {
     ctx.strokeStyle = "#ffffff"; ctx.lineWidth = 2; ctx.stroke();
     ctx.globalAlpha = 1;
   }
+}
+
+function drawHair(ctx, x, by, back) {
+  ctx.fillStyle = "#6a3a1a";
+  if (back) { ctx.beginPath(); ctx.arc(x, by - 28, 8, 0, TAU); ctx.fill(); return; }
+  ctx.beginPath(); ctx.arc(x, by - 29.5, 7.8, Math.PI * 1.05, Math.PI * 1.95); ctx.fill();
+  ctx.beginPath(); ctx.moveTo(x - 7.8, by - 29); ctx.lineTo(x - 4, by - 24); ctx.lineTo(x - 2, by - 29); ctx.lineTo(x + 2, by - 25); ctx.lineTo(x + 4, by - 29); ctx.lineTo(x + 7.8, by - 25); ctx.lineTo(x + 7.8, by - 30); ctx.closePath(); ctx.fill();
 }
 
 // ==========================================================================
@@ -569,17 +586,73 @@ function shadeOr(hex, amt) {
   return `rgb(${f((v >> 16) & 255)},${f((v >> 8) & 255)},${f(v & 255)})`;
 }
 
-/** NPCs in the village. */
+/** NPCs: villagers, merchants and quest givers (who may wear a hat). */
 export function drawNpc(ctx, n, t) {
   const { x, y } = n;
   shadow(ctx, x, y + 1, 10);
-  const bob = Math.sin(t * 2 + x) * 0.8;
-  ctx.fillStyle = n.color;
-  ctx.beginPath(); ctx.moveTo(x - 9, y); ctx.lineTo(x - 6, y - 20 - bob); ctx.lineTo(x + 6, y - 20 - bob); ctx.lineTo(x + 9, y); ctx.closePath(); ctx.fill();
-  ctx.fillStyle = "#f1c9a5"; ctx.beginPath(); ctx.arc(x, y - 26 - bob, 7, 0, TAU); ctx.fill();
-  ctx.fillStyle = n.hair; ctx.beginPath(); ctx.arc(x, y - 28 - bob, 7.2, Math.PI, TAU); ctx.fill();
-  if (n.id === "elder") { ctx.fillStyle = "#e8e8e8"; ctx.beginPath(); ctx.moveTo(x - 4, y - 23 - bob); ctx.lineTo(x, y - 14 - bob); ctx.lineTo(x + 4, y - 23 - bob); ctx.fill(); }
-  ctx.fillStyle = "#1a1a2a"; ctx.fillRect(x - 3, y - 27 - bob, 1.6, 2.2); ctx.fillRect(x + 1.4, y - 27 - bob, 1.6, 2.2);
+  const bob = n.moving ? Math.abs(Math.sin(n.walk * 2)) * 1.6 : Math.sin(t * 2 + x) * 0.8;
+  const face = n.face || 1;
+  const step = n.moving ? Math.sin(n.walk * 2) * 2 : 0;
+  ctx.strokeStyle = "rgba(10,10,20,0.45)"; ctx.lineWidth = 1;
+  ctx.fillStyle = "#2a2030"; ctx.fillRect(x - 4.5, y - 5 + step * 0.3, 3.5, 5 - step * 0.3); ctx.fillRect(x + 1, y - 5 - step * 0.3, 3.5, 5 + step * 0.3);
+  const g = ctx.createLinearGradient(x - 9, y - 20, x + 9, y);
+  g.addColorStop(0, shadeOr(n.color, 0.2)); g.addColorStop(1, shadeOr(n.color, -0.25));
+  ctx.fillStyle = g;
+  ctx.beginPath(); ctx.moveTo(x - 9, y - 3); ctx.lineTo(x - 6, y - 20 - bob); ctx.lineTo(x + 6, y - 20 - bob); ctx.lineTo(x + 9, y - 3); ctx.closePath(); ctx.fill(); ctx.stroke();
+  ctx.fillStyle = shadeOr(n.color, -0.35); ctx.fillRect(x - 7.5, y - 11 - bob * 0.5, 15, 2);
+  if (n.apron) { ctx.fillStyle = n.apron; ctx.fillRect(x - 4.5, y - 15 - bob, 9, 11); }
+  if (n.carry) { ctx.fillStyle = n.carry; ctx.beginPath(); ctx.arc(x + face * 8, y - 12 - bob, 3.5, 0, TAU); ctx.fill(); ctx.stroke(); }
+  ctx.fillStyle = "#f1c9a5"; ctx.beginPath(); ctx.arc(x, y - 26 - bob, 7, 0, TAU); ctx.fill(); ctx.stroke();
+  if (!n.hat || !helmCoversHair(n.hat)) { ctx.fillStyle = n.hair; ctx.beginPath(); ctx.arc(x, y - 28 - bob, 7.2, Math.PI, TAU); ctx.fill(); }
+  if (n.beard) { ctx.fillStyle = n.hair; ctx.beginPath(); ctx.moveTo(x - 5, y - 24 - bob); ctx.quadraticCurveTo(x, y - 12 - bob, x + 5, y - 24 - bob); ctx.fill(); }
+  if (n.hat) drawHelm(ctx, n.hat, x, y - 26 - bob, 7, t, false, Math.sin(t * 2 + x) * 0.6);
+  ctx.fillStyle = "#1a1a2a"; ctx.fillRect(x - 3 + face * 0.8, y - 27 - bob, 1.6, 2.2); ctx.fillRect(x + 1.4 + face * 0.8, y - 27 - bob, 1.6, 2.2);
+  if (n.marker) {
+    // ! for a quest on offer, ? when one is ready to hand in.
+    const my = y - 52 + Math.sin(t * 3) * 2.5;
+    glow(ctx, x, my, 14, n.marker === "?" ? "rgba(46,230,166,A)" : "rgba(255,215,106,A)", 0.45);
+    ctx.font = "900 15px Sora, Inter, sans-serif"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+    ctx.lineWidth = 3; ctx.strokeStyle = "#1a1424"; ctx.strokeText(n.marker, x, my);
+    ctx.fillStyle = n.marker === "?" ? "#2ee6a6" : "#ffd76a"; ctx.fillText(n.marker, x, my);
+    ctx.textBaseline = "alphabetic";
+  }
+  if (n.say && n.sayT > 0) {
+    ctx.font = "600 8.5px Inter, sans-serif";
+    const tw = ctx.measureText(n.say).width + 10, by2 = y - 50 - bob;
+    ctx.globalAlpha = Math.min(1, n.sayT * 2);
+    ctx.fillStyle = "rgba(255,255,255,0.94)";
+    ctx.beginPath(); ctx.roundRect ? ctx.roundRect(x - tw / 2, by2 - 8, tw, 15, 6) : ctx.rect(x - tw / 2, by2 - 8, tw, 15); ctx.fill();
+    ctx.beginPath(); ctx.moveTo(x - 3, by2 + 7); ctx.lineTo(x, by2 + 11); ctx.lineTo(x + 3, by2 + 7); ctx.fill();
+    ctx.fillStyle = "#1a1424"; ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillText(n.say, x, by2);
+    ctx.textBaseline = "alphabetic"; ctx.globalAlpha = 1;
+  }
+}
+
+/** Chickens and the village cat. */
+export function drawCritter(ctx, c, t) {
+  const { x, y } = c;
+  shadow(ctx, x, y + 1, 6);
+  ctx.save(); ctx.translate(x, y - (c.hop || 0)); ctx.scale(c.face || 1, 1);
+  ctx.strokeStyle = "rgba(10,10,20,0.45)"; ctx.lineWidth = 1;
+  if (c.kind === "chicken") {
+    const peck = c.peck > 0 ? 3 : 0;
+    ctx.fillStyle = "#f8f4ec"; ctx.beginPath(); ctx.ellipse(0, -6, 6, 4.5, 0, 0, TAU); ctx.fill(); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(-5, -7); ctx.lineTo(-8, -11); ctx.lineTo(-4, -9); ctx.fill();
+    ctx.beginPath(); ctx.arc(4, -10 + peck, 3, 0, TAU); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = "#ff3a3a"; ctx.beginPath(); ctx.arc(4, -13.5 + peck, 1.4, 0, TAU); ctx.fill();
+    ctx.fillStyle = "#ffb347"; ctx.beginPath(); ctx.moveTo(6.5, -10.5 + peck); ctx.lineTo(9, -9.5 + peck); ctx.lineTo(6.5, -8.5 + peck); ctx.fill();
+    ctx.fillStyle = "#111"; ctx.fillRect(4.5, -11 + peck, 1, 1);
+    ctx.strokeStyle = "#ffb347"; ctx.beginPath(); ctx.moveTo(-1, -2); ctx.lineTo(-1, 0); ctx.moveTo(1.5, -2); ctx.lineTo(1.5, 0); ctx.stroke();
+  } else {
+    ctx.strokeStyle = "#5a5a6a"; ctx.lineWidth = 2; ctx.lineCap = "round";
+    ctx.beginPath(); ctx.moveTo(-5, -5); ctx.quadraticCurveTo(-10, -6, -9 + Math.sin(t * 2) * 1.5, -12); ctx.stroke();
+    ctx.strokeStyle = "rgba(10,10,20,0.45)"; ctx.lineWidth = 1;
+    ctx.fillStyle = "#6a6a7a"; ctx.beginPath(); ctx.ellipse(-0.5, -5, 6, 3.5, 0, 0, TAU); ctx.fill(); ctx.stroke();
+    ctx.beginPath(); ctx.arc(5, -9, 3.6, 0, TAU); ctx.fill(); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(2.4, -11); ctx.lineTo(2.8, -15); ctx.lineTo(4.8, -12.4); ctx.moveTo(5.4, -12.6); ctx.lineTo(7.4, -15); ctx.lineTo(7.8, -11); ctx.fill();
+    ctx.fillStyle = "#c8ff6a"; ctx.fillRect(5.6, -10, 1.2, 1.4);
+  }
+  ctx.restore();
 }
 
 /** Treasure chest. */

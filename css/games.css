@@ -634,6 +634,9 @@ em.up { color: var(--accent-good, #2ee6a6); } em.down { color: var(--text-3); }
 .dh-stats span { padding: 3px 9px; border-radius: 99px; background: #ffffff0d; border: 1px solid var(--border); font-size: .74rem; font-weight: 700; }
 .dh-empty { color: var(--text-3); font-size: .8rem; margin: 2px 0; }
 .dh-talk p { margin: 0 0 10px; line-height: 1.5; }
+.dh-tabs { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 4px; position: sticky; top: -2px; z-index: 1; padding: 4px 0; background: var(--bg-1, #12121c); }
+.dh-prog { color: var(--text-2); white-space: nowrap; }
+.dh-row > button { flex: none; white-space: nowrap; }
 
 /* Four action buttons (attack, roll, skill, potion) sit in a 2 × 2 block. */
 .touch-controls .action-btns:has(> :nth-child(4)) { display: grid; grid-template-columns: repeat(2, auto); gap: 10px; }
