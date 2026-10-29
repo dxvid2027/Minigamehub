@@ -67,7 +67,17 @@ function registerServiceWorker() {
   if (!("serviceWorker" in navigator)) return;
   if (location.protocol !== "http:" && location.protocol !== "https:") return;
   window.addEventListener("load", () => {
-    navigator.serviceWorker.register(new URL("../../sw.js", import.meta.url), { scope: "./" })
+    // When a new deploy's worker takes over, reload once so the page runs on
+    // the new files instead of whatever the old worker handed it.
+    const hadController = !!navigator.serviceWorker.controller;
+    let reloaded = false;
+    navigator.serviceWorker.addEventListener("controllerchange", () => {
+      if (!hadController || reloaded) return;
+      reloaded = true;
+      location.reload();
+    });
+    navigator.serviceWorker.register(new URL("../../sw.js", import.meta.url), { scope: "./", updateViaCache: "none" })
+      .then((reg) => reg.update?.())
       .catch((err) => console.warn("[app] service worker registration failed", err));
   });
 }
