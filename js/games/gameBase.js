@@ -164,8 +164,12 @@ export class GameBase {
       maxH = Math.max(200, screenH - above - reserve - band);
     }
 
-    let w = maxW, h = w / ratio;
-    if (h > maxH) { h = maxH; w = h * ratio; }
+    // A game may ask for a different shape on phones (chess wants room for
+    // its player bars under a full-width board).
+    const r2 = this.getStageRatio?.({ mobile, maxW, maxH, full });
+    const useRatio = r2 || ratio;
+    let w = maxW, h = w / useRatio;
+    if (h > maxH) { h = maxH; w = h * useRatio; }
     this.stageOuter.style.width = `${Math.floor(w)}px`;
     this.stageOuter.style.height = `${Math.floor(h)}px`;
     // Overlaid controls are positioned against the stage's box, so they have

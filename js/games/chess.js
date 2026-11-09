@@ -115,6 +115,8 @@ export class ChessGame extends GameBase {
   getTouchHint() { return "Tap a piece, then tap a highlighted destination."; }
   getKeyboardHint() { return "Click a piece, then click a highlighted destination."; }
   getPlayLabel() { return "Play"; }
+  /** On phones the stage grows taller so the board can use the full width. */
+  getStageRatio({ mobile, maxW }) { return mobile ? maxW / (maxW + 100) : null; }
 
   // ------------------------------------------------------------- SAVE ----
   _store() {
@@ -180,7 +182,7 @@ export class ChessGame extends GameBase {
 
   // ------------------------------------------------------------ SETUP ----
   onInit() {
-    this.stageEl.classList.add("dom-board");
+    this.stageEl.classList.add("dom-board", "chess-stage");
     this.wrap = el("div", { class: "chess-wrap" });
     this.topBar = el("div", { class: "chess-bar" });
     this.boardEl = el("div", { class: "board-grid chess-board themed" });
