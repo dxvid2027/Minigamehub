@@ -216,7 +216,7 @@ const MATE = 100000;
  * Search a position. Returns { move, scores } where `scores` rates every
  * root move (used by the weaker levels to choose among good moves).
  */
-function search(pos, { depth = 3, time = 800, allScores = false } = {}) {
+function search(pos, { depth = 3, time = 800, allScores = false, qdepth = 8 } = {}) {
   const deadline = performance.now() + time;
   let aborted = false;
   let nodes = 0;
@@ -238,7 +238,7 @@ function search(pos, { depth = 3, time = 800, allScores = false } = {}) {
     const stand = pos.evaluate();
     if (stand >= beta) return beta;
     if (stand > alpha) alpha = stand;
-    if (qd > 6) return alpha;
+    if (qd >= qdepth) return alpha;
     const moves = pos.gen(true);
     order(moves, 99);
     const us = pos.side;
@@ -358,7 +358,11 @@ export function chooseMove(board, turn, enPassant, opts = {}) {
     }
   }
   const noise = opts.noise || 0;
-  const res = search(pos, { depth: opts.depth || 3, time: opts.time || 800, allScores: noise > 0 || !!opts.style });
+  // Fractional depth: 2.4 searches 3 plies 40% of the time, 2 otherwise.
+  let depth = opts.depth || 3;
+  if (depth % 1) depth = Math.floor(depth) + (Math.random() < depth % 1 ? 1 : 0);
+  const blunder = opts.blunder || 0;
+  const res = search(pos, { depth: Math.max(1, depth), time: opts.time || 800, qdepth: opts.qdepth ?? 8, allScores: noise > 0 || blunder > 0 || !!opts.style });
   if (!res.move) return null;
   let pick = res.move;
   if (res.scores.length) {
@@ -373,9 +377,15 @@ export function chooseMove(board, turn, enPassant, opts = {}) {
       return { m, v, raw: s };
     });
     const top = Math.max(...rated.map(x => x.v));
-    if (noise > 0) {
+    if (blunder > 0 && Math.random() < blunder) {
+      // A human-style slip: any move that isn't an outright disaster.
+      let pool = rated.filter(x => x.v >= top - 400 && x.raw > -MATE / 2);
+      if (!pool.length) pool = rated;          // every move loses: any will do
+      pick = pool[Math.floor(Math.random() * pool.length)].m;
+    } else if (noise > 0) {
       // Weighted pick among good moves — never a move that just hangs material.
-      const pool = rated.filter(x => x.v >= top - noise && x.raw > -MATE / 2);
+      let pool = rated.filter(x => x.v >= top - noise && x.raw > -MATE / 2);
+      if (!pool.length) pool = rated.filter(x => x.v === top);
       const w = pool.map(x => Math.exp((x.v - top) / Math.max(8, noise / 2.5)));
       let roll = Math.random() * w.reduce((a, b) => a + b, 0);
       for (let i = 0; i < pool.length; i++) { roll -= w[i]; if (roll <= 0) { pick = pool[i].m; break; } }
@@ -384,3 +394,37 @@ export function chooseMove(board, turn, enPassant, opts = {}) {
   const promo = pick.promo ? TYPE[pick.promo] : null;
   return { from: toRC(pick.f), to: toRC(pick.t), promo };
 }
+
+/**
+ * Engine settings for a playing strength, calibrated by bot-vs-bot matches so
+ * that 300 points of rating difference scores about 85% (the Elo expectation):
+ * every neighbouring pair of anchors below was played against each other
+ * (24-40 games each) and tuned until the result matched.
+ * The time cap is generous so that slower phones still reach the intended depth.
+ * Between anchors everything is interpolated, depth included (fractional
+ * depths mix two search depths), so every rating plays a little differently.
+ */
+export const STRENGTH = [
+  // elo,  depth, qdepth, noise, slip,   time cap (ms)
+  [400,    1,     2,      105,   0.17,   300],
+  [700,    1.1,   4,      75,    0.12,   400],
+  [1000,   1.5,   5,      60,    0.095,  600],
+  [1300,   2.0,   6,      38,    0.055,  800],
+  [1600,   2.6,   8,      24,    0.03,   1400],
+  [1900,   3.6,   8,      9,     0.008,  2200],
+  [2200,   4.6,   8,      3,     0.003,  3200],
+  [2500,   5.5,   8,      0,     0,      4500],
+];
+export function strengthFor(elo) {
+  const T = STRENGTH;
+  if (elo <= T[0][0]) elo = T[0][0];
+  if (elo >= T[T.length - 1][0]) elo = T[T.length - 1][0];
+  let i = 0;
+  while (i < T.length - 2 && elo > T[i + 1][0]) i++;
+  const [e0, ...a] = T[i], [e1, ...b] = T[i + 1];
+  const f = (elo - e0) / (e1 - e0);
+  const L = (k) => a[k] + (b[k] - a[k]) * f;
+  return { depth: L(0), qdepth: Math.round(L(1)), noise: L(2), blunder: L(3), time: Math.round(L(4)), book: elo >= 800 || Math.random() < 0.5 };
+}
+
+export const _internals = { Pos, uciOf, sq64, MATE };

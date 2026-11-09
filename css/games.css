@@ -971,3 +971,4 @@ em.up { color: var(--accent-good, #2ee6a6); } em.down { color: var(--text-3); }
 @media (prefers-reduced-motion: reduce) {
   .chess-stage::before, .chess-board .cp.land, .chess-bar .avatar.on, .chess-board .cell.capture-hint::after { animation: none; }
 }
+.chess-mode .go .btn small.elo { display: block; font-size: .6rem; opacity: .7; font-weight: 600; } .chess-mode .go { flex-wrap: wrap; }
