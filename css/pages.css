@@ -405,9 +405,9 @@ body.immersive .page { padding: 0; max-width: none; }
   position: fixed; inset: 0; z-index: 400;
   width: 100vw; height: 100dvh;
   margin: 0;
-  padding: max(20px, env(safe-area-inset-top)) max(6px, env(safe-area-inset-right))
-           max(6px, env(safe-area-inset-bottom)) max(6px, env(safe-area-inset-left));
-  gap: 6px;
+  padding: max(4px, env(safe-area-inset-top)) max(4px, env(safe-area-inset-right))
+           max(4px, env(safe-area-inset-bottom)) max(4px, env(safe-area-inset-left));
+  gap: 4px;
   background: var(--bg-0);
   justify-content: center;
   overflow: hidden;
@@ -511,3 +511,115 @@ body.immersive .page { padding: 0; max-width: none; }
   background-repeat: no-repeat; background-position: center; background-size: contain;
   filter: drop-shadow(0 1px 2px #0006);
 }
+
+/* ---------------------------------------------------------------- */
+/* Touch controls v2 — one look for every game, sized for thumbs.     */
+/* Sizes follow the screen: bigger on bigger phones, never tiny.      */
+/* ---------------------------------------------------------------- */
+.touch-controls {
+  --pad: clamp(150px, 41vw, 196px);
+  --btn: clamp(68px, 19vw, 88px);
+  --stick: clamp(136px, 36vw, 176px);
+  --c-a: #22d3ee; --c-b: #ff5ca8; --c-c: #ffb547; --c-d: #2ee6a6;
+  -webkit-user-select: none; user-select: none; -webkit-touch-callout: none;
+}
+.touch-controls.overlay {
+  --pad: clamp(128px, 32vh, 178px);
+  --btn: clamp(58px, 16vh, 84px);
+  --stick: clamp(120px, 30vh, 168px);
+}
+.touch-controls.band {
+  padding: 8px max(12px, env(safe-area-inset-left)) max(8px, env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-right));
+  gap: 16px;
+}
+
+/* Direction pad: a round base with four arrows and a hub that follows the thumb. */
+.touch-controls .dpad, .touch-controls.band .dpad {
+  width: var(--pad); height: var(--pad); display: block; position: relative;
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at 50% 50%, #ffffff10 0 30%, transparent 31%),
+    radial-gradient(circle at 50% 38%, #2a3150ee, #141829ee 70%);
+  border: 2px solid #ffffff26;
+  box-shadow: 0 10px 28px #0008, inset 0 2px 0 #ffffff1c, inset 0 -6px 14px #0006;
+  touch-action: none; cursor: pointer;
+}
+.touch-controls.overlay .dpad { left: 14px; bottom: 14px; position: absolute; background: radial-gradient(circle at 50% 38%, #2a3150a8, #141829a8 70%); }
+.touch-controls .dpad .dp {
+  position: absolute; width: 34%; height: 34%; display: grid; place-items: center;
+  color: #ffffffb0; font-size: calc(var(--pad) * .13); border-radius: 30%;
+  transition: background .08s, color .08s, transform .08s; pointer-events: none;
+}
+.touch-controls .dpad .dp.up { left: 33%; top: 3%; }
+.touch-controls .dpad .dp.down { left: 33%; bottom: 3%; }
+.touch-controls .dpad .dp.left { top: 33%; left: 3%; }
+.touch-controls .dpad .dp.right { top: 33%; right: 3%; }
+.touch-controls .dpad .dp.on { color: #fff; background: radial-gradient(circle, color-mix(in srgb, var(--c-a) 70%, transparent), transparent 75%); transform: scale(1.12); text-shadow: 0 0 10px var(--c-a); }
+.touch-controls .dpad .dp-hub {
+  position: absolute; left: 50%; top: 50%; width: 30%; height: 30%; border-radius: 50%;
+  transform: translate(-50%, -50%); pointer-events: none;
+  background: radial-gradient(circle at 38% 32%, #ffffff, #c6cdf2 45%, #7a83b8);
+  box-shadow: 0 4px 12px #0009, inset 0 -3px 8px #0000004d; opacity: .7; transition: opacity .1s;
+}
+.touch-controls .dpad.held .dp-hub { opacity: 1; transition: none; }
+.touch-controls .dpad.held { border-color: color-mix(in srgb, var(--c-a) 55%, #ffffff30); }
+
+/* Action buttons: big, round, colour-coded the same way in every game. */
+.touch-controls .action-btns, .touch-controls.band .action-btns { gap: 14px; align-items: center; }
+.touch-controls .action-btns button,
+.touch-controls.band .action-btns button,
+.touch-controls.overlay .action-btns button {
+  --c: var(--c-a);
+  width: var(--btn); height: var(--btn); border-radius: 50%;
+  font-size: calc(var(--btn) * .32); font-weight: 800; color: #fff;
+  background: radial-gradient(circle at 38% 30%, color-mix(in srgb, var(--c) 75%, #fff), color-mix(in srgb, var(--c) 70%, #000) 75%);
+  border: 2px solid color-mix(in srgb, var(--c) 60%, #fff);
+  box-shadow: 0 8px 20px #0008, 0 0 0 4px color-mix(in srgb, var(--c) 18%, transparent), inset 0 -5px 10px #0005, inset 0 2px 0 #ffffff55;
+  text-shadow: 0 1px 2px #0008; touch-action: none;
+  transition: transform .07s, filter .07s, box-shadow .07s;
+}
+.touch-controls .action-btns button.b { --c: var(--c-b); }
+.touch-controls .action-btns button.c { --c: var(--c-c); }
+.touch-controls .action-btns button.d { --c: var(--c-d); }
+.touch-controls .action-btns button.on,
+.touch-controls .action-btns button:active { transform: scale(.9); filter: brightness(1.25); box-shadow: 0 3px 10px #0008, 0 0 0 6px color-mix(in srgb, var(--c) 30%, transparent), 0 0 24px var(--c); }
+.touch-controls.overlay .action-btns button { opacity: .88; }
+.touch-controls .action-btns button.labelled { font-size: calc(var(--btn) * .19); letter-spacing: .04em; }
+.touch-controls .action-btns:has(> :nth-child(4)) { gap: 10px; }
+.touch-controls .action-btns:has(> :nth-child(4)) button { width: calc(var(--btn) * .84); height: calc(var(--btn) * .84); }
+.touch-controls .action-btns:has(> :nth-child(3)):not(:has(> :nth-child(4))) { display: grid; grid-template-columns: repeat(2, auto); gap: 10px; }
+.touch-controls .action-btns:has(> :nth-child(3)):not(:has(> :nth-child(4))) button:first-child { grid-column: span 2; justify-self: center; }
+
+/* Analog stick: same base look as the pad. */
+.touch-controls .stick-base {
+  width: var(--stick); height: var(--stick); margin: calc(var(--stick) / -2) 0 0 calc(var(--stick) / -2);
+  background: radial-gradient(circle at 50% 38%, #2a3150b0, #141829b0 70%);
+  border: 2px solid #ffffff2e; box-shadow: 0 10px 28px #0007, inset 0 -6px 14px #0006;
+}
+.touch-controls .stick-base.held { border-color: color-mix(in srgb, var(--c-a) 60%, #fff3); box-shadow: 0 0 20px color-mix(in srgb, var(--c-a) 40%, transparent), inset 0 -6px 14px #0006; }
+.touch-controls .stick-knob { width: 44%; height: 44%; }
+.touch-controls.band .stick-zone { width: calc(var(--stick) + 20px); height: calc(var(--stick) + 20px); }
+.touch-controls.band .stick-base { left: 50%; bottom: auto; top: 50%; }
+.touch-controls.band .stick-zone { touch-action: none; }
+.touch-controls.overlay .stick-base { left: calc(var(--stick) / 2 + 18px); bottom: 18px; }
+
+/* Single big button (one-tap games). */
+.touch-controls .single-btn {
+  width: calc(var(--btn) * 1.2); height: calc(var(--btn) * 1.2); font-size: calc(var(--btn) * .4);
+  background: radial-gradient(circle at 38% 30%, color-mix(in srgb, var(--c-a) 75%, #fff), color-mix(in srgb, var(--c-a) 65%, #000) 75%);
+  border: 2px solid color-mix(in srgb, var(--c-a) 60%, #fff); color: #fff;
+  box-shadow: 0 8px 22px #0008, 0 0 0 5px color-mix(in srgb, var(--c-a) 18%, transparent), inset 0 -5px 10px #0005;
+  touch-action: none;
+}
+.touch-controls .single-btn.on { transform: translateX(-50%) scale(.92); filter: brightness(1.2); }
+.touch-controls.band .single-btn.on { transform: scale(.92); }
+
+@media (prefers-reduced-motion: reduce) {
+  .touch-controls .dpad .dp, .touch-controls .action-btns button { transition: none; }
+}
+
+/* Fullscreen: the stage frame loses its rounded card look and fills the screen. */
+.play-wrap.immersive-target .game-stage-outer,
+.play-wrap:fullscreen .game-stage-outer { border-radius: 10px; border-color: transparent; }
+.play-wrap.immersive-target, .play-wrap:fullscreen { align-items: center; }
+.touch-controls .dpad, .touch-controls .action-btns, .touch-controls .stick-zone { flex: none; }

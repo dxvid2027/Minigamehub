@@ -4,6 +4,13 @@
 // game never has to branch on device type itself.
 // ==========================================================================
 import { isTouchDevice } from "../core/utils.js";
+import { saveManager } from "./saveManager.js";
+
+/** A tiny tick under the thumb, where the device supports it and it's wanted. */
+function haptic() {
+  if (saveManager.data?.settings?.haptics === false) return;
+  try { navigator.vibrate?.(8); } catch (e) { /* not supported */ }
+}
 
 export class InputController {
   constructor(stageEl) {
@@ -183,24 +190,82 @@ export class InputController {
   buildDPad(container, { buttons = ["a"], labels: customLabels = {} } = {}) {
     container.innerHTML = "";
     container.classList.add("active");
+    // One round pad instead of four separate keys: the thumb rests on it and
+    // slides between directions (diagonals included) without lifting, which
+    // separate buttons could never do — each only saw its own touchstart.
     const dpad = document.createElement("div");
     dpad.className = "zone dpad";
-    const dirs = [["up", "▲", "ArrowUp"], ["left", "◀", "ArrowLeft"],
-                  ["right", "▶", "ArrowRight"], ["down", "▼", "ArrowDown"]];
-    dirs.forEach(([cls, label, code]) => {
-      const b = document.createElement("button");
-      b.className = cls; b.textContent = label; b.type = "button";
-      b.setAttribute("aria-label", cls);
-      this._bindHold(b,
-        () => {
-          this.virtual[cls] = true;
-          this.virtualTaps.add(cls);
-          if (!this.keys.has(code)) this.pressedThisFrame.add(code);
-          this.keys.add(code);
-        },
-        () => { this.virtual[cls] = false; this.keys.delete(code); });
+    dpad.style.touchAction = "none";
+    const dirs = { up: "ArrowUp", left: "ArrowLeft", right: "ArrowRight", down: "ArrowDown" };
+    const els = {};
+    for (const [cls, label] of [["up", "▲"], ["left", "◀"], ["right", "▶"], ["down", "▼"]]) {
+      const b = document.createElement("span");
+      b.className = `dp ${cls}`; b.textContent = label;
+      els[cls] = b;
       dpad.appendChild(b);
-    });
+    }
+    const hub = document.createElement("span");
+    hub.className = "dp-hub";
+    dpad.appendChild(hub);
+    dpad.setAttribute("role", "group");
+    dpad.setAttribute("aria-label", "Direction pad");
+
+    const held = new Set();
+    const press = (cls) => {
+      if (held.has(cls)) return;
+      held.add(cls);
+      const code = dirs[cls];
+      this.virtual[cls] = true;
+      this.virtualTaps.add(cls);
+      if (!this.keys.has(code)) this.pressedThisFrame.add(code);
+      this.keys.add(code);
+      els[cls].classList.add("on");
+      haptic();
+    };
+    const release = (cls) => {
+      if (!held.has(cls)) return;
+      held.delete(cls);
+      this.virtual[cls] = false;
+      this.keys.delete(dirs[cls]);
+      els[cls].classList.remove("on");
+    };
+    // Direction from where the thumb is relative to the pad's centre. A small
+    // dead zone in the middle, and 8 sectors so diagonals press two keys.
+    const aim = (px, py) => {
+      const r = dpad.getBoundingClientRect();
+      let dx = px - (r.left + r.width / 2), dy = py - (r.top + r.height / 2);
+      if (this._rot === 90) [dx, dy] = [dy, -dx];
+      else if (this._rot === 270) [dx, dy] = [-dy, dx];
+      const want = new Set();
+      if (Math.hypot(dx, dy) > r.width * 0.12) {
+        const a = Math.atan2(dy, dx) * 180 / Math.PI;          // -180..180, 0 = right
+        const sector = Math.round(a / 45);                      // -4..4
+        const map = { 0: ["right"], 1: ["right", "down"], 2: ["down"], 3: ["down", "left"], 4: ["left"], "-4": ["left"], "-3": ["left", "up"], "-2": ["up"], "-1": ["up", "right"] };
+        for (const d of map[sector]) want.add(d);
+      }
+      for (const d of [...held]) if (!want.has(d)) release(d);
+      for (const d of want) press(d);
+      hub.style.transform = `translate(calc(-50% + ${Math.max(-1, Math.min(1, dx / (r.width / 2))) * r.width * 0.16}px), calc(-50% + ${Math.max(-1, Math.min(1, dy / (r.height / 2))) * r.height * 0.16}px))`;
+    };
+    const stop = () => { for (const d of [...held]) release(d); hub.style.transform = ""; dpad.classList.remove("held"); };
+    let touchId = null;
+    dpad.addEventListener("touchstart", (e) => {
+      e.preventDefault();
+      if (touchId !== null) return;
+      const t = e.changedTouches[0];
+      touchId = t.identifier;
+      dpad.classList.add("held");
+      aim(t.clientX, t.clientY);
+    }, { passive: false });
+    dpad.addEventListener("touchmove", (e) => {
+      for (const t of e.changedTouches) if (t.identifier === touchId) { aim(t.clientX, t.clientY); e.preventDefault(); }
+    }, { passive: false });
+    const drop = (e) => { for (const t of e.changedTouches) if (t.identifier === touchId) { touchId = null; stop(); } };
+    dpad.addEventListener("touchend", drop);
+    dpad.addEventListener("touchcancel", drop);
+    dpad.addEventListener("mousedown", (e) => { touchId = -1; dpad.classList.add("held"); aim(e.clientX, e.clientY); e.preventDefault(); });
+    window.addEventListener("mousemove", this._padMove = (e) => { if (touchId === -1) aim(e.clientX, e.clientY); });
+    window.addEventListener("mouseup", this._padUp = () => { if (touchId === -1) { touchId = null; stop(); } });
     container.appendChild(dpad);
 
     if (buttons.length) {
@@ -212,6 +277,7 @@ export class InputController {
         const b = document.createElement("button");
         b.className = key; b.textContent = customLabels[key] || labels[key] || key.toUpperCase();
         b.type = "button";
+        b.setAttribute("aria-label", customLabels[key] || key);
         if (customLabels[key]) b.classList.add("labelled");
         const code = codes[key];
         this._bindHold(b,
@@ -252,7 +318,8 @@ export class InputController {
     base.appendChild(knob);
     zone.appendChild(base);
 
-    const RADIUS = 52;          // px of travel for a full-deflection reading
+    // Travel for a full-deflection reading scales with the (responsive) base.
+    let RADIUS = 52;
     let touchId = null, cx = 0, cy = 0;
 
     const setAxis = (x, y) => {
@@ -268,6 +335,7 @@ export class InputController {
     };
 
     const begin = (px, py) => {
+      RADIUS = Math.max(44, (base.offsetWidth || 128) * 0.42);
       // Re-centre the stick under the thumb that grabbed it.
       const r = zone.getBoundingClientRect();
       cx = Math.min(Math.max(px, r.left + RADIUS + 8), r.right - RADIUS - 8);
@@ -342,8 +410,8 @@ export class InputController {
   }
 
   _bindHold(el, onDown, onUp) {
-    const down = (e) => { e.preventDefault(); onDown(); };
-    const up = (e) => { onUp(); };
+    const down = (e) => { e.preventDefault(); el.classList.add("on"); haptic(); onDown(); };
+    const up = (e) => { el.classList.remove("on"); onUp(); };
     el.addEventListener("touchstart", down, { passive: false });
     el.addEventListener("touchend", up);
     el.addEventListener("touchcancel", up);
@@ -357,6 +425,8 @@ export class InputController {
     window.removeEventListener("keyup", this._onKeyUp);
     if (this._stickMove) window.removeEventListener("mousemove", this._stickMove);
     if (this._stickUp) window.removeEventListener("mouseup", this._stickUp);
+    if (this._padMove) window.removeEventListener("mousemove", this._padMove);
+    if (this._padUp) window.removeEventListener("mouseup", this._padUp);
     this._cleanupPointer?.();
     this.keys.clear();
   }

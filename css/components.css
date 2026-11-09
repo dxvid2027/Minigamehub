@@ -416,10 +416,13 @@
 /* On a phone a full-width toast at the top covers the game HUD, so in-game
    notifications drop to a compact strip along the bottom instead. */
 @media (max-width: 780px) {
+  /* At the top, never over the thumb controls at the bottom, and see-through
+     to touches so a toast can never swallow a button press. */
   body.in-game #toast-root {
-    top: auto; bottom: calc(8px + env(safe-area-inset-bottom));
-    left: 8px; right: 8px; align-items: center; gap: 6px;
+    top: calc(6px + env(safe-area-inset-top)); bottom: auto;
+    left: 8px; right: 8px; align-items: center; gap: 4px;
   }
+  body.in-game #toast-root > * { pointer-events: none; opacity: .94; }
   body.in-game .toast { max-width: 100%; padding: 8px 12px; font-size: .82rem; }
   body.in-game .toast .ic { width: 28px; height: 28px; font-size: .95rem; }
 }
@@ -432,6 +435,7 @@ body.compact-hud #toast-root {
   top: calc(52px + env(safe-area-inset-top)); bottom: auto;
   left: auto; right: 8px; align-items: flex-end; gap: 5px;
 }
+body.compact-hud #toast-root > * { pointer-events: none; }
 body.compact-hud .toast {
   min-width: 0; max-width: min(300px, 46vw);
   padding: 6px 10px; font-size: .74rem;

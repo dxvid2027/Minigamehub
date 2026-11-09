@@ -152,7 +152,7 @@ export class GameBase {
     const band = this.touchEl?.classList.contains("band") ? (this.touchEl.offsetHeight || 148) : 0;
     let maxH;
     if (full) {
-      maxH = Math.max(180, (screenH || 600) - hudH - band - 20);
+      maxH = Math.max(180, (screenH || 600) - hudH - band - 12);
     } else {
       const rect = this.stageOuter.getBoundingClientRect();
       // rect.top is viewport-relative; when the page is scrolled fall back to
@@ -170,6 +170,17 @@ export class GameBase {
     const useRatio = r2 || ratio;
     let w = maxW, h = w / useRatio;
     if (h > maxH) { h = maxH; w = h * useRatio; }
+    // Fullscreen means the whole screen: let the stage take all the room it
+    // is given, bending the shape by up to a third rather than letterboxing.
+    // Every game lays out from viewW/viewH, so a slightly different shape just
+    // shows a little more of the scene. A game can opt out with fixedRatio.
+    if (full && !this.fixedRatio) {
+      const flex = this.fullscreenFlex ?? 1.35;
+      w = maxW; h = maxH;
+      const r = w / h;
+      if (r > useRatio * flex) w = h * useRatio * flex;
+      else if (r < useRatio / flex) h = w / (useRatio / flex);
+    }
     this.stageOuter.style.width = `${Math.floor(w)}px`;
     this.stageOuter.style.height = `${Math.floor(h)}px`;
     // Overlaid controls are positioned against the stage's box, so they have
@@ -674,7 +685,8 @@ export class GameBase {
 
   /** Compact HUD when the screen is short, or when the stage is turned. */
   _syncCompactHud() {
-    const short = !!this._shortMq?.matches || !!this._rotated;
+    // Fullscreen always uses the slim HUD: every pixel goes to the game.
+    const short = !!this._shortMq?.matches || !!this._rotated || !!this.isFullscreen?.();
     document.body.classList.toggle("compact-hud", short);
   }
 
