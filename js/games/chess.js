@@ -22,6 +22,7 @@ import { el, choice, randInt } from "../core/utils.js";
 import { SHAPES, MATERIALS, PALETTE, BOARDS, DEFAULT_DESIGN, pieceSVG, boardColors } from "./chessArt.js";
 import { TIERS, tierOf, tierIdx, rankInfo, pickBot, openRankPath, REWARDS, STYLE_TEXT } from "./chessRanked.js";
 import { todayKey } from "../core/utils.js";
+import { chooseMove } from "./chessEngine.js";
 
 const VALUE = { p: 1, n: 3, b: 3.1, r: 5, q: 9, k: 0 };
 const START_COUNT = { p: 8, n: 2, b: 2, r: 2, q: 1 };
@@ -216,6 +217,9 @@ export class ChessGame extends GameBase {
     }
     this.flip = this.human === "b";
     this.moves = [];
+    this._gen = (this._gen || 0) + 1;
+    this.mateKing = null; this._fx = null; this._anim = null;
+    this.uci = [];
     this.hintsUsed = 0;
     this.boardEl.style.setProperty("--frame", this.mode === "ranked" ? rankInfo(s.rating).tier.color : "#4a3f6e");
     this.clock = M.clock ? { w: M.clock, b: M.clock, inc: M.inc || 0 } : null;
@@ -236,24 +240,36 @@ export class ChessGame extends GameBase {
   onResume() { this._clockT = performance.now(); }
 
   // -------------------------------------------------------------- AI ------
+  /**
+   * Engine settings. `noise` (centipawns) is how far from the best move a bot
+   * may wander: weak bots pick among good-looking moves, strong ones don't.
+   */
   _levelCfg() {
     if (this.mode === "ranked") {
       const r = this.botRating;
-      if (r < 850) return { depth: 1, blunder: 0.35 };
-      if (r < 1000) return { depth: 2, blunder: 0.22 };
-      if (r < 1150) return { depth: 2, blunder: 0.1 };
-      if (r < 1300) return { depth: 2, blunder: 0.03 };
-      if (r < 1500) return { depth: 3, blunder: 0.06 };
-      return { depth: 3, blunder: 0 };
+      if (r < 800) return { depth: 1, time: 300, noise: 45 };
+      if (r < 950) return { depth: 2, time: 400, noise: 35 };
+      if (r < 1100) return { depth: 2, time: 500, noise: 22 };
+      if (r < 1250) return { depth: 3, time: 600, noise: 16 };
+      if (r < 1400) return { depth: 3, time: 700, noise: 8 };
+      if (r < 1600) return { depth: 4, time: 900, noise: 5 };
+      if (r < 1800) return { depth: 5, time: 1100, noise: 0 };
+      return { depth: 6, time: 1500, noise: 0 };
     }
-    if (this.mode === "blitz") return { depth: 2, blunder: 0.06 };
-    return { Easy: { depth: 1, blunder: 0.35 }, Normal: { depth: 2, blunder: 0.05 }, Hard: { depth: 3, blunder: 0 } }[this.aiLevel] || { depth: 2, blunder: 0.05 };
+    if (this.mode === "blitz") return { depth: 3, time: 500, noise: 10 };
+    return {
+      Easy: { depth: 1, time: 300, noise: 40 },
+      Normal: { depth: 3, time: 600, noise: 12 },
+      Hard: { depth: 6, time: 1400, noise: 0 },
+    }[this.aiLevel] || { depth: 3, time: 600, noise: 12 };
   }
 
   _scheduleAI() {
     this.locked = true;
     this._renderBars();
+    const gen = this._gen;
     setTimeout(() => {
+      if (gen !== this._gen) return;          // a new game started meanwhile
       if (this.state === "paused") { this.locked = false; this._scheduleAI(); return; }
       if (this.state !== "playing" || this.over) { this.locked = false; return; }
       this._aiMove();
@@ -263,70 +279,17 @@ export class ChessGame extends GameBase {
   }
 
   _aiMove() {
-    const color = this.turn;
-    const legal = this._legalMoves(this.board, color, this.enPassant);
+    const legal = this._legalMoves(this.board, this.turn, this.enPassant);
     if (!legal.length) return;
-    const { depth, blunder } = this._levelCfg();
-    let move;
+    const cfg = this._levelCfg();
     const style = this.mode === "ranked" ? this.bot?.style : null;
-    if (Math.random() < blunder) {
-      // A "blunder" still has character: each bot's mistakes look like it.
-      const pool = style === "pawns" ? legal.filter(m => this.board[m.from.r][m.from.c].type === "p")
-        : style === "knights" ? legal.filter(m => this.board[m.from.r][m.from.c].type === "n")
-        : style === "aggressive" ? legal.filter(m => m.capture) : [];
-      move = choice(pool.length ? pool : legal);
-    } else move = this._bestMove(legal, depth, color, style);
-    if (move.promotion) move.promo = "q";
+    const pick = chooseMove(this.board, this.turn, this.enPassant, { ...cfg, style, played: this.mode === "c960" ? null : this.uci });
+    let move = pick && legal.find(m => m.from.r === pick.from.r && m.from.c === pick.from.c && m.to.r === pick.to.r && m.to.c === pick.to.c);
+    if (!move) move = choice(legal);
+    move = { ...move, promo: move.promotion ? (pick?.promo || "q") : undefined };
     this._makeMove(move);
   }
 
-  _bestMove(legal, depth, color, style) {
-    let best = null, bestScore = -Infinity;
-    const opp = color === "w" ? "b" : "w";
-    const ordered = [...legal].sort(() => Math.random() - 0.5).sort((a, b) => (b.capture ? 1 : 0) - (a.capture ? 1 : 0));
-    for (const m of ordered) {
-      const { board, enPassant } = this._apply(clone(this.board), { ...m, promo: m.promotion ? "q" : undefined }, this.enPassant);
-      let score = -this._search(board, opp, enPassant, depth - 1, -Infinity, -bestScore + 0.3);
-      if (style === "aggressive" && m.capture) score += 0.12;
-      if (style === "solid" && this.board[m.from.r][m.from.c].type === "k" && !m.castle) score -= 0.1;
-      if (style === "pawns" && this.board[m.from.r][m.from.c].type === "p") score += 0.08;
-      if (style === "knights" && this.board[m.from.r][m.from.c].type === "n") score += 0.08;
-      if (score > bestScore) { bestScore = score; best = m; }
-    }
-    return best || choice(legal);
-  }
-
-  _search(board, color, enPassant, depth, alpha, beta) {
-    const legal = this._legalMoves(board, color, enPassant);
-    if (!legal.length) {
-      const k = this._findKing(board, color);
-      return k && this._attacked(board, k.r, k.c, color) ? -1000 - depth : 0;
-    }
-    if (depth <= 0) return this._evaluate(board, color);
-    legal.sort((a, b) => (b.capture ? 1 : 0) - (a.capture ? 1 : 0));
-    let best = -Infinity;
-    for (const m of legal) {
-      const { board: b2, enPassant: ep2 } = this._apply(clone(board), { ...m, promo: m.promotion ? "q" : undefined }, enPassant);
-      const score = -this._search(b2, color === "w" ? "b" : "w", ep2, depth - 1, -beta, -alpha);
-      if (score > best) best = score;
-      if (score > alpha) alpha = score;
-      if (alpha >= beta) break;
-    }
-    return best;
-  }
-
-  _evaluate(board, forColor) {
-    let score = 0;
-    for (let r = 0; r < 8; r++) for (let c = 0; c < 8; c++) {
-      const p = board[r][c];
-      if (!p) continue;
-      let val = VALUE[p.type];
-      if (p.type === "p") val += (p.color === "w" ? 6 - r : r - 1) * 0.04 + (c >= 2 && c <= 5 ? 0.03 : 0);
-      else if (p.type !== "k") val += (3.5 - Math.hypot(r - 3.5, c - 3.5)) * 0.03;
-      score += p.color === forColor ? val : -val;
-    }
-    return score;
-  }
 
   // ------------------------------------------------------------ RULES -----
   _pseudoMoves(board, r, c, enPassant) {
@@ -469,7 +432,7 @@ export class ChessGame extends GameBase {
     this._makeMove(move);
   }
 
-  _snapshot() { return { board: clone(this.board), turn: this.turn, enPassant: this.enPassant, lastMove: this.lastMove, halfmove: this.halfmove, reps: new Map(this.reps), clock: this.clock && { ...this.clock }, moves: [...(this.moves || [])] }; }
+  _snapshot() { return { board: clone(this.board), turn: this.turn, enPassant: this.enPassant, lastMove: this.lastMove, halfmove: this.halfmove, reps: new Map(this.reps), clock: this.clock && { ...this.clock }, moves: [...(this.moves || [])], uci: [...(this.uci || [])] }; }
 
   /** Short algebraic notation, with file/rank disambiguation where needed. */
   _san(move) {
@@ -487,7 +450,11 @@ export class ChessGame extends GameBase {
   _makeMove(move) {
     this.history.push(this._snapshot());
     this.moves.push(this._san(move));
+    this.uci.push(FILES[move.from.c] + (8 - move.from.r) + FILES[move.to.c] + (8 - move.to.r));
     this._anim = { from: move.from, to: move.to, castle: move.castle };
+    const capSq = move.enPassant ? { r: move.from.r, c: move.to.c } : move.to;
+    const victim = this.board[capSq.r][capSq.c];
+    this._fx = victim ? { ...capSq, type: victim.type, color: victim.color } : null;
     const target = this.board[move.to.r][move.to.c];
     const mover = this.board[move.from.r][move.from.c];
     const capture = !!target || move.enPassant;
@@ -555,7 +522,7 @@ export class ChessGame extends GameBase {
     // Against the AI take back both plies so it is your move again.
     let snap = this.history.pop();
     if (this.human && snap.turn !== this.human && this.history.length) snap = this.history.pop();
-    Object.assign(this, { board: snap.board, turn: snap.turn, enPassant: snap.enPassant, lastMove: snap.lastMove, halfmove: snap.halfmove, reps: snap.reps, moves: snap.moves, selected: null });
+    Object.assign(this, { board: snap.board, turn: snap.turn, enPassant: snap.enPassant, lastMove: snap.lastMove, halfmove: snap.halfmove, reps: snap.reps, moves: snap.moves, uci: snap.uci, selected: null });
     audioManager.play("click");
     this._render();
   }
@@ -566,7 +533,8 @@ export class ChessGame extends GameBase {
     const legal = this._legalMoves(this.board, this.turn, this.enPassant);
     if (!legal.length) return;
     this.hintsUsed = (this.hintsUsed || 0) + 1;
-    const m = this._bestMove(legal, 2, this.turn);
+    const m = chooseMove(this.board, this.turn, this.enPassant, { depth: 4, time: 700, book: false });
+    if (!m) return;
     this.selected = { ...m.from };
     this._render();
     const cells = this.boardEl.querySelectorAll(".cell");
@@ -605,7 +573,12 @@ export class ChessGame extends GameBase {
     if (this.over) return;
     this.over = true;
     this.locked = false;
+    if (reason === "checkmate") {
+      const loser = winner === "w" ? "b" : "w";
+      this.mateKing = this._findKing(this.board, loser);
+    }
     this._render();
+    if (winner && (this.mode === "local" || winner === this.human)) this._confetti();
     const s = this._store();
     const name = (c) => (c === "w" ? "White" : "Black");
     const how = reason === "checkmate" ? "by checkmate" : reason === "time" ? "on time" : reason === "resignation" ? "by resignation" : "";
@@ -703,12 +676,32 @@ export class ChessGame extends GameBase {
         piece.style.transform = `translate(${f.left - t.left}px, ${f.top - t.top}px)`;
         piece.style.zIndex = 2;
         void piece.offsetWidth;
-        piece.style.transition = "transform .22s cubic-bezier(.2,.8,.2,1)";
+        piece.style.transition = "transform .24s cubic-bezier(.2,.8,.2,1)";
         piece.style.transform = "";
-        setTimeout(() => { piece.style.zIndex = ""; piece.style.transition = ""; }, 260);
+        setTimeout(() => { piece.style.zIndex = ""; piece.style.transition = ""; piece.classList.add("land"); setTimeout(() => piece.classList.remove("land"), 320); }, 240);
       };
       slide(a.from, a.to);
       if (a.castle) { const r = a.to.r; slide({ r, c: a.castle === "kingside" ? 7 : 0 }, { r, c: a.castle === "kingside" ? 5 : 3 }); }
+    }
+    // A captured piece shatters where it stood.
+    if (this._fx) {
+      const fx = this._fx; this._fx = null;
+      const cell = cells[fx.r * 8 + fx.c];
+      if (cell) {
+        const ghost = el("div", { class: "chess-ghost", style: `left:${cell.offsetLeft}px;top:${cell.offsetTop}px;width:${cell.offsetWidth}px;height:${cell.offsetHeight}px` });
+        ghost.innerHTML = pieceSVG(fx.type, fx.color, d, "g");
+        const col = fx.color === "w" ? d.white : d.black;
+        for (let i = 0; i < 12; i++) {
+          const a2 = (i / 12) * Math.PI * 2 + Math.random() * 0.4, dist = 30 + Math.random() * 40;
+          ghost.appendChild(el("i", { class: "spark", style: `--dx:${Math.cos(a2) * dist}px;--dy:${Math.sin(a2) * dist}px;--c:${i % 3 ? col : "#ffd76a"}` }));
+        }
+        this.boardEl.appendChild(ghost);
+        setTimeout(() => ghost.remove(), 700);
+      }
+    }
+    if (this.over && this.mateKing) {
+      const k = cells[this.mateKing.r * 8 + this.mateKing.c]?.querySelector(".cp");
+      if (k) k.classList.add("mated");
     }
     if (this.promo) {
       const side = this.turn;
@@ -720,6 +713,16 @@ export class ChessGame extends GameBase {
       this.boardEl.appendChild(pick);
     }
     this._renderBars();
+  }
+
+  _confetti() {
+    const box = el("div", { class: "chess-confetti" });
+    const cols = ["#ffd76a", "#2ee6a6", "#22d3ee", "#ff6ac8", "#9a5ae8", "#ffffff"];
+    for (let i = 0; i < 70; i++) {
+      box.appendChild(el("i", { style: `left:${Math.random() * 100}%;--c:${cols[i % cols.length]};--d:${(Math.random() * 0.8).toFixed(2)}s;--x:${(Math.random() * 120 - 60).toFixed(0)}px;--r:${(Math.random() * 720 - 360).toFixed(0)}deg` }));
+    }
+    this.boardEl.appendChild(box);
+    setTimeout(() => box.remove(), 2600);
   }
 
   _captured(color) {
@@ -751,7 +754,8 @@ export class ChessGame extends GameBase {
       const diff = Math.round(mine.mat - cap.mat);
       const caps = el("span", { class: "caps" });
       caps.innerHTML = cap.out.map(t => pieceSVG(t, other, d, "c")).join("") + (diff > 0 ? `<em>+${diff}</em>` : "");
-      const turnDot = el("span", { class: `dot${this.turn === side && !this.over ? " on" : ""}` });
+      const av = this.mode === "ranked" && side !== this.human ? this.bot.emoji : (this.mode === "local" || this.mode === "puzzle" || side === this.human) ? (side === "w" ? "♔" : "♚") : "🤖";
+      const turnDot = el("span", { class: `avatar${this.turn === side && !this.over ? " on" : ""}`, style: `--ac:${side === "w" ? d.white : d.black}` }, av);
       const thinking = this.locked && this.turn === side && this.human && side !== this.human ? el("span", { class: "think" }, "thinking…") : null;
       node.append(...[turnDot, el("b", {}, label(side)), thinking, caps].filter(Boolean));
       if (this.clock) { const ck = el("span", { class: "clock" }, fmtClock(this.clock[side])); this._clockEls[side] = ck; node.append(ck); }
