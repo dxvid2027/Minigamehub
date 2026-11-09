@@ -22,7 +22,10 @@ import { el, choice, randInt } from "../core/utils.js";
 import { SHAPES, MATERIALS, PALETTE, BOARDS, DEFAULT_DESIGN, pieceSVG, boardColors } from "./chessArt.js";
 import { TIERS, tierOf, tierIdx, rankInfo, pickBot, openRankPath, REWARDS, STYLE_TEXT } from "./chessRanked.js";
 import { todayKey } from "../core/utils.js";
-import { chooseMove } from "./chessEngine.js";
+import { chooseMove, strengthFor } from "./chessEngine.js";
+
+// Casual levels as ratings; the engine is calibrated so these are honest.
+const LEVEL_ELO = { Easy: 600, Normal: 1100, Hard: 1600, Master: 2100 };
 
 const VALUE = { p: 1, n: 3, b: 3.1, r: 5, q: 9, k: 0 };
 const START_COUNT = { p: 8, n: 2, b: 2, r: 2, q: 1 };
@@ -30,7 +33,7 @@ const FILES = "abcdefgh";
 
 const MODES = {
   ranked: { name: "Ranked", icon: "🏆", desc: "Climb the Ranked Path from Bronze III to Grandmaster against named bots. Rewards on the way.", clock: 600 },
-  casual: { name: "Casual", icon: "♟", desc: "Play the AI at your own pace, with undo." },
+  casual: { name: "Casual", icon: "♟", desc: "Pick a bot by rating — Easy 600 up to Master 2100 — and play at your own pace, with undo." },
   blitz:  { name: "Blitz 3+2", icon: "⚡", desc: "Three minutes each plus two seconds a move. Don't flag!", clock: 180, inc: 2 },
   c960:   { name: "Chess960", icon: "🎲", desc: "Back ranks shuffled at random — no opening theory. Castling is off." },
   puzzle: { name: "Puzzles", icon: "🧩", desc: "Find checkmate in one move." },
@@ -165,7 +168,7 @@ export class ChessGame extends GameBase {
         el("div", { class: "ic" }, m.icon),
         el("div", { class: "tx" }, [el("b", {}, m.name), sub ? el("span", { class: "sub" }, sub) : null, el("span", {}, m.desc)]),
         el("div", { class: "go" }, id === "casual" || id === "c960"
-          ? ["Easy", "Normal", "Hard"].map(l => el("button", { class: "btn btn-ghost btn-sm", onClick: () => go(id, l) }, l))
+          ? Object.entries(LEVEL_ELO).map(([l, e]) => el("button", { class: "btn btn-ghost btn-sm", title: `About ${e} Elo`, onClick: () => go(id, l) }, [l, el("small", { class: "elo" }, String(e))]))
           : [el("button", { class: "btn btn-primary btn-sm", onClick: () => go(id) }, "Play"),
              id === "ranked" ? el("button", { class: "btn btn-ghost btn-sm", onClick: () => { closeModal(); setTimeout(() => this._openPath(), 30); } }, "🗺 Path") : null].filter(Boolean)),
       ]);
@@ -244,24 +247,13 @@ export class ChessGame extends GameBase {
    * Engine settings. `noise` (centipawns) is how far from the best move a bot
    * may wander: weak bots pick among good-looking moves, strong ones don't.
    */
-  _levelCfg() {
-    if (this.mode === "ranked") {
-      const r = this.botRating;
-      if (r < 800) return { depth: 1, time: 300, noise: 45 };
-      if (r < 950) return { depth: 2, time: 400, noise: 35 };
-      if (r < 1100) return { depth: 2, time: 500, noise: 22 };
-      if (r < 1250) return { depth: 3, time: 600, noise: 16 };
-      if (r < 1400) return { depth: 3, time: 700, noise: 8 };
-      if (r < 1600) return { depth: 4, time: 900, noise: 5 };
-      if (r < 1800) return { depth: 5, time: 1100, noise: 0 };
-      return { depth: 6, time: 1500, noise: 0 };
-    }
-    if (this.mode === "blitz") return { depth: 3, time: 500, noise: 10 };
-    return {
-      Easy: { depth: 1, time: 300, noise: 40 },
-      Normal: { depth: 3, time: 600, noise: 12 },
-      Hard: { depth: 6, time: 1400, noise: 0 },
-    }[this.aiLevel] || { depth: 3, time: 600, noise: 12 };
+  _levelCfg() { return strengthFor(this._aiElo()); }
+
+  /** The rating the AI plays at — its strength is calibrated to this number. */
+  _aiElo() {
+    if (this.mode === "ranked") return this.botRating;
+    if (this.mode === "blitz") return 1300;
+    return LEVEL_ELO[this.aiLevel] ?? 1100;
   }
 
   _scheduleAI() {
@@ -745,7 +737,7 @@ export class ChessGame extends GameBase {
       if (this.mode === "local") return side === "w" ? "White" : "Black";
       if (this.mode === "puzzle") return side === this.human ? "You" : "Defender";
       if (side === this.human) return this.mode === "ranked" ? `You · ${rankInfo(s.rating).label} · ${s.rating}${s.streak >= 2 ? ` 🔥${s.streak}` : ""}` : "You";
-      return this.mode === "ranked" ? `${this.bot.emoji} ${this.bot.name} · ${this.botRating}` : `🤖 AI · ${this.mode === "blitz" ? "Blitz" : this.aiLevel}`;
+      return this.mode === "ranked" ? `${this.bot.emoji} ${this.bot.name} · ${this.botRating}` : `🤖 AI · ${this.mode === "blitz" ? "Blitz" : this.aiLevel} · ${this._aiElo()}`;
     };
     const bar = (node, side) => {
       node.innerHTML = "";
