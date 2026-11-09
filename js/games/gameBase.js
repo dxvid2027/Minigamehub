@@ -152,7 +152,7 @@ export class GameBase {
     const band = this.touchEl?.classList.contains("band") ? (this.touchEl.offsetHeight || 148) : 0;
     let maxH;
     if (full) {
-      maxH = Math.max(180, (screenH || 600) - hudH - band - 20);
+      maxH = Math.max(180, (screenH || 600) - hudH - band - 12);
     } else {
       const rect = this.stageOuter.getBoundingClientRect();
       // rect.top is viewport-relative; when the page is scrolled fall back to
@@ -170,6 +170,17 @@ export class GameBase {
     const useRatio = r2 || ratio;
     let w = maxW, h = w / useRatio;
     if (h > maxH) { h = maxH; w = h * useRatio; }
+    // Fullscreen means the whole screen: let the stage take all the room it
+    // is given, bending the shape by up to a third rather than letterboxing.
+    // Every game lays out from viewW/viewH, so a slightly different shape just
+    // shows a little more of the scene. A game can opt out with fixedRatio.
+    if (full && !this.fixedRatio) {
+      const flex = this.fullscreenFlex ?? 1.35;
+      w = maxW; h = maxH;
+      const r = w / h;
+      if (r > useRatio * flex) w = h * useRatio * flex;
+      else if (r < useRatio / flex) h = w / (useRatio / flex);
+    }
     this.stageOuter.style.width = `${Math.floor(w)}px`;
     this.stageOuter.style.height = `${Math.floor(h)}px`;
     // Overlaid controls are positioned against the stage's box, so they have
@@ -674,7 +685,8 @@ export class GameBase {
 
   /** Compact HUD when the screen is short, or when the stage is turned. */
   _syncCompactHud() {
-    const short = !!this._shortMq?.matches || !!this._rotated;
+    // Fullscreen always uses the slim HUD: every pixel goes to the game.
+    const short = !!this._shortMq?.matches || !!this._rotated || !!this.isFullscreen?.();
     document.body.classList.toggle("compact-hud", short);
   }
 
@@ -921,7 +933,10 @@ export class GameBase {
     // height is that scarce the controls go over the stage instead, which is
     // the trade every phone game makes in landscape.
     const short = !!this._shortMq?.matches;
-    const overlay = (stickLayout && (wide || this.isFullscreen())) || short;
+    // In fullscreen a one-button game keeps its button in the corner of the
+    // picture instead of giving up a whole strip of the screen for it.
+    const single = (this.getTouchLayout?.() || "none") === "single";
+    const overlay = ((stickLayout || single) && (wide || this.isFullscreen())) || short;
     this.touchEl.classList.toggle("band", !overlay);
     this.touchEl.classList.toggle("overlay", overlay);
     this.touchEl.classList.add("active");
@@ -943,6 +958,20 @@ export class GameBase {
     if (!st?.offsetWidth) return;
     let left = 0, top = 0, node = st;
     while (node && node !== this.root) { left += node.offsetLeft; top += node.offsetTop; node = node.offsetParent; }
+    // A tall game on a sideways phone leaves empty space left and right of
+    // the picture. When that space fits a thumb pad, the controls move out
+    // there instead of covering the playfield.
+    const free = left;
+    const padPx = Math.min(178, Math.max(128, window.innerHeight * 0.32));
+    const sides = free >= padPx * 0.85 && this.root.offsetWidth > this.root.offsetHeight;
+    this.touchEl.classList.toggle("sides", sides);
+    if (sides) {
+      Object.assign(this.touchEl.style, {
+        left: "0px", top: `${top}px`, width: `${this.root.offsetWidth}px`, height: `${st.offsetHeight}px`,
+        right: "auto", bottom: "auto",
+      });
+      return;
+    }
     Object.assign(this.touchEl.style, {
       left: `${left}px`, top: `${top}px`,
       width: `${st.offsetWidth}px`, height: `${st.offsetHeight}px`,

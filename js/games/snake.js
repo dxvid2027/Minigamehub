@@ -15,8 +15,9 @@ export class SnakeGame extends GameBase {
       "The snake speeds up gradually as you grow.",
     ];
   }
-  getTouchLayout() { return "none"; }
-  getTouchHint() { return "Swipe up/down/left/right to steer."; }
+  getTouchLayout() { return "dpad"; }
+  getTouchButtons() { return []; }
+  getTouchHint() { return "Steer with the pad — or swipe on the board."; }
   getKeyboardHint() { return "Arrow keys or WASD to steer, P to pause."; }
 
   getScene() { return "grid"; }
