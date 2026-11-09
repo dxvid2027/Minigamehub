@@ -958,6 +958,20 @@ export class GameBase {
     if (!st?.offsetWidth) return;
     let left = 0, top = 0, node = st;
     while (node && node !== this.root) { left += node.offsetLeft; top += node.offsetTop; node = node.offsetParent; }
+    // A tall game on a sideways phone leaves empty space left and right of
+    // the picture. When that space fits a thumb pad, the controls move out
+    // there instead of covering the playfield.
+    const free = left;
+    const padPx = Math.min(178, Math.max(128, window.innerHeight * 0.32));
+    const sides = free >= padPx * 0.85 && this.root.offsetWidth > this.root.offsetHeight;
+    this.touchEl.classList.toggle("sides", sides);
+    if (sides) {
+      Object.assign(this.touchEl.style, {
+        left: "0px", top: `${top}px`, width: `${this.root.offsetWidth}px`, height: `${st.offsetHeight}px`,
+        right: "auto", bottom: "auto",
+      });
+      return;
+    }
     Object.assign(this.touchEl.style, {
       left: `${left}px`, top: `${top}px`,
       width: `${st.offsetWidth}px`, height: `${st.offsetHeight}px`,
