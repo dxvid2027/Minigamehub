@@ -1,20 +1,66 @@
 // ==========================================================================
-// Chess — full rules (castling, en passant, promotion, check/mate/stalemate)
-// with an alpha-beta AI, or 2-player pass-and-play.
+// Chess — full rules (castling, en passant, promotion with choice, check,
+// mate, stalemate, fifty moves, repetition, dead positions) with several
+// ways to play:
+//
+//   Ranked     — an Elo rating and tiers from Bronze to Master; the bot is
+//                matched to your rating and you alternate colours.
+//   Casual     — the AI at Easy, Normal or Hard, with undo.
+//   Blitz      — 3 minutes + 2 seconds a move against the clock.
+//   Chess960   — shuffled back ranks (no castling in this version).
+//   Puzzles    — checkmate in one move.
+//   2 Players  — pass and play on one screen.
+//
+// Every piece is drawn from the player's own design (see chessArt.js): the
+// shape family, the material, both army colours and the board.
 // ==========================================================================
 import { GameBase } from "./gameBase.js";
 import { audioManager } from "../systems/audioManager.js";
-import { el, choice } from "../core/utils.js";
+import { saveManager } from "../systems/saveManager.js";
+import { openModal, closeModal } from "../ui/modal.js";
+import { el, choice, randInt } from "../core/utils.js";
+import { SHAPES, MATERIALS, PALETTE, BOARDS, DEFAULT_DESIGN, pieceSVG, boardColors } from "./chessArt.js";
 
-// Both sides use the *solid* glyphs; the two armies are told apart by fill and
-// outline (see .piece-w / .piece-b in games.css), which reads far better on a
-// dark board than mixing outline and solid figures.
-const GLYPH = { k: "♚", q: "♛", r: "♜", b: "♝", n: "♞", p: "♟" };
 const VALUE = { p: 1, n: 3, b: 3.1, r: 5, q: 9, k: 0 };
+const START_COUNT = { p: 8, n: 2, b: 2, r: 2, q: 1 };
+const FILES = "abcdefgh";
 
-function initialBoard() {
-  const back = ["r", "n", "b", "q", "k", "b", "n", "r"];
-  const board = Array.from({ length: 8 }, () => Array(8).fill(null));
+const TIERS = [
+  { name: "Bronze", min: 0, icon: "🥉" }, { name: "Silver", min: 900, icon: "🥈" },
+  { name: "Gold", min: 1100, icon: "🥇" }, { name: "Platinum", min: 1300, icon: "💠" },
+  { name: "Diamond", min: 1500, icon: "💎" }, { name: "Master", min: 1700, icon: "👑" },
+];
+const tierOf = (r) => [...TIERS].reverse().find(t => r >= t.min);
+const tierIdx = (name) => TIERS.findIndex(t => t.name === name);
+
+const MODES = {
+  ranked: { name: "Ranked", icon: "🏆", desc: "Win to climb from Bronze to Master. The bot matches your rating; colours alternate.", clock: 600 },
+  casual: { name: "Casual", icon: "♟", desc: "Play the AI at your own pace, with undo." },
+  blitz:  { name: "Blitz 3+2", icon: "⚡", desc: "Three minutes each plus two seconds a move. Don't flag!", clock: 180, inc: 2 },
+  c960:   { name: "Chess960", icon: "🎲", desc: "Back ranks shuffled at random — no opening theory. Castling is off." },
+  puzzle: { name: "Puzzles", icon: "🧩", desc: "Find checkmate in one move." },
+  local:  { name: "2 Players", icon: "👥", desc: "Pass and play with a friend on this screen." },
+};
+
+// Mate-in-one positions, each with at least one mating move (checked in tests).
+const PUZZLES = [
+  { fen: "6k1/5ppp/8/8/8/8/5PPP/4R1K1 w - - 0 1", name: "Back rank" },
+  { fen: "k7/8/1K6/8/8/8/8/7R w - - 0 1", name: "Corner king" },
+  { fen: "6k1/5ppp/8/8/8/8/5PPP/1Q4K1 w - - 0 1", name: "Queen on the eighth" },
+  { fen: "6rk/6pp/8/6N1/8/8/8/6K1 w - - 0 1", name: "Smothered" },
+  { fen: "r1bqkbnr/pppp1ppp/2n5/4p2Q/2B1P3/8/PPPP1PPP/RNB1K1NR w KQkq - 0 4", name: "Scholar's mate" },
+  { fen: "7k/R7/6K1/8/8/8/8/8 w - - 0 1", name: "Rook and king" },
+  { fen: "7k/1R6/5N2/8/8/8/8/6K1 w - - 0 1", name: "Arabian mate" },
+  { fen: "k7/2Q5/1K6/8/8/8/8/8 w - - 0 1", name: "Queen kiss" },
+  { fen: "7k/R7/8/8/8/8/8/1R4K1 w - - 0 1", name: "Rook ladder" },
+  { fen: "rnbqkbnr/ppppp2p/5p2/6p1/4P3/8/PPPP1PPP/RNBQKBNR w KQkq - 0 3", name: "Fool's revenge" },
+  { fen: "6k1/5ppp/8/8/8/8/1q3PPP/3RR1K1 w - - 0 1", name: "Doubled rooks" },
+  { fen: "5k2/5P2/5K2/8/8/8/8/6R1 w - - 0 1", name: "Pawn shield" },
+];
+
+function emptyBoard() { return Array.from({ length: 8 }, () => Array(8).fill(null)); }
+function initialBoard(back = ["r", "n", "b", "q", "k", "b", "n", "r"]) {
+  const board = emptyBoard();
   for (let c = 0; c < 8; c++) {
     board[0][c] = { type: back[c], color: "b", moved: false };
     board[1][c] = { type: "p", color: "b", moved: false };
@@ -23,42 +69,243 @@ function initialBoard() {
   }
   return board;
 }
+/** A legal Chess960 back rank: bishops on opposite colours, king between the rooks. */
+function back960() {
+  const row = Array(8).fill(null);
+  row[randInt(0, 3) * 2] = "b";
+  row[randInt(0, 3) * 2 + 1] = "b";
+  const free = () => row.map((x, i) => (x ? -1 : i)).filter(i => i >= 0);
+  let f = free(); row[choice(f)] = "q";
+  f = free(); row[choice(f)] = "n";
+  f = free(); row[choice(f)] = "n";
+  f = free(); row[f[0]] = "r"; row[f[1]] = "k"; row[f[2]] = "r";
+  return row;
+}
+function parseFen(fen) {
+  const [pos, turn, castle = "-", ep = "-"] = fen.split(" ");
+  const board = emptyBoard();
+  pos.split("/").forEach((rank, r) => {
+    let c = 0;
+    for (const ch of rank) {
+      if (/\d/.test(ch)) { c += +ch; continue; }
+      const color = ch === ch.toUpperCase() ? "w" : "b";
+      board[r][c] = { type: ch.toLowerCase(), color, moved: true };
+      c++;
+    }
+  });
+  const unmove = (r, c) => { if (board[r][c]) board[r][c].moved = false; };
+  if (castle.includes("K")) { unmove(7, 4); unmove(7, 7); }
+  if (castle.includes("Q")) { unmove(7, 4); unmove(7, 0); }
+  if (castle.includes("k")) { unmove(0, 4); unmove(0, 7); }
+  if (castle.includes("q")) { unmove(0, 4); unmove(0, 0); }
+  for (let c = 0; c < 8; c++) { if (board[6][c]?.type === "p" && board[6][c].color === "w") board[6][c].moved = false; if (board[1][c]?.type === "p" && board[1][c].color === "b") board[1][c].moved = false; }
+  const enPassant = ep !== "-" ? { r: 8 - +ep[1], c: FILES.indexOf(ep[0]) } : null;
+  return { board, turn, enPassant };
+}
 
 function clone(board) { return board.map(row => row.map(p => (p ? { ...p } : null))); }
 const inb = (r, c) => r >= 0 && r < 8 && c >= 0 && c < 8;
+const fmtClock = (s) => { s = Math.max(0, s); const m = Math.floor(s / 60), x = Math.floor(s % 60); return s < 20 ? `${m}:${String(x).padStart(2, "0")}.${Math.floor((s % 1) * 10)}` : `${m}:${String(x).padStart(2, "0")}`; };
 
 export class ChessGame extends GameBase {
-  getDifficulties() { return ["Easy", "Normal", "Hard", "2 Player"]; }
+  getDifficulties() { return ["Chess"]; }
   getInstructions() {
     return [
-      "You play White and move first. Tap a piece, then a highlighted square.",
-      "Castling, en passant and pawn promotion (to queen) are all supported.",
-      "Checkmate the opposing king to win — or choose 2 Player to play a friend.",
+      "Choose a mode: Ranked (Elo rating, Bronze to Master), Casual vs AI, Blitz 3+2, Chess960, Puzzles or 2 Players.",
+      "Tap a piece, then a highlighted square. Castling, en passant and promotion (you choose the piece) are all supported.",
+      "🎨 Design your own pieces: shape, material, both army colours and the board. Some styles unlock at higher ranks.",
+      "Checkmate wins. Stalemate, fifty quiet moves, threefold repetition and bare kings are draws.",
     ];
   }
   getTouchLayout() { return "none"; }
   getTouchHint() { return "Tap a piece, then tap a highlighted destination."; }
   getKeyboardHint() { return "Click a piece, then click a highlighted destination."; }
+  getPlayLabel() { return "Play"; }
 
+  // ------------------------------------------------------------- SAVE ----
+  _store() {
+    const custom = saveManager.ensureGame(this.id).custom;
+    if (!custom.chess) custom.chess = {};
+    const s = custom.chess;
+    s.rating ??= 800; s.peak ??= s.rating; s.games ??= 0; s.wins ??= 0; s.losses ??= 0; s.draws ??= 0; s.streak ??= 0;
+    s.puzzles ??= []; s.design ??= {}; for (const [k, v] of Object.entries(DEFAULT_DESIGN)) if (s.design[k] === undefined) s.design[k] = v;
+    return s;
+  }
+  get design() { return this._store().design; }
+  _unlocked(rank) { return !rank || tierIdx(tierOf(this._store().peak).name) >= tierIdx(rank); }
+
+  getStartExtras() {
+    const s = this._store();
+    const t = tierOf(s.rating);
+    const prev = el("div", { class: "chess-preview-row" });
+    prev.innerHTML = ["k", "q", "n"].map(k => `<span>${pieceSVG(k, "w", s.design, "s")}</span>`).join("") + ["n", "q", "k"].map(k => `<span>${pieceSVG(k, "b", s.design, "s")}</span>`).join("");
+    return el("div", { class: "chess-start" }, [
+      el("div", { class: "delve-summary" }, [
+        el("span", {}, `${t.icon} ${t.name} · ${s.rating}`),
+        el("span", {}, `Ranked: ${s.wins}W ${s.losses}L ${s.draws}D`),
+        el("span", {}, `🧩 ${s.puzzles.length}/${PUZZLES.length}`),
+      ]),
+      prev,
+      el("button", { class: "btn btn-ghost", onClick: () => this._openDesigner(() => this.showStartOverlay()) }, "🎨 Design your pieces"),
+    ]);
+  }
+
+  /** Mode picker. Casual offers its three AI levels right on the card. */
+  onPlayPressed() {
+    const s = this._store();
+    const t = tierOf(s.rating);
+    const grid = el("div", { class: "chess-modes" });
+    const go = (mode, level) => { this.mode = mode; this.aiLevel = level || "Normal"; audioManager.play("select"); closeModal(); this.start(); };
+    for (const [id, m] of Object.entries(MODES)) {
+      const sub = id === "ranked" ? `${t.icon} ${t.name} · ${s.rating}` : id === "puzzle" ? `${s.puzzles.length}/${PUZZLES.length} solved` : "";
+      const card = el("div", { class: `chess-mode${this.mode === id ? " current" : ""}` }, [
+        el("div", { class: "ic" }, m.icon),
+        el("div", { class: "tx" }, [el("b", {}, m.name), sub ? el("span", { class: "sub" }, sub) : null, el("span", {}, m.desc)]),
+        el("div", { class: "go" }, id === "casual" || id === "c960"
+          ? ["Easy", "Normal", "Hard"].map(l => el("button", { class: "btn btn-ghost btn-sm", onClick: () => go(id, l) }, l))
+          : [el("button", { class: "btn btn-primary btn-sm", onClick: () => go(id) }, "Play")]),
+      ]);
+      grid.appendChild(card);
+    }
+    openModal({
+      title: "Choose a mode",
+      bodyNode: grid,
+      footerNode: el("div", { class: "modal-foot" }, [
+        el("button", { class: "btn btn-ghost", onClick: () => { closeModal(); setTimeout(() => this._openDesigner(), 30); } }, "🎨 Design"),
+        el("button", { class: "btn btn-ghost", onClick: () => closeModal() }, "Cancel"),
+      ]),
+    });
+  }
+
+  // ------------------------------------------------------------ SETUP ----
   onInit() {
     this.stageEl.classList.add("dom-board");
-    this.boardEl = el("div", { class: "board-grid chess-board" });
-    this.stageEl.appendChild(this.boardEl);
+    this.wrap = el("div", { class: "chess-wrap" });
+    this.topBar = el("div", { class: "chess-bar" });
+    this.boardEl = el("div", { class: "board-grid chess-board themed" });
+    this.botBar = el("div", { class: "chess-bar" });
+    this.actions = el("div", { class: "chess-actions" });
+    this.wrap.append(this.topBar, this.boardEl, this.botBar, this.actions);
+    this.stageEl.appendChild(this.wrap);
+    this.mode = "casual";
+    this.aiLevel = "Normal";
   }
 
-  onStart(difficulty) {
-    this.board = initialBoard();
-    this.turn = "w";
-    this.enPassant = null;
-    this.twoPlayer = difficulty === "2 Player";
-    this.selected = null;
-    this.locked = false;
-    this.history = [];
-    this.setHud({ Turn: "White (You)" });
+  onStart() {
+    const s = this._store();
+    const M = MODES[this.mode] || MODES.casual;
+    this.selected = null; this.locked = false; this.history = []; this.lastMove = null; this.promo = null;
+    this.halfmove = 0; this.reps = new Map(); this.note = ""; this.over = false;
+    this.human = "w";
+    if (this.mode === "puzzle") {
+      this._loadPuzzle(s.puzzles.length < PUZZLES.length ? PUZZLES.findIndex((_, i) => !s.puzzles.includes(i)) : randInt(0, PUZZLES.length - 1));
+    } else {
+      this.board = initialBoard(this.mode === "c960" ? back960() : undefined);
+      if (this.mode === "c960") for (const r of [0, 7]) for (const p of this.board[r]) p.moved = true;
+      this.turn = "w"; this.enPassant = null;
+      if (this.mode === "ranked") { this.human = s.games % 2 ? "b" : "w"; this.botRating = Math.max(400, s.rating + randInt(-60, 60)); }
+      if (this.mode === "local") this.human = null;
+    }
+    this.flip = this.human === "b";
+    this.clock = M.clock ? { w: M.clock, b: M.clock, inc: M.inc || 0 } : null;
+    this._clockT = performance.now();
+    this._remember();
     this._render();
+    if (this.human && this.turn !== this.human) this._scheduleAI();
   }
 
-  // ---------------------------------------------------------------- RULES --
+  _loadPuzzle(i) {
+    const P = PUZZLES[i];
+    const { board, turn, enPassant } = parseFen(P.fen);
+    this.pIdx = i; this.board = board; this.turn = turn; this.enPassant = enPassant;
+    this.human = turn; this.lastMove = null; this.selected = null; this.solved = false; this.history = [];
+    this.note = `Puzzle ${i + 1}: ${P.name} — ${turn === "w" ? "White" : "Black"} mates in one`;
+  }
+
+  onResume() { this._clockT = performance.now(); }
+
+  // -------------------------------------------------------------- AI ------
+  _levelCfg() {
+    if (this.mode === "ranked") {
+      const r = this.botRating;
+      if (r < 850) return { depth: 1, blunder: 0.35 };
+      if (r < 1000) return { depth: 2, blunder: 0.22 };
+      if (r < 1150) return { depth: 2, blunder: 0.1 };
+      if (r < 1300) return { depth: 2, blunder: 0.03 };
+      if (r < 1500) return { depth: 3, blunder: 0.06 };
+      return { depth: 3, blunder: 0 };
+    }
+    if (this.mode === "blitz") return { depth: 2, blunder: 0.06 };
+    return { Easy: { depth: 1, blunder: 0.35 }, Normal: { depth: 2, blunder: 0.05 }, Hard: { depth: 3, blunder: 0 } }[this.aiLevel] || { depth: 2, blunder: 0.05 };
+  }
+
+  _scheduleAI() {
+    this.locked = true;
+    this._renderBars();
+    setTimeout(() => {
+      if (this.state === "paused") { this.locked = false; this._scheduleAI(); return; }
+      if (this.state !== "playing" || this.over) { this.locked = false; return; }
+      this._aiMove();
+      this.locked = false;
+      this._renderBars();
+    }, 380);
+  }
+
+  _aiMove() {
+    const color = this.turn;
+    const legal = this._legalMoves(this.board, color, this.enPassant);
+    if (!legal.length) return;
+    const { depth, blunder } = this._levelCfg();
+    const move = Math.random() < blunder ? choice(legal) : this._bestMove(legal, depth, color);
+    if (move.promotion) move.promo = "q";
+    this._makeMove(move);
+  }
+
+  _bestMove(legal, depth, color) {
+    let best = null, bestScore = -Infinity;
+    const opp = color === "w" ? "b" : "w";
+    const ordered = [...legal].sort(() => Math.random() - 0.5).sort((a, b) => (b.capture ? 1 : 0) - (a.capture ? 1 : 0));
+    for (const m of ordered) {
+      const { board, enPassant } = this._apply(clone(this.board), { ...m, promo: m.promotion ? "q" : undefined }, this.enPassant);
+      const score = -this._search(board, opp, enPassant, depth - 1, -Infinity, -bestScore);
+      if (score > bestScore) { bestScore = score; best = m; }
+    }
+    return best || choice(legal);
+  }
+
+  _search(board, color, enPassant, depth, alpha, beta) {
+    const legal = this._legalMoves(board, color, enPassant);
+    if (!legal.length) {
+      const k = this._findKing(board, color);
+      return k && this._attacked(board, k.r, k.c, color) ? -1000 - depth : 0;
+    }
+    if (depth <= 0) return this._evaluate(board, color);
+    legal.sort((a, b) => (b.capture ? 1 : 0) - (a.capture ? 1 : 0));
+    let best = -Infinity;
+    for (const m of legal) {
+      const { board: b2, enPassant: ep2 } = this._apply(clone(board), { ...m, promo: m.promotion ? "q" : undefined }, enPassant);
+      const score = -this._search(b2, color === "w" ? "b" : "w", ep2, depth - 1, -beta, -alpha);
+      if (score > best) best = score;
+      if (score > alpha) alpha = score;
+      if (alpha >= beta) break;
+    }
+    return best;
+  }
+
+  _evaluate(board, forColor) {
+    let score = 0;
+    for (let r = 0; r < 8; r++) for (let c = 0; c < 8; c++) {
+      const p = board[r][c];
+      if (!p) continue;
+      let val = VALUE[p.type];
+      if (p.type === "p") val += (p.color === "w" ? 6 - r : r - 1) * 0.04 + (c >= 2 && c <= 5 ? 0.03 : 0);
+      else if (p.type !== "k") val += (3.5 - Math.hypot(r - 3.5, c - 3.5)) * 0.03;
+      score += p.color === forColor ? val : -val;
+    }
+    return score;
+  }
+
+  // ------------------------------------------------------------ RULES -----
   _pseudoMoves(board, r, c, enPassant) {
     const piece = board[r][c];
     if (!piece) return [];
@@ -86,28 +333,27 @@ export class ChessGame extends GameBase {
         else if (enPassant && enPassant.r === nr && enPassant.c === nc) push(nr, nc, { capture: true, enPassant: true });
       }
     } else if (piece.type === "n") {
-      [[-2,-1],[-2,1],[-1,-2],[-1,2],[1,-2],[1,2],[2,-1],[2,1]].forEach(([dr,dc]) => {
-        const nr = r+dr, nc = c+dc;
-        if (inb(nr,nc) && (!board[nr][nc] || board[nr][nc].color !== piece.color)) push(nr, nc, { capture: !!board[nr][nc] });
+      [[-2, -1], [-2, 1], [-1, -2], [-1, 2], [1, -2], [1, 2], [2, -1], [2, 1]].forEach(([dr, dc]) => {
+        const nr = r + dr, nc = c + dc;
+        if (inb(nr, nc) && (!board[nr][nc] || board[nr][nc].color !== piece.color)) push(nr, nc, { capture: !!board[nr][nc] });
       });
-    } else if (piece.type === "b") slide([[-1,-1],[-1,1],[1,-1],[1,1]]);
-    else if (piece.type === "r") slide([[-1,0],[1,0],[0,-1],[0,1]]);
-    else if (piece.type === "q") slide([[-1,-1],[-1,1],[1,-1],[1,1],[-1,0],[1,0],[0,-1],[0,1]]);
+    } else if (piece.type === "b") slide([[-1, -1], [-1, 1], [1, -1], [1, 1]]);
+    else if (piece.type === "r") slide([[-1, 0], [1, 0], [0, -1], [0, 1]]);
+    else if (piece.type === "q") slide([[-1, -1], [-1, 1], [1, -1], [1, 1], [-1, 0], [1, 0], [0, -1], [0, 1]]);
     else if (piece.type === "k") {
       for (let dr = -1; dr <= 1; dr++) for (let dc = -1; dc <= 1; dc++) {
         if (!dr && !dc) continue;
-        const nr = r+dr, nc = c+dc;
-        if (inb(nr,nc) && (!board[nr][nc] || board[nr][nc].color !== piece.color)) push(nr, nc, { capture: !!board[nr][nc] });
+        const nr = r + dr, nc = c + dc;
+        if (inb(nr, nc) && (!board[nr][nc] || board[nr][nc].color !== piece.color)) push(nr, nc, { capture: !!board[nr][nc] });
       }
-      if (!piece.moved) {
-        [[0,7,5,6,'kingside'],[0,0,3,1,'queenside']].forEach(([, rookC, kingDest, throughC, side]) => {
+      // Standard castling only (king on e-file, rooks in the corners).
+      if (!piece.moved && c === 4) {
+        [[7, 5, 6, "kingside"], [0, 3, 2, "queenside"]].forEach(([rookC, throughC, kingDest, side]) => {
           const rook = board[r][rookC];
-          if (rook && rook.type === "r" && !rook.moved) {
-            const empties = side === 'kingside' ? [5,6] : [1,2,3];
-            if (empties.every(cc => !board[r][cc])) {
-              if (!this._attacked(board, r, c, piece.color) && !this._attacked(board, r, throughC, piece.color) && !this._attacked(board, r, kingDest, piece.color)) {
-                push(r, kingDest, { castle: side });
-              }
+          if (rook && rook.type === "r" && rook.color === piece.color && !rook.moved) {
+            const empties = side === "kingside" ? [5, 6] : [1, 2, 3];
+            if (empties.every(cc => !board[r][cc]) && !this._attacked(board, r, c, piece.color) && !this._attacked(board, r, throughC, piece.color) && !this._attacked(board, r, kingDest, piece.color)) {
+              push(r, kingDest, { castle: side });
             }
           }
         });
@@ -121,14 +367,15 @@ export class ChessGame extends GameBase {
     for (let rr = 0; rr < 8; rr++) for (let cc = 0; cc < 8; cc++) {
       const p = board[rr][cc];
       if (!p || p.color !== attacker) continue;
-      if (p.type === "p") {
-        const dir = p.color === "w" ? -1 : 1;
-        if (rr + dir === r && (cc - 1 === c || cc + 1 === c)) return true;
-        continue;
-      }
+      if (p.type === "p") { const dir = p.color === "w" ? -1 : 1; if (rr + dir === r && (cc - 1 === c || cc + 1 === c)) return true; continue; }
       if (p.type === "k") { if (Math.abs(rr - r) <= 1 && Math.abs(cc - c) <= 1) return true; continue; }
-      const moves = this._pseudoMoves(board, rr, cc, null);
-      if (moves.some(m => m.to.r === r && m.to.c === c)) return true;
+      if (p.type === "n") { const dr = Math.abs(rr - r), dc = Math.abs(cc - c); if ((dr === 1 && dc === 2) || (dr === 2 && dc === 1)) return true; continue; }
+      const dr = Math.sign(r - rr), dc = Math.sign(c - cc);
+      const straight = rr === r || cc === c, diag = Math.abs(rr - r) === Math.abs(cc - c);
+      if (!(straight && (p.type === "r" || p.type === "q")) && !(diag && (p.type === "b" || p.type === "q"))) continue;
+      let nr = rr + dr, nc = cc + dc, clear = true;
+      while (nr !== r || nc !== c) { if (board[nr][nc]) { clear = false; break; } nr += dr; nc += dc; }
+      if (clear) return true;
     }
     return false;
   }
@@ -144,7 +391,7 @@ export class ChessGame extends GameBase {
       const p = board[r][c];
       if (!p || p.color !== color) continue;
       for (const m of this._pseudoMoves(board, r, c, enPassant)) {
-        const test = this._apply(clone(board), m, enPassant).board;
+        const test = this._apply(clone(board), { ...m, promo: "q" }, enPassant).board;
         const k = this._findKing(test, color);
         if (k && !this._attacked(test, k.r, k.c, color)) all.push(m);
       }
@@ -159,138 +406,369 @@ export class ChessGame extends GameBase {
     board[move.to.r][move.to.c] = piece;
     board[move.from.r][move.from.c] = null;
     piece.moved = true;
-    if (move.promotion) piece.type = "q";
+    if (move.promotion) piece.type = move.promo || "q";
     if (move.double) newEnPassant = { r: (move.from.r + move.to.r) / 2, c: move.from.c };
     if (move.castle === "kingside") { board[move.to.r][5] = board[move.to.r][7]; board[move.to.r][7] = null; board[move.to.r][5].moved = true; }
     if (move.castle === "queenside") { board[move.to.r][3] = board[move.to.r][0]; board[move.to.r][0] = null; board[move.to.r][3].moved = true; }
     return { board, enPassant: newEnPassant };
   }
 
-  // ---------------------------------------------------------------- UI -----
-  _render() {
-    this.boardEl.innerHTML = "";
-    const legalForSel = this.selected ? this._legalMoves(this.board, this.turn, this.enPassant).filter(m => m.from.r === this.selected.r && m.from.c === this.selected.c) : [];
-    const kingPos = this._findKing(this.board, this.turn);
-    const inCheck = kingPos && this._attacked(this.board, kingPos.r, kingPos.c, this.turn);
-    for (let r = 0; r < 8; r++) for (let c = 0; c < 8; c++) {
-      const light = (r + c) % 2 === 0;
-      const cell = el("div", { class: `cell ${light ? "light" : "dark"}`, onClick: () => this._onCellClick(r, c) });
-      const piece = this.board[r][c];
-      if (piece) {
-        const glyph = el("span", { class: `piece-glyph piece-${piece.color}` });
-        glyph.textContent = GLYPH[piece.type];
-        cell.appendChild(glyph);
-      }
-      if (this.selected && this.selected.r === r && this.selected.c === c) cell.classList.add("selected");
-      const hint = legalForSel.find(m => m.to.r === r && m.to.c === c);
-      if (hint) cell.classList.add(hint.capture ? "capture-hint" : "move-hint");
-      if (inCheck && kingPos.r === r && kingPos.c === c) cell.classList.add("check");
-      this.boardEl.appendChild(cell);
-    }
+  _key() { return this.board.map(row => row.map(p => (p ? (p.color === "w" ? p.type.toUpperCase() : p.type) : ".")).join("")).join("/") + this.turn; }
+  _remember() { const k = this._key(); this.reps.set(k, (this.reps.get(k) || 0) + 1); return this.reps.get(k); }
+
+  _deadPosition() {
+    const rest = [];
+    for (const row of this.board) for (const p of row) if (p && p.type !== "k") rest.push(p.type);
+    return rest.length === 0 || (rest.length === 1 && (rest[0] === "n" || rest[0] === "b"));
   }
 
+  // ------------------------------------------------------------ PLAY ------
   _onCellClick(r, c) {
-    if (this.state !== "playing" || this.locked) return;
-    if (!this.twoPlayer && this.turn !== "w") return;
+    if (this.state !== "playing" || this.locked || this.over || this.promo) return;
+    if (this.human && this.turn !== this.human) return;
+    if (this.mode === "puzzle" && this.solved) return;
     const piece = this.board[r][c];
     const legal = this._legalMoves(this.board, this.turn, this.enPassant);
     if (this.selected) {
-      const move = legal.find(m => m.from.r === this.selected.r && m.from.c === this.selected.c && m.to.r === r && m.to.c === c);
-      if (move) return this._makeMove(move);
+      const moves = legal.filter(m => m.from.r === this.selected.r && m.from.c === this.selected.c && m.to.r === r && m.to.c === c);
+      if (moves.length) {
+        if (moves[0].promotion) { this.promo = { move: moves[0] }; this._render(); return; }
+        return this._humanMove(moves[0]);
+      }
     }
-    if (piece && piece.color === this.turn) { this.selected = { r, c }; this._render(); }
-    else { this.selected = null; this._render(); }
+    if (piece && piece.color === this.turn) { this.selected = { r, c }; audioManager.play("click"); }
+    else this.selected = null;
+    this._render();
   }
 
+  _humanMove(move) {
+    if (this.mode === "puzzle") return this._puzzleMove(move);
+    this._makeMove(move);
+  }
+
+  _snapshot() { return { board: clone(this.board), turn: this.turn, enPassant: this.enPassant, lastMove: this.lastMove, halfmove: this.halfmove, reps: new Map(this.reps), clock: this.clock && { ...this.clock } }; }
+
   _makeMove(move) {
-    const capture = !!this.board[move.to.r][move.to.c] || move.enPassant;
+    this.history.push(this._snapshot());
+    const target = this.board[move.to.r][move.to.c];
+    const mover = this.board[move.from.r][move.from.c];
+    const capture = !!target || move.enPassant;
     const { enPassant } = this._apply(this.board, move, this.enPassant);
     this.enPassant = enPassant;
+    this.halfmove = capture || mover.type === "p" ? 0 : this.halfmove + 1;
+    this.lastMove = move;
     this.selected = null;
-    audioManager.play(capture ? "hit" : "select");
-    this._render();
+    this.promo = null;
+    if (this.clock) { this._tickClock(); this.clock[this.turn] += this.clock.inc; }
+    audioManager.play(move.castle ? "powerup" : capture ? "hit" : "select");
     this._afterMove();
   }
 
   _afterMove() {
-    const nextColor = this.turn === "w" ? "b" : "w";
-    const legal = this._legalMoves(this.board, nextColor, this.enPassant);
-    const kingPos = this._findKing(this.board, nextColor);
-    const inCheck = kingPos && this._attacked(this.board, kingPos.r, kingPos.c, nextColor);
-    if (!legal.length) {
-      if (inCheck) return this._finish(this.turn); // checkmate: mover wins
-      return this._finish(null); // stalemate
-    }
+    const mover = this.turn;
+    const next = mover === "w" ? "b" : "w";
+    const legal = this._legalMoves(this.board, next, this.enPassant);
+    const k = this._findKing(this.board, next);
+    const inCheck = k && this._attacked(this.board, k.r, k.c, next);
+    this.turn = next;
+    const reps = this._remember();
+    this._render();
+    if (!legal.length) return this._finish(inCheck ? mover : null, inCheck ? "checkmate" : "stalemate");
+    if (this.halfmove >= 100) return this._finish(null, "the fifty-move rule");
+    if (reps >= 3) return this._finish(null, "threefold repetition");
+    if (this._deadPosition()) return this._finish(null, "insufficient material");
     if (inCheck) audioManager.play("error");
-    this.turn = nextColor;
-    this.setHud({ Turn: this.turn === "w" ? "White (You)" : (this.twoPlayer ? "Black" : "AI Thinking…") });
-    if (!this.twoPlayer && this.turn === "b") {
-      this.locked = true;
-      setTimeout(() => { this._aiMove(); this.locked = false; }, 450);
+    if (this.human && this.turn !== this.human) this._scheduleAI();
+  }
+
+  _puzzleMove(move) {
+    const snap = this._snapshot();
+    this._apply(this.board, move, this.enPassant);
+    this.lastMove = move; this.selected = null; this.promo = null;
+    const opp = this.turn === "w" ? "b" : "w";
+    const k = this._findKing(this.board, opp);
+    const mate = k && this._attacked(this.board, k.r, k.c, opp) && !this._legalMoves(this.board, opp, null).length;
+    if (mate) {
+      this.solved = true;
+      const s = this._store();
+      if (!s.puzzles.includes(this.pIdx)) { s.puzzles.push(this.pIdx); this.addScore(100); }
+      saveManager.saveNow();
+      this.note = `✔ Checkmate! Puzzle ${this.pIdx + 1} solved.`;
+      audioManager.play("win");
+    } else {
+      this.note = "✘ Not mate — try again.";
+      audioManager.play("error");
+      setTimeout(() => { if (this.mode === "puzzle" && !this.solved) { Object.assign(this, { board: snap.board, lastMove: null }); this._render(); } }, 800);
+    }
+    this._render();
+  }
+
+  _nextPuzzle() {
+    const s = this._store();
+    const open = PUZZLES.map((_, i) => i).filter(i => !s.puzzles.includes(i) && i !== this.pIdx);
+    this._loadPuzzle(open.length ? open[0] : (this.pIdx + 1) % PUZZLES.length);
+    this._render();
+  }
+
+  _undo() {
+    if (this.locked || this.over || !this.history.length) return;
+    // Against the AI take back both plies so it is your move again.
+    let snap = this.history.pop();
+    if (this.human && snap.turn !== this.human && this.history.length) snap = this.history.pop();
+    Object.assign(this, { board: snap.board, turn: snap.turn, enPassant: snap.enPassant, lastMove: snap.lastMove, halfmove: snap.halfmove, reps: snap.reps, selected: null });
+    audioManager.play("click");
+    this._render();
+  }
+
+  _resign() {
+    if (this.over || this.state !== "playing") return;
+    this._finish(this.human === "w" ? "b" : "w", "resignation");
+  }
+
+  // ----------------------------------------------------------- CLOCK ------
+  _tickClock() {
+    const now = performance.now();
+    if (this.clock && !this.over && this.state === "playing") this.clock[this.turn] -= (now - this._clockT) / 1000;
+    this._clockT = now;
+  }
+
+  onUpdate() {
+    if (!this.clock || this.over) return;
+    this._tickClock();
+    for (const side of ["w", "b"]) {
+      const elx = this._clockEls?.[side];
+      if (elx) { elx.textContent = fmtClock(this.clock[side]); elx.classList.toggle("low", this.clock[side] < 20); elx.classList.toggle("on", this.turn === side); }
+    }
+    if (this.clock[this.turn] <= 0) {
+      this.clock[this.turn] = 0;
+      this._finish(this.turn === "w" ? "b" : "w", "time");
     }
   }
 
-  _aiMove() {
-    if (this.state !== "playing") return;
-    const legal = this._legalMoves(this.board, "b", this.enPassant);
-    if (!legal.length) return;
-    let move;
-    if (this.difficulty === "Easy") move = choice(legal);
-    else {
-      const depth = this.difficulty === "Hard" ? 3 : 2;
-      move = this._bestMove(legal, depth);
-    }
-    this._makeMove(move);
+  // ---------------------------------------------------------- FINISH -----
+  _finish(winner, reason) {
+    if (this.over) return;
+    this.over = true;
+    this.locked = false;
+    this._render();
+    const s = this._store();
+    const name = (c) => (c === "w" ? "White" : "Black");
+    const how = reason === "checkmate" ? "by checkmate" : reason === "time" ? "on time" : reason === "resignation" ? "by resignation" : "";
+    setTimeout(() => {
+      if (this.mode === "local") {
+        if (!winner) return this.endGame({ result: "draw", score: 1, message: `Draw by ${reason}.` });
+        return this.endGame({ result: "win", score: 1, message: `${name(winner)} wins ${how}!` });
+      }
+      const result = !winner ? "draw" : winner === this.human ? "win" : "loss";
+      const extraStats = [{ label: "Moves", value: Math.ceil(this.history.length / 2) }];
+      let message = !winner ? `Draw by ${reason}.` : result === "win" ? `You win ${how}!` : `The AI wins ${how}.`;
+      let score = result === "win" ? 1 : 0;
+      if (this.mode === "ranked") {
+        const before = s.rating, tBefore = tierOf(before);
+        const expected = 1 / (1 + Math.pow(10, (this.botRating - before) / 400));
+        const actual = result === "win" ? 1 : result === "draw" ? 0.5 : 0;
+        const k = s.games < 10 ? 40 : 24;
+        const delta = Math.round(k * (actual - expected)) + (result === "win" && s.streak >= 2 ? 4 : 0);
+        s.rating = Math.max(100, before + delta);
+        s.peak = Math.max(s.peak, s.rating);
+        s.games++; s[result === "win" ? "wins" : result === "loss" ? "losses" : "draws"]++;
+        s.streak = result === "win" ? s.streak + 1 : 0;
+        const tAfter = tierOf(s.rating);
+        message += ` ${delta >= 0 ? "+" : ""}${delta} rating → ${s.rating}.`;
+        if (tAfter !== tBefore) message += tierIdx(tAfter.name) > tierIdx(tBefore.name) ? ` Promoted to ${tAfter.icon} ${tAfter.name}!` : ` Dropped to ${tAfter.name}.`;
+        extraStats.push({ label: "Rating", value: s.rating }, { label: "Rank", value: `${tAfter.icon} ${tAfter.name}` }, { label: "Opponent", value: this.botRating });
+        score = s.rating;
+      }
+      saveManager.saveNow();
+      this.endGame({ result, score, message, extraStats });
+    }, 700);
   }
 
-  _bestMove(legal, depth) {
-    let best = null, bestScore = -Infinity;
-    const shuffled = [...legal].sort(() => Math.random() - 0.5);
-    for (const m of shuffled) {
-      const b2 = clone(this.board);
-      const { board, enPassant } = this._apply(b2, m, this.enPassant);
-      const score = -this._search(board, "w", enPassant, depth - 1, -Infinity, Infinity);
-      if (score > bestScore) { bestScore = score; best = m; }
+  // ---------------------------------------------------------- RENDER -----
+  _render() {
+    const d = this.design;
+    const bc = boardColors(d);
+    this.boardEl.style.setProperty("--sq-l", bc.light);
+    this.boardEl.style.setProperty("--sq-d", bc.dark);
+    this.boardEl.innerHTML = "";
+    const legal = this.selected ? this._legalMoves(this.board, this.turn, this.enPassant).filter(m => m.from.r === this.selected.r && m.from.c === this.selected.c) : [];
+    const kingPos = this._findKing(this.board, this.turn);
+    const inCheck = kingPos && this._attacked(this.board, kingPos.r, kingPos.c, this.turn);
+    for (let vr = 0; vr < 8; vr++) for (let vc = 0; vc < 8; vc++) {
+      const r = this.flip ? 7 - vr : vr, c = this.flip ? 7 - vc : vc;
+      const light = (r + c) % 2 === 0;
+      const cell = el("div", { class: `cell ${light ? "light" : "dark"}`, onClick: () => this._onCellClick(r, c) });
+      const piece = this.board[r][c];
+      if (piece) { const p = el("span", { class: "cp" }); p.innerHTML = pieceSVG(piece.type, piece.color, d); cell.appendChild(p); }
+      const lm = this.lastMove;
+      if (lm && ((lm.from.r === r && lm.from.c === c) || (lm.to.r === r && lm.to.c === c))) cell.classList.add("last");
+      if (this.selected && this.selected.r === r && this.selected.c === c) cell.classList.add("selected");
+      const hint = d.hints && legal.find(m => m.to.r === r && m.to.c === c);
+      if (hint) cell.classList.add(hint.capture ? "capture-hint" : "move-hint");
+      if (inCheck && kingPos.r === r && kingPos.c === c) cell.classList.add("check");
+      if (d.coords) {
+        if (vc === 0) cell.appendChild(el("i", { class: "co rk" }, String(8 - r)));
+        if (vr === 7) cell.appendChild(el("i", { class: "co fl" }, FILES[c]));
+      }
+      this.boardEl.appendChild(cell);
     }
-    return best || choice(legal);
+    if (this.promo) {
+      const side = this.turn;
+      const pick = el("div", { class: "chess-promo" }, [el("b", {}, "Promote to"), el("div", {}, ["q", "r", "b", "n"].map(t => {
+        const btn = el("button", { onClick: (e) => { e.stopPropagation(); this._humanMove({ ...this.promo.move, promo: t }); } });
+        btn.innerHTML = pieceSVG(t, side, d);
+        return btn;
+      }))]);
+      this.boardEl.appendChild(pick);
+    }
+    this._renderBars();
   }
 
-  _search(board, color, enPassant, depth, alpha, beta) {
-    const legal = this._legalMoves(board, color, enPassant);
-    if (!legal.length) {
-      const k = this._findKing(board, color);
-      const inCheck = k && this._attacked(board, k.r, k.c, color);
-      return inCheck ? -1000 - depth : 0; // checkmate is very bad for the side to move; stalemate is neutral
-    }
-    if (depth === 0) return this._evaluate(board, color);
-    let best = -Infinity;
-    for (const m of legal) {
-      const { board: b2, enPassant: ep2 } = this._apply(clone(board), m, enPassant);
-      const score = -this._search(b2, color === "w" ? "b" : "w", ep2, depth - 1, -beta, -alpha);
-      best = Math.max(best, score);
-      alpha = Math.max(alpha, score);
-      if (alpha >= beta) break;
-    }
-    return best;
+  _captured(color) {
+    const left = { p: 0, n: 0, b: 0, r: 0, q: 0 };
+    for (const row of this.board) for (const p of row) if (p && p.color === color && p.type !== "k") left[p.type]++;
+    const out = [];
+    for (const t of ["q", "r", "b", "n", "p"]) for (let i = 0; i < Math.max(0, START_COUNT[t] - left[t]); i++) out.push(t);
+    const mat = Object.entries(left).reduce((s, [t, n]) => s + VALUE[t] * n, 0);
+    return { out, mat };
   }
 
-  _evaluate(board, forColor) {
-    let score = 0;
-    for (let r = 0; r < 8; r++) for (let c = 0; c < 8; c++) {
-      const p = board[r][c];
-      if (!p) continue;
-      const val = VALUE[p.type] + (p.type !== "k" && p.type !== "p" ? (3.5 - Math.hypot(r - 3.5, c - 3.5)) * 0.02 : 0);
-      score += p.color === forColor ? val : -val;
+  _renderBars() {
+    const s = this._store();
+    const d = this.design;
+    const me = this.human || "w";
+    const opp = me === "w" ? "b" : "w";
+    const top = this.flip ? "w" : "b", bot = this.flip ? "b" : "w";
+    this._clockEls = {};
+    const label = (side) => {
+      if (this.mode === "local") return side === "w" ? "White" : "Black";
+      if (this.mode === "puzzle") return side === this.human ? "You" : "Defender";
+      if (side === this.human) return this.mode === "ranked" ? `You · ${tierOf(s.rating).icon} ${s.rating}` : "You";
+      return this.mode === "ranked" ? `Bot · ${this.botRating}` : `AI · ${this.mode === "blitz" ? "Blitz" : this.aiLevel}`;
+    };
+    const bar = (node, side) => {
+      node.innerHTML = "";
+      const other = side === "w" ? "b" : "w";
+      const cap = this._captured(other), mine = this._captured(side);
+      const diff = Math.round(mine.mat - cap.mat);
+      const caps = el("span", { class: "caps" });
+      caps.innerHTML = cap.out.map(t => pieceSVG(t, other, d, "c")).join("") + (diff > 0 ? `<em>+${diff}</em>` : "");
+      const turnDot = el("span", { class: `dot${this.turn === side && !this.over ? " on" : ""}` });
+      const thinking = this.locked && this.turn === side && this.human && side !== this.human ? el("span", { class: "think" }, "thinking…") : null;
+      node.append(...[turnDot, el("b", {}, label(side)), thinking, caps].filter(Boolean));
+      if (this.clock) { const ck = el("span", { class: "clock" }, fmtClock(this.clock[side])); this._clockEls[side] = ck; node.append(ck); }
+    };
+    bar(this.topBar, top);
+    bar(this.botBar, bot);
+
+    this.actions.innerHTML = "";
+    const btn = (txt, fn, cls = "btn btn-ghost btn-sm") => el("button", { class: cls, onClick: fn }, txt);
+    const acts = [btn("🎨 Design", () => this._openDesigner())];
+    if (this.mode === "puzzle") {
+      acts.push(el("span", { class: `chess-note${this.solved ? " ok" : ""}` }, this.note));
+      acts.push(btn(this.solved ? "Next puzzle ▶" : "Skip ▶", () => this._nextPuzzle(), this.solved ? "btn btn-primary btn-sm" : "btn btn-ghost btn-sm"));
+    } else {
+      if (this.mode === "casual" || this.mode === "local" || this.mode === "c960") acts.push(btn("↶ Undo", () => this._undo()));
+      if (this.mode === "local") acts.push(btn("⇅ Flip", () => { this.flip = !this.flip; this._render(); }));
+      if (this.mode !== "local") acts.push(btn("🏳 Resign", () => this._resign()));
+      acts.push(el("span", { class: "chess-note" }, `${MODES[this.mode].icon} ${MODES[this.mode].name}${this.mode === "casual" || this.mode === "c960" ? ` · ${this.aiLevel}` : ""}`));
     }
-    return score;
+    this.actions.append(...acts);
+    this.setHud({ Mode: MODES[this.mode].name, Turn: this.over ? "—" : this.turn === "w" ? "White" : "Black" });
+    void opp;
   }
 
-  _finish(winnerColor) {
-    audioManager.play(winnerColor ? (winnerColor === "w" ? "win" : "lose") : "gameover");
-    if (!winnerColor) return this.endGame({ result: "draw", score: 1, message: "Stalemate — the game is a draw." });
-    if (this.twoPlayer) return this.endGame({ result: "win", score: 1, message: `${winnerColor === "w" ? "White" : "Black"} wins by checkmate!` });
-    const humanWon = winnerColor === "w";
-    this.endGame({ result: humanWon ? "win" : "loss", score: humanWon ? 1 : 0, message: humanWon ? "Checkmate — you win!" : "Checkmate — the AI wins." });
+  // -------------------------------------------------------- DESIGNER -----
+  _openDesigner(onDone) {
+    const s = this._store();
+    const d = s.design;
+    const wasPlaying = this.state === "playing";
+    const preview = el("div", { class: "cd-preview" });
+    const body = el("div", { class: "chess-designer" });
+    const paint = () => {
+      const bc = boardColors(d);
+      preview.style.setProperty("--sq-l", bc.light); preview.style.setProperty("--sq-d", bc.dark);
+      preview.innerHTML = "";
+      const rows = [["r", "n", "b", "q", "k", "p"].map(t => ["b", t]), ["p", "k", "q", "b", "n", "r"].map(t => ["w", t])];
+      rows.forEach((row, ri) => row.forEach(([side, t], ci) => {
+        const cell = el("span", { class: `cd-sq ${(ri + ci) % 2 ? "d" : "l"}` });
+        cell.innerHTML = pieceSVG(t, side, d, "p");
+        preview.appendChild(cell);
+      }));
+      saveManager.saveNow();
+      if (this.board) this._render();
+    };
+    const chips = (items, key, render) => {
+      const row = el("div", { class: "cd-chips" });
+      const draw = () => {
+        row.innerHTML = "";
+        for (const it of items) {
+          const locked = it.rank && !this._unlocked(it.rank);
+          const b = el("button", {
+            class: `cd-chip${d[key] === it.id ? " on" : ""}${locked ? " locked" : ""}`, disabled: locked || undefined,
+            title: locked ? `Reach ${it.rank} in Ranked to unlock` : it.name,
+            onClick: () => { d[key] = it.id; audioManager.play("select"); draw(); paint(); },
+          });
+          render(b, it, locked);
+          row.appendChild(b);
+        }
+      };
+      draw();
+      return row;
+    };
+    const colorRow = (key) => {
+      const row = el("div", { class: "cd-colors" });
+      const input = el("input", { type: "color", value: d[key], title: "Any colour" });
+      const draw = () => {
+        row.innerHTML = "";
+        for (const c of PALETTE) row.appendChild(el("button", { class: `cd-sw${d[key] === c ? " on" : ""}`, style: `background:${c}`, title: c, onClick: () => { d[key] = c; input.value = c; draw(); paint(); } }));
+        row.appendChild(input);
+      };
+      input.addEventListener("input", () => { d[key] = input.value; paint(); });
+      input.addEventListener("change", () => draw());
+      draw();
+      return row;
+    };
+    const shapeItems = [...Object.entries(SHAPES).map(([id, v]) => ({ id, name: v.name })), { id: "glyph", name: "Glyph" }];
+    const matItems = Object.entries(MATERIALS).map(([id, v]) => ({ id, name: v.name, rank: v.rank }));
+    const boardItems = [...BOARDS, { id: "custom", name: "Custom" }];
+    const customRow = el("div", { class: "cd-custom" }, [
+      el("label", {}, ["Light ", (() => { const i = el("input", { type: "color", value: d.customLight }); i.addEventListener("input", () => { d.customLight = i.value; d.board = "custom"; paint(); }); return i; })()]),
+      el("label", {}, ["Dark ", (() => { const i = el("input", { type: "color", value: d.customDark }); i.addEventListener("input", () => { d.customDark = i.value; d.board = "custom"; paint(); }); return i; })()]),
+    ]);
+    const toggle = (key, text) => {
+      const i = el("input", { type: "checkbox" }); i.checked = !!d[key];
+      i.addEventListener("change", () => { d[key] = i.checked; paint(); });
+      return el("label", { class: "cd-toggle" }, [i, text]);
+    };
+    body.append(
+      preview,
+      el("h4", {}, "Piece shape"),
+      chips(shapeItems, "shape", (b, it) => { b.innerHTML = `${pieceSVG("n", "w", { ...d, shape: it.id }, "x")}<span>${it.name}</span>`; }),
+      el("h4", {}, "Material"),
+      chips(matItems, "material", (b, it, locked) => { b.innerHTML = `${pieceSVG("q", "w", { ...d, material: it.id }, "m" + it.id)}<span>${locked ? "🔒 " : ""}${it.name}</span>`; }),
+      el("h4", {}, "White army"), colorRow("white"),
+      el("h4", {}, "Black army"), colorRow("black"),
+      el("h4", {}, "Board"),
+      chips(boardItems, "board", (b, it, locked) => {
+        const bc = it.id === "custom" ? { light: d.customLight, dark: d.customDark } : it;
+        b.innerHTML = `<i class="cd-bsw" style="background:linear-gradient(135deg, ${bc.light} 50%, ${bc.dark} 50%)"></i><span>${locked ? "🔒 " : ""}${it.name}</span>`;
+      }),
+      customRow,
+      el("div", { class: "cd-toggles" }, [toggle("coords", "Coordinates"), toggle("hints", "Move hints")]),
+      el("p", { class: "zone-intro" }, "Aurora pieces unlock at Diamond and the Royal board at Gold — climb in Ranked."),
+    );
+    paint();
+    if (wasPlaying && this.clock) this._tickClock();
+    openModal({
+      title: "🎨 Piece Designer",
+      bodyNode: body,
+      onClose: () => { this._clockT = performance.now(); onDone?.(); },
+      footerNode: el("div", { class: "modal-foot" }, [
+        el("button", { class: "btn btn-ghost", onClick: () => { Object.assign(s.design, DEFAULT_DESIGN); closeModal(); if (this.board) this._render(); } }, "Reset"),
+        el("button", { class: "btn btn-primary", onClick: () => closeModal() }, "Done"),
+      ]),
+    });
   }
 }
 
