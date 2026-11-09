@@ -933,7 +933,10 @@ export class GameBase {
     // height is that scarce the controls go over the stage instead, which is
     // the trade every phone game makes in landscape.
     const short = !!this._shortMq?.matches;
-    const overlay = (stickLayout && (wide || this.isFullscreen())) || short;
+    // In fullscreen a one-button game keeps its button in the corner of the
+    // picture instead of giving up a whole strip of the screen for it.
+    const single = (this.getTouchLayout?.() || "none") === "single";
+    const overlay = ((stickLayout || single) && (wide || this.isFullscreen())) || short;
     this.touchEl.classList.toggle("band", !overlay);
     this.touchEl.classList.toggle("overlay", overlay);
     this.touchEl.classList.add("active");

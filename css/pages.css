@@ -623,3 +623,5 @@ body.immersive .page { padding: 0; max-width: none; }
 .play-wrap:fullscreen .game-stage-outer { border-radius: 10px; border-color: transparent; }
 .play-wrap.immersive-target, .play-wrap:fullscreen { align-items: center; }
 .touch-controls .dpad, .touch-controls .action-btns, .touch-controls .stick-zone { flex: none; }
+.touch-controls.overlay .single-btn { left: auto; right: 16px; bottom: 16px; transform: none; opacity: .9; }
+.touch-controls.overlay .single-btn.on { transform: scale(.92); }
