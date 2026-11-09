@@ -380,7 +380,7 @@ export class GameBase {
 
     this._setOverlay(true);
     this.overlayEl.innerHTML = "";
-    this.overlayEl.append(
+    this.overlayEl.append(...[
       el("div", { class: "overlay-icon" }, this.meta.emoji),
       el("h2", {}, this.meta.title),
       el("p", {}, this.meta.desc),
@@ -422,7 +422,7 @@ export class GameBase {
           : null,
       ]),
       el("ul", { class: "instructions" }, [...instructions.map(i => el("li", {}, i)), el("li", {}, controlsLine)]),
-    );
+    ].filter(Boolean));
   }
 
   showPauseOverlay() {
