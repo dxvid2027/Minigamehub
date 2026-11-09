@@ -723,3 +723,46 @@ em.up { color: var(--accent-good, #2ee6a6); } em.down { color: var(--text-3); }
 .dh-chips { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 5px; }
 .dh-chips .btn { padding: 3px 9px; min-height: 30px; }
 .dh-tabs .btn { padding: 4px 9px; }
+
+/* ---- Abyss Angler: boat & catch panels ---------------------------------- */
+.aa-panel { position: absolute; left: 50%; bottom: 10px; transform: translateX(-50%); width: min(94%, 460px); max-height: calc(100% - 20px); overflow-y: auto;
+  background: rgba(8, 16, 30, .86); backdrop-filter: blur(8px); border: 1px solid rgba(124, 240, 255, .22); border-radius: 16px; padding: 12px 14px;
+  color: #eaf6ff; z-index: 6; box-shadow: 0 10px 40px rgba(0,0,0,.45); display: flex; flex-direction: column; gap: 8px; }
+.aa-panel[hidden] { display: none; }
+.aa-panel.result { top: 50%; bottom: auto; transform: translate(-50%, -50%); }
+.aa-panel.result.golden { border-color: #ffd76a; box-shadow: 0 0 40px rgba(255, 215, 106, .35); }
+.aa-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; font-size: .82rem; }
+.aa-head span { color: #9fc4d8; font-size: .74rem; }
+.aa-lbl { font-size: .66rem; letter-spacing: .08em; text-transform: uppercase; color: #7fa6bc; font-weight: 700; }
+.aa-baits { display: grid; grid-template-columns: repeat(5, 1fr); gap: 5px; }
+.aa-bait { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 6px 2px; border-radius: 10px; border: 1px solid rgba(255,255,255,.12);
+  background: rgba(255,255,255,.05); color: inherit; cursor: pointer; font: inherit; transition: transform .12s, background .12s; }
+.aa-bait i { width: 14px; height: 14px; border-radius: 50%; background: var(--bt); box-shadow: 0 0 10px var(--bt); }
+.aa-bait b { font-size: .64rem; line-height: 1.1; text-align: center; }
+.aa-bait span { font-size: .62rem; color: #9fc4d8; }
+.aa-bait.on { border-color: var(--bt); background: rgba(255,255,255,.14); transform: translateY(-2px); }
+.aa-bait.empty { opacity: .35; cursor: not-allowed; }
+.aa-orders { display: flex; flex-direction: column; gap: 4px; }
+.aa-order { display: grid; grid-template-columns: 20px 1fr auto auto; gap: 6px; align-items: center; font-size: .72rem; padding: 5px 8px; border-radius: 8px; background: rgba(255,255,255,.05); }
+.aa-order .pg { color: #9fc4d8; } .aa-order .rw { color: #ffd76a; font-weight: 700; }
+.aa-order.done { opacity: .5; text-decoration: line-through; }
+.aa-acts { display: flex; flex-wrap: wrap; gap: 6px; }
+.aa-acts .aa-cast { flex: 1 1 100%; }
+.aa-acts .btn-ghost { flex: 1 1 0; padding-left: 6px; padding-right: 6px; font-size: .8rem; }
+.aa-card { text-align: center; display: flex; flex-direction: column; align-items: center; gap: 4px; }
+.aa-trophy { width: 100%; max-width: 360px; aspect-ratio: 2 / 1; border-radius: 12px; background: radial-gradient(ellipse at center, #123a5a, #06101e); }
+.aa-card h3 { margin: 2px 0 0; font-size: 1.2rem; }
+.golden .aa-card h3 { color: #ffd76a; }
+.aa-big { font-size: 3rem; line-height: 1.1; }
+.aa-badges { display: flex; flex-wrap: wrap; justify-content: center; gap: 4px; }
+.aa-badge { font-size: .62rem; font-weight: 800; letter-spacing: .05em; padding: 3px 7px; border-radius: 999px; background: #22d3ee; color: #04121c; }
+.aa-badge.rec { background: #ff8f5a; } .aa-badge.gold { background: #ffd76a; } .aa-badge.perf { background: #2ee6a6; } .aa-badge.boss { background: #c05cff; color: #fff; }
+.aa-stats { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; font-size: .8rem; color: #bfe0f0; }
+.aa-stats .v { color: #ffd76a; font-weight: 800; }
+.aa-fact { margin: 0; font-size: .74rem; color: #9fc4d8; line-height: 1.35; }
+.aa-orderdone { font-size: .74rem; color: #2ee6a6; font-weight: 700; }
+.dock-h { margin: 12px 0 6px; font-size: .8rem; text-transform: uppercase; letter-spacing: .06em; color: var(--text-3); }
+.aa-tre { display: flex; flex-wrap: wrap; gap: 5px; }
+.aa-tr { font-size: .72rem; padding: 4px 8px; border-radius: 999px; background: #ffffff14; }
+.aa-tr.none { opacity: .45; }
+.fish-card .st.fact { font-style: italic; opacity: .8; }
