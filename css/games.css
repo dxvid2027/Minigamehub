@@ -837,3 +837,61 @@ em.up { color: var(--accent-good, #2ee6a6); } em.down { color: var(--text-3); }
 .cd-colors input[type=color], .cd-custom input[type=color] { width: 40px; height: 30px; border: none; background: none; cursor: pointer; padding: 0; }
 .cd-custom, .cd-toggles { display: flex; gap: 14px; margin-top: 8px; font-size: .78rem; color: var(--text-2); align-items: center; flex-wrap: wrap; }
 .cd-custom label, .cd-toggle { display: flex; align-items: center; gap: 6px; }
+
+/* ---------- Chess: ranked path, move list, polish ---------- */
+.chess-board.themed { border-image: linear-gradient(150deg, var(--frame, #4a3f6e) 0%, #2b3252 100%) 1; }
+.chess-board .cell.check { animation: chessCheck .9s ease-in-out infinite alternate; }
+@keyframes chessCheck { from { filter: brightness(1); } to { filter: brightness(1.35); } }
+.chess-board .cell.hint-sq::after { content: ""; position: absolute; inset: 10%; border-radius: 50%; border: 3px dashed #ffd76a; box-shadow: 0 0 14px #ffd76a99; animation: chessPulse .6s infinite alternate; }
+.chess-start-btns { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; }
+.chess-moves { flex: 1; min-width: 60px; display: flex; align-items: center; gap: 4px; overflow-x: auto; white-space: nowrap; scrollbar-width: none; font: 600 .74rem/1 'Inter', sans-serif; color: var(--text-2); }
+.chess-moves::-webkit-scrollbar { display: none; }
+.chess-moves i { font-style: normal; color: var(--text-3); margin-left: 4px; }
+.chess-moves span { padding: 3px 5px; border-radius: 5px; background: #ffffff0a; }
+.chess-moves span.last { background: #ffd76a33; color: #ffd76a; }
+
+.modal:has(.rank-path) { width: min(560px, 100%); }
+.rank-path { display: flex; flex-direction: column; gap: 10px; }
+.rp-banner { padding: 10px 14px; border-radius: 12px; text-align: center; display: flex; flex-direction: column; gap: 3px; animation: rpPop .5s cubic-bezier(.2,1.4,.4,1); }
+.rp-banner b { font: 800 1.1rem 'Sora', sans-serif; }
+.rp-banner span { font-size: .74rem; opacity: .85; }
+.rp-banner .rw { color: #ffd76a; font-weight: 700; }
+.rp-banner.win { background: linear-gradient(135deg, #1e6a4a, #12382a); color: #b8ffd8; }
+.rp-banner.loss { background: linear-gradient(135deg, #6a1e2a, #381218); color: #ffc0c8; }
+.rp-banner.up { background: linear-gradient(135deg, #ffd76a, #ff9f43); color: #3a2208; box-shadow: 0 0 30px #ffd76a66; }
+.rp-banner.down { background: linear-gradient(135deg, #4a3a5a, #241a30); color: #e0d0f0; }
+@keyframes rpPop { from { transform: scale(.7); opacity: 0; } to { transform: none; opacity: 1; } }
+.rp-head { display: flex; gap: 12px; align-items: center; padding: 10px 12px; border-radius: 12px; background: linear-gradient(135deg, color-mix(in srgb, var(--tc) 22%, transparent), #ffffff08); border: 1px solid color-mix(in srgb, var(--tc) 45%, transparent); }
+.rp-badge { font-size: 2.4rem; width: 56px; height: 56px; display: grid; place-items: center; border-radius: 50%; background: radial-gradient(circle, color-mix(in srgb, var(--tc) 40%, transparent), transparent 70%); }
+.rp-info { flex: 1; display: flex; flex-direction: column; gap: 4px; font-size: .74rem; color: var(--text-3); min-width: 0; }
+.rp-info b { font: 800 1.05rem 'Sora', sans-serif; color: var(--tc); }
+.rp-bar { height: 7px; border-radius: 4px; background: #ffffff14; overflow: hidden; }
+.rp-bar i { display: block; height: 100%; background: var(--tc); border-radius: 4px; box-shadow: 0 0 8px var(--tc); }
+.rp-chips { display: flex; flex-wrap: wrap; gap: 5px; }
+.rp-chips em { font-style: normal; padding: 2px 7px; border-radius: 999px; background: #ffffff12; color: var(--text-2); }
+.rp-chips em.fire { background: #ff7a3a33; color: #ffb080; }
+.rp-sub { font-size: .66rem; text-transform: uppercase; letter-spacing: .08em; color: var(--text-3); font-weight: 700; }
+.rp-hist { display: flex; gap: 4px; overflow-x: auto; }
+.rp-h { display: flex; flex-direction: column; align-items: center; min-width: 40px; padding: 4px 5px; border-radius: 8px; font-size: .62rem; background: #ffffff0a; }
+.rp-h b { font-size: .8rem; }
+.rp-h.w b { color: #2ee6a6; } .rp-h.l b { color: #ff5470; } .rp-h.d b { color: #c0c6d4; }
+.rp-scroll { max-height: min(52vh, 460px); overflow-y: auto; border-radius: 14px; background: radial-gradient(ellipse at 50% 0%, #2a1a4a, #0c0e1c 70%); position: relative; }
+.rp-road { position: relative; width: 320px; max-width: 100%; margin: 0 auto; }
+.rp-svg { position: absolute; inset: 0; width: 100%; }
+.rp-node { position: absolute; transform: translate(-50%, -50%); display: flex; align-items: center; }
+.rp-dot { width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center; font: 800 .66rem 'Inter', sans-serif; background: #1a1d30; border: 2px solid #ffffff2a; color: var(--text-3); position: relative; z-index: 1; }
+.rp-node.big .rp-dot { width: 42px; height: 42px; font-size: 1.3rem; }
+.rp-node.got .rp-dot { border-color: var(--tc); color: var(--tc); background: color-mix(in srgb, var(--tc) 20%, #1a1d30); box-shadow: 0 0 12px color-mix(in srgb, var(--tc) 60%, transparent); }
+.rp-node:not(.got) .rp-dot { filter: grayscale(1); opacity: .7; }
+.rp-node.here .rp-dot { animation: rpHere 1.2s ease-in-out infinite alternate; }
+@keyframes rpHere { to { box-shadow: 0 0 24px var(--tc); transform: scale(1.1); } }
+.rp-lbl { position: absolute; top: 50%; transform: translateY(-50%); display: flex; flex-direction: column; gap: 1px; white-space: nowrap; font-size: .66rem; color: var(--text-3); }
+.rp-lbl.r { left: calc(100% + 8px); } .rp-lbl.l { right: calc(100% + 8px); text-align: right; align-items: flex-end; }
+.rp-lbl b { font-size: .76rem; color: var(--text-1); }
+.rp-node.got .rp-lbl b { color: var(--tc); }
+.rp-rw { display: flex; flex-direction: column; gap: 1px; }
+.rp-rw i { font-style: normal; color: #ffd76a; font-size: .64rem; }
+.rp-rw i.ok { color: #2ee6a6; }
+.rp-me { position: absolute; width: 34px; height: 34px; transform: translate(-50%, -78%); z-index: 3; filter: drop-shadow(0 0 8px #fff8); pointer-events: none; }
+.rp-me.moving { transition: left 1.4s cubic-bezier(.4,0,.2,1), top 1.4s cubic-bezier(.4,0,.2,1); }
+.rp-me svg { width: 100%; height: 100%; }

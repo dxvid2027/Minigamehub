@@ -48,6 +48,10 @@ export const SHAPES = {
   },
 };
 export const GLYPHS = { k: "♚", q: "♛", r: "♜", b: "♝", n: "♞", p: "♟" };
+// U+FE0E asks for the text form: without it phones draw the pawn as a black
+// emoji that ignores the army colour.
+const VS15 = "\uFE0E";
+const GLYPH_FONT = "'DejaVu Sans','Segoe UI Symbol','Noto Sans Symbols 2','Noto Sans Symbols','Arial Unicode MS',serif";
 
 // --- Materials -------------------------------------------------------------
 export const MATERIALS = {
@@ -57,7 +61,10 @@ export const MATERIALS = {
   flat:    { name: "Flat" },
   metal:   { name: "Metal" },
   marble:  { name: "Marble" },
+  lava:    { name: "Lava", rank: "Silver" },
+  ice:     { name: "Ice", rank: "Platinum" },
   aurora:  { name: "Aurora", rank: "Diamond" },
+  galaxy:  { name: "Galaxy", rank: "Master" },
 };
 
 export const PALETTE = [
@@ -74,6 +81,10 @@ export const BOARDS = [
   { id: "candy",    name: "Candy",    light: "#ffe0ef", dark: "#d0609a" },
   { id: "midnight", name: "Midnight", light: "#2f3556", dark: "#151830" },
   { id: "royal",    name: "Royal",    light: "#f3dd8a", dark: "#6a2a5a", rank: "Gold" },
+  { id: "glacier",  name: "Glacier",  light: "#eaf8ff", dark: "#5a9ac8", rank: "Platinum" },
+  { id: "inferno",  name: "Inferno",  light: "#ffb070", dark: "#5a1410", rank: "Diamond" },
+  { id: "galaxy",   name: "Galaxy",   light: "#4a3a8a", dark: "#120a2e", rank: "Master" },
+  { id: "champion", name: "Champion", light: "#ffe9a0", dark: "#1a1a1a", rank: "Grandmaster" },
 ];
 
 export const DEFAULT_DESIGN = {
@@ -93,6 +104,9 @@ function look(color, material, uid) {
     case "flat": return { defs: "", fill: color, stroke: light ? "#00000055" : "#ffffff55", sw: 1.5, filter: "drop-shadow(0 2px 0 #0004)" };
     case "metal": return { defs: lg([[0, lighten(color, 0.6)], [0.35, color], [0.55, darken(color, 0.4)], [0.75, lighten(color, 0.3)], [1, darken(color, 0.25)]], 1, 0), fill: `url(#${id})`, stroke: darken(color, 0.65), sw: 2.5, filter: "drop-shadow(0 3px 3px #0008)" };
     case "marble": return { defs: `<linearGradient id="${id}" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="${lighten(color, 0.3)}"/><stop offset=".45" stop-color="${color}"/><stop offset=".5" stop-color="${light ? darken(color, 0.25) : lighten(color, 0.35)}"/><stop offset=".55" stop-color="${color}"/><stop offset="1" stop-color="${darken(color, 0.15)}"/></linearGradient>`, fill: `url(#${id})`, stroke: outline, sw: 2.5, veins: light ? darken(color, 0.3) : lighten(color, 0.4), filter: "drop-shadow(0 3px 3px #0007)" };
+    case "lava": return { defs: lg([[0, "#ffd070"], [0.35, "#ff6a2a"], [1, darken(color, 0.55)]], 0.3, 1), fill: `url(#${id})`, stroke: luma(color) > 0.5 ? "#7a1a08" : "#ffb060", sw: 2.5, cracks: "#ffe08a", filter: "drop-shadow(0 0 4px #ff6a2acc) drop-shadow(0 3px 3px #0008)" };
+    case "ice": return { defs: lg([[0, "#ffffff", 0.95], [0.5, lighten(color, 0.55), 0.8], [1, color, 0.85]]), fill: `url(#${id})`, stroke: luma(color) > 0.5 ? "#4a8ab0" : "#e8fbff", sw: 2.2, shine: true, filter: "drop-shadow(0 0 4px #9ae8ffaa) drop-shadow(0 3px 3px #0007)" };
+    case "galaxy": return { defs: lg([[0, "#2a1060"], [0.5, color], [1, "#05030f"]]), fill: `url(#${id})`, stroke: "#c8b8ff", sw: 2.5, stars: true, filter: "drop-shadow(0 0 5px #9a7affaa) drop-shadow(0 3px 3px #0008)" };
     case "aurora": return { defs: lg([[0, color], [0.5, "#7cf0ff"], [1, "#c08bff"]]), fill: `url(#${id})`, stroke: "#ffffffcc", sw: 2.5, filter: `drop-shadow(0 0 5px #7cf0ffaa) drop-shadow(0 3px 3px #0007)` };
     default: return { defs: lg([[0, lighten(color, 0.35)], [1, darken(color, 0.12)]]), fill: `url(#${id})`, stroke: outline, sw: 3, filter: "drop-shadow(0 3px 3px #0007)" };
   }
@@ -103,7 +117,7 @@ export function pieceSVG(type, side, design = DEFAULT_DESIGN, uidPrefix = "b") {
   const color = side === "w" ? design.white : design.black;
   if (design.shape === "glyph") {
     const L = look(color, design.material, `${uidPrefix}${side}`);
-    return `<svg viewBox="0 0 100 100" class="cp-svg" style="filter:${L.filter}"><text x="50" y="84" text-anchor="middle" font-size="86" fill="${color}" stroke="${L.stroke}" stroke-width="2" paint-order="stroke">${GLYPHS[type]}</text></svg>`;
+    return `<svg viewBox="0 0 100 100" class="cp-svg" style="filter:${L.filter}"><text x="50" y="84" text-anchor="middle" font-size="86" font-family="${GLYPH_FONT}" fill="${L.fill.startsWith("url") ? color : L.fill}" stroke="${L.stroke}" stroke-width="2" paint-order="stroke" style="font-variant-emoji:text">${GLYPHS[type]}${VS15}</text></svg>`;
   }
   const set = SHAPES[design.shape] || SHAPES.staunton;
   const sh = set[type];
@@ -113,8 +127,10 @@ export function pieceSVG(type, side, design = DEFAULT_DESIGN, uidPrefix = "b") {
   const eye = sh.eye ? `<circle cx="${sh.eye[0]}" cy="${sh.eye[1]}" r="${sh.eye[2]}" fill="${L.stroke}"/>` : "";
   const shine = L.shine ? `<ellipse cx="42" cy="50" rx="5" ry="16" fill="#fff" opacity=".35"/>` : "";
   const veins = L.veins ? `<path d="M36 60c6-4 10 4 16-2s8-10 14-6M40 80c4-6 10-2 14-8" fill="none" stroke="${L.veins}" stroke-width="1.2" opacity=".6"/>` : "";
+  const cracks = L.cracks ? `<path d="M40 82l6-10l-3-8l7-10M58 80l-4-9l5-7" fill="none" stroke="${L.cracks}" stroke-width="1.6" opacity=".85"/>` : "";
+  const stars = L.stars ? [[42, 70, 1.4], [56, 62, 1], [47, 50, 1.2], [60, 78, 1.1], [38, 60, 0.9], [52, 40, 1]].map(([x, y, r]) => `<circle cx="${x}" cy="${y}" r="${r}" fill="#fff" opacity=".9"/>`).join("") : "";
   return `<svg viewBox="0 0 100 100" class="cp-svg" style="filter:${L.filter}"><defs>${L.defs}</defs>` +
-    `<g fill="${L.fill}" stroke="${L.stroke}" stroke-width="${L.sw}" stroke-linejoin="round">${body}</g>${veins}${lines}${eye}${shine}</svg>`;
+    `<g fill="${L.fill}" stroke="${L.stroke}" stroke-width="${L.sw}" stroke-linejoin="round">${body}</g>${veins}${cracks}${stars}${lines}${eye}${shine}</svg>`;
 }
 
 export function boardColors(design) {
