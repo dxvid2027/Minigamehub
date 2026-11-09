@@ -397,19 +397,23 @@ export function chooseMove(board, turn, enPassant, opts = {}) {
 
 /**
  * Engine settings for a playing strength, calibrated by bot-vs-bot matches so
- * that 300 points of rating difference scores about 85% (the Elo expectation).
+ * that 300 points of rating difference scores about 85% (the Elo expectation):
+ * every neighbouring pair of anchors below was played against each other
+ * (24-40 games each) and tuned until the result matched.
+ * The time cap is generous so that slower phones still reach the intended depth.
  * Between anchors everything is interpolated, depth included (fractional
  * depths mix two search depths), so every rating plays a little differently.
  */
 export const STRENGTH = [
-  // elo,  depth, qdepth, noise, blunder, time
-  [400,   1,     0,      160,   0.40,    250],
-  [700,   1,     1,      90,    0.20,    300],
-  [1000,  2,     3,      50,    0.09,    450],
-  [1300,  2.6,   5,      28,    0.04,    600],
-  [1600,  3.4,   8,      14,    0.015,   900],
-  [1900,  4.4,   8,      5,     0,       1300],
-  [2200,  5.5,   8,      0,     0,       2000],
+  // elo,  depth, qdepth, noise, slip,   time cap (ms)
+  [400,    1,     2,      105,   0.17,   300],
+  [700,    1.1,   4,      75,    0.12,   400],
+  [1000,   1.5,   5,      60,    0.095,  600],
+  [1300,   2.0,   6,      38,    0.055,  800],
+  [1600,   2.6,   8,      24,    0.03,   1400],
+  [1900,   3.6,   8,      9,     0.008,  2200],
+  [2200,   4.6,   8,      3,     0.003,  3200],
+  [2500,   5.5,   8,      0,     0,      4500],
 ];
 export function strengthFor(elo) {
   const T = STRENGTH;
