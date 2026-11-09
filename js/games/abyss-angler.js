@@ -26,7 +26,7 @@ import { ZONES, FISH, TREASURES, BAITS, MAX_DEPTH, paintFish, paintTreasure, hex
 const GEAR = [
   { id: "line",  name: "Line Strength", desc: "Take more tension before it snaps.", base: 90,  step: 1.5,  unit: "line",  per: 0.24 },
   { id: "reel",  name: "Reel Speed",    desc: "Pull the catch up faster.",          base: 110, step: 1.52, unit: "reel",  per: 0.22 },
-  { id: "depth", name: "Line Length",   desc: "Reach deeper water — all the way to the Hadal Gate.", base: 130, step: 1.55, unit: "depth", per: 60 },
+  { id: "depth", name: "Line Length",   desc: "Reach deeper water — all the way to the sea floor at 720 m.", base: 130, step: 1.55, unit: "depth", per: 60 },
   { id: "hook",  name: "Hook Control",  desc: "Steer the falling hook harder.",     base: 100, step: 1.48, unit: "steer", per: 0.26 },
   { id: "sonar", name: "Sonar",         desc: "See what circles below, even in the dark.", base: 150, step: 1.6, unit: "sonar", per: 1 },
   { id: "charm", name: "Lucky Charm",   desc: "More golden fish and more treasure.", base: 220, step: 1.6, unit: "luck", per: 1 },
@@ -45,7 +45,7 @@ export class AbyssAnglerGame extends GameBase {
   getInstructions() {
     return [
       "A trip is as many casts as you like. Cast from the boat, then steer the falling hook past jellyfish, debris, sharks and sea mines — one touch snaps the line. Grab pearls on the way down.",
-      "Press down (or ▼) to stop and wait for a bite. Sonar shows what is circling.",
+      "Press down (or ▼) to stop and wait for a bite — or let the hook fall: it stops by itself at the end of your line. Something always bites. Sonar shows what is circling.",
       "When something bites, hold to reel. Tension climbs while you pull — let go when the fish surges. When it runs to one side, hold the opposite arrow to turn it and reel faster.",
       "Every catch comes up on deck: size, weight, value, new species, records and rare golden fish. Then cast again, switch bait right there, or visit the dock.",
       "Captain's orders pay a bonus. Eight abyssal giants live below 400 m and only take the right bait — two of them at the Hadal Gate beyond 600 m.",
@@ -77,7 +77,12 @@ export class AbyssAnglerGame extends GameBase {
   }
   _save() { saveManager.saveNow(); }
   _lv(id) { return this._store().lv[id] || 0; }
-  _stat(unit) { const g = GEAR.find(x => x.unit === unit); return GEAR_BASE[unit] + this._lv(g.id) * g.per; }
+  _stat(unit) {
+    const g = GEAR.find(x => x.unit === unit);
+    const v = GEAR_BASE[unit] + this._lv(g.id) * g.per;
+    // The line never reaches past the bottom of the sea.
+    return unit === "depth" ? Math.min(MAX_DEPTH, v) : v;
+  }
   _cost(g) { return Math.round(g.base * Math.pow(g.step, this._lv(g.id))); }
   _baitLeft(id) { return id === "worm" ? Infinity : this._store().baits[id] || 0; }
 
@@ -303,7 +308,13 @@ export class AbyssAnglerGame extends GameBase {
   /** Who is circling down here. Better bait tilts the roll toward rarities. */
   _spawnShoal() {
     const b = BAITS.find(x => x.id === this.bait) || BAITS[0];
-    const pool = FISH.filter(f => this.depth >= f.min && this.depth <= f.max && (!f.boss || f.bait === this.bait));
+    let pool = FISH.filter(f => this.depth >= f.min && this.depth <= f.max && (!f.boss || f.bait === this.bait));
+    // Never an empty sea: fall back to the species living closest to this depth.
+    if (!pool.length) {
+      const dist = f => (this.depth < f.min ? f.min - this.depth : this.depth > f.max ? this.depth - f.max : 0);
+      const near = FISH.filter(f => !f.boss).sort((a, b) => dist(a) - dist(b));
+      pool = near.slice(0, 4);
+    }
     this.shoal = [];
     const n = 3 + Math.min(3, Math.floor(this.depth / 180));
     const luck = this._stat("luck");
@@ -336,7 +347,7 @@ export class AbyssAnglerGame extends GameBase {
         // Treasure doesn't swim: it drifts up the line to the hook slowly.
         s.interest += dt * 0.12;
         s.x += (this.hook.x - s.x) * dt * 0.3; s.y += (0.42 - s.y) * dt * 0.25;
-        if (s.interest > 2.4 && Math.abs(s.y - 0.42) < 0.06) biter = s;
+        if (s.interest > 2.4 && Math.abs(s.y - 0.42) < 0.06 && Math.abs(s.x - this.hook.x) < 0.08) biter = s;
         continue;
       }
       const towards = s.interest > 0.5;
@@ -361,7 +372,16 @@ export class AbyssAnglerGame extends GameBase {
       audioManager.play("powerup");
       this.shake();
     }
-    if (this.waitT > 26) { this.caught = null; this._say("Nothing is interested. Reeling up."); this.phase = "reel"; }
+    // Something always bites: after a while the keenest fish commits to the hook.
+    if (!biter && this.waitT > 5) {
+      if (!this.shoal.length) this._spawnShoal();
+      const keen = this.shoal.reduce((m, s) => (!m || s.interest > m.interest ? s : m), null);
+      if (keen) {
+        keen.interest = Math.max(keen.interest, 2.5);
+        keen.x += (this.hook.x - keen.x) * Math.min(1, dt * 3);
+        keen.y += (0.42 - keen.y) * Math.min(1, dt * 3);
+      }
+    }
   }
 
   _sizeOf(spec) { return Math.round((18 + spec.size * 90) * randFloat(0.72, 1.38)); }
